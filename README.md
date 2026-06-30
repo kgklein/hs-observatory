@@ -190,13 +190,16 @@ field:
     origin: [0.0, 0.0, 0.0]
   turbulence:
     geometry: isotropic
+    backend: cached
+    chunk_size: 1000
+    n_workers: null
     n_scales: 8
     injection_scale_index: 2
     intermittency_p: 0.7
     base_seed: 12345
     realization: 1
   output_fields:
-    n: {background: 5.0, fluctuation: none}
+    n: {background: 5.0, fluctuation: constant}
     v:
       background: [400.0, 0.0, 0.0]
       fluctuation: none
@@ -207,11 +210,48 @@ field:
       amplitude: 0.5
 ```
 
-Compressive density turbulence is deliberately unsupported for now. The explicit `n.fluctuation` setting leaves a clean extension point for a future density model.
+Compressive density turbulence is deliberately unsupported for now. Set `n.fluctuation: constant` to fill density with `n.background`; the legacy spelling `none` remains accepted. The explicit setting leaves a clean extension point for a future density model.
+
+#### Malara evaluator performance
+
+Although the evaluator visits only nearby eddies, reconstructing deterministic random parameters and walking each p-model ancestry creates substantial Python overhead. Four backends provide conservative choices without changing the field mathematics:
+
+- `direct` is the uncached scientific reference.
+- `chunked` applies the reference evaluator serially to bounded position chunks.
+- `cached` lazily retains random eddy parameters, heritage patterns, p-model transfer factors, and final amplitudes only for touched eddies. This is the default for generated Malara fields.
+- `parallel` evaluates ordered chunks in worker processes, optionally with a private cache in each worker. No mutable cache is shared between processes.
+
+Select the generation backend under `field.turbulence`:
+
+```yaml
+turbulence:
+  backend: cached       # direct, chunked, cached, or parallel
+  chunk_size: 1000      # used by chunked and parallel
+  n_workers: null       # parallel only; null uses the executor default
+  use_cache: true       # parallel only
+```
+
+The low-level benchmark compares backends across point counts, scale depths, and intermittency values. Its default ceiling is 100 points so routine runs remain manageable; request heavier cases explicitly:
+
+```bash
+python scripts/benchmark_malara_evaluator.py
+python scripts/benchmark_malara_evaluator.py --trajectory-like \
+  --backends direct,cached,parallel --chunk-size 100 --n-workers 4
+python scripts/benchmark_malara_evaluator.py --max-points 1000 \
+  --csv outputs/malara_benchmark.csv
+```
+
+By default, positions are independent uniform samples. `--trajectory-like` instead follows a smooth path through the periodic domain with a compact nine-spacecraft formation (hub plus eight nodes), ordered by time and then spacecraft. It is a reproducible locality surrogate for benchmarking—not a specific HelioSwarm CDF trajectory—and is useful for comparing eddy reuse against the random-point case.
+
+`evaluate_vector_chunked(positions, chunk_size=...)` uses the serial reference path. `evaluate_vector_cached(positions)` uses the evaluator-local lazy cache; `clear_cache()` and `cache_info()` expose its lifecycle and hit rate. `evaluate_vector_parallel(...)` preserves chunk ordering and reconstructs a compact evaluator in each process.
+
+`collect_touched_eddy_statistics(positions)` reports total eddy touches, unique `(scale, i, j, k)` identities, per-scale counts, and their reuse factor. A large reuse factor indicates that caching deterministic eddy parameters may avoid substantial repeated reconstruction. The benchmark prints these diagnostics for its largest requested case. Pass `--chunk-sizes 100,1000,10000` to compare several chunk sizes for chunked or parallel backends.
+
+Every optimized benchmark row reports `max_abs_diff_from_direct`. Zero means bit-for-bit agreement for that run; a small nonzero value would quantify floating-point disagreement and should be investigated before adopting that backend. Cache entry and hit-rate columns apply to the in-process cached backend. Parallel cache statistics are shown as unavailable because worker-local dictionaries are deliberately not transferred back to the parent process.
 
 To add a measurement-error model, subclass `ErrorModel` and implement `apply(truth, rng, n_mc, time=...)`. Return both observed values and realized errors with shape `(n_mc, *truth.shape)`, then add its YAML name to `error_model_from_config`. Models that do not depend on cadence may ignore `time`. Coordinate uncertainties implement `CoordinateOffsetModel` and are constructed separately because they alter where the field is sampled. These interfaces are intended to accommodate correlated noise, dropouts, cadence averaging, spin tones, and non-Gaussian models.
 
-To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. JSON is the default output; binary analyses can override `write_result`, as `static_decorrelation` does for HDF5. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete higher-order science.
+To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. JSON is the default output; binary analyses can override `write_result`, as `static_decorrelation` and `timeseries_fft` do for HDF5. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete higher-order science.
 
 ## Static spatial decorrelation analysis
 
@@ -256,6 +296,50 @@ decorrelation:
     dpi: 150
 ```
 
+## Single-spacecraft FFT analysis
+
+`timeseries_fft` computes one-sided real-FFT power spectral densities independently for every spacecraft time series. It uses no multi-spacecraft separation or spatial information and performs no Taylor-hypothesis conversion from frequency to wavenumber. Input time axes must be uniformly sampled; nonuniform data currently raise an error rather than being interpolated or passed to Lomb–Scargle analysis.
+
+Run the example after generating observations:
+
+```bash
+hsobs-generate configs/example_generate.yaml
+hsobs-analyze configs/example_timeseries_fft.yaml
+```
+
+Density is stored as `/psd/n`. Velocity and magnetic spectra are stored both by component as `/psd/v_components` and `/psd/B_components`, with shape `(spacecraft, frequency, 3)`, and as trace sums `/psd/v_trace` and `/psd/B_trace`. For shared-cadence input, `/frequency` is one dataset. Native-cadence files use `/frequency/{variable}` so density, velocity, and magnetic spectra retain their distinct instrument frequency grids.
+
+With time step `dt` and window `w`, the normalization is
+
+```text
+PSD(f) = dt / sum(w^2) * |rFFT(w x)|^2
+```
+
+Strictly positive non-Nyquist bins are doubled, yielding approximate units of quantity²/Hz. Mean detrending and a Hann window are enabled by default. The DC bin is saved but omitted from the default log-log diagnostic plot, which overlays all spacecraft in panels for density, velocity trace, and magnetic trace. All panels use the same frequency-axis limits; native lower-cadence products therefore retain blank space above their Nyquist frequencies.
+
+When analyzing `data_group: observed`, plotting also computes the corresponding truth spectra and writes them under `/truth_psd` in the analysis HDF5 file. The selected Monte Carlo realization and truth are rendered as separate figures by default, using identical axes and styling. For each parameter with positive truth spectral power, both figures use a common y-axis range spanning the observed and truth spectra. Parameters with zero truth power retain an independently autoscaled observed panel and an annotated zero-power truth panel. Set `plot.truth_enabled: false` to suppress the truth product.
+
+```yaml
+analysis:
+  method: timeseries_fft
+
+fft:
+  data_group: observed
+  mc_index: 0
+  variables: [n, v, B]
+  detrend: mean
+  window: hann
+  normalization: psd
+  plot:
+    enabled: true
+    path: outputs/timeseries_fft.png
+    truth_enabled: true
+    truth_path: outputs/timeseries_fft_truth.png
+    loglog: true
+    overlay_spacecraft: true
+    show_components: false
+```
+
 ## Development
 
 ```bash
@@ -263,4 +347,4 @@ pytest
 ruff check src tests
 ```
 
-Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, diagnostics, and static spatial decorrelation.
+Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, diagnostics, static spatial decorrelation, and single-spacecraft FFT spectra.

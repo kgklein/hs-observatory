@@ -1,0 +1,87 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-06-01T00:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [100.0, 0.0, 250]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 100.
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: malara_turbulence
+
+  domain:
+    L: [100000.0, 100000.0, 100000.0]
+    units: km
+    origin: [0.0, 0.0, 0.0]
+
+  turbulence:
+    geometry: isotropic
+    # direct, chunked, cached, or parallel. Cached is the package default.
+    backend: parallel
+    chunk_size: 1000
+    n_workers: 4
+    use_cache: true
+    n_scales: 10
+    injection_scale_index: 2
+    spectral_exponent_h: 0.3333333333333333
+    intermittency_p: 0.7
+    base_seed: 12345
+    realization: 1
+
+  output_fields:
+    n:
+      background: 5.0
+      fluctuation: constant
+    v:
+      background: [400.0, 0.0, 0.0]
+      fluctuation: malara
+      amplitude: 10.
+
+    B:
+      background: [10.0, 0.0, 0.0]
+      fluctuation: malara
+      amplitude: 0.5
+
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25
+      tau_s: 2.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.005
+      magnitude_tau_s: 2.0
+      direction_sigma_deg: 0.3
+      direction_tau_s: 1.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01
+      magnitude_tau_s: 0.5
+      direction_sigma_deg: 0.25
+      direction_tau_s: 0.25
+
+output:
+  path: outputs/full_observations_malara.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  truth_path: outputs/full_observations_malara_truth.png
+  geometry_path: outputs/full_observations_malara_geometry.png
+  dpi: 150

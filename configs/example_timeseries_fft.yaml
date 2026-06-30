@@ -1,0 +1,27 @@
+analysis:
+  method: timeseries_fft
+
+input:
+  path: outputs/synthetic_observations.h5
+
+output:
+  path: outputs/timeseries_fft.h5
+
+fft:
+  data_group: observed
+  mc_index: 0
+  variables: ["n", "v", "B"]
+
+  detrend: mean
+  window: hann
+  normalization: psd
+
+  plot:
+    enabled: true
+    path: outputs/timeseries_fft.png
+    truth_enabled: true
+    truth_path: outputs/timeseries_fft_truth.png
+    loglog: true
+    overlay_spacecraft: true
+    show_components: false
+    dpi: 150

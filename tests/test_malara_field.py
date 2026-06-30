@@ -28,7 +28,7 @@ def _field_config(*, velocity_fluctuation="none", realization_offset=None):
             "realization": 3,
         },
         "output_fields": {
-            "n": {"background": 5.0, "fluctuation": "none"},
+            "n": {"background": 5.0, "fluctuation": "constant"},
             "v": velocity,
             "B": {
                 "background": [5.0, 0.0, 0.0],
@@ -72,6 +72,48 @@ def test_velocity_and_magnetic_fields_share_or_offset_realizations():
 
     assert np.allclose(shared_v / 2.0, shared_B / 0.5)
     assert not np.allclose(independent_v / 2.0, shared_B / 0.5)
+
+
+def test_malara_field_yaml_selects_equivalent_evaluator_backends():
+    time = np.arange(2.0)
+    position = np.random.default_rng(21).uniform(0.0, 100.0, size=(3, 2, 3))
+    results = {}
+
+    for backend in ("direct", "chunked", "cached", "parallel"):
+        config = yaml.safe_load(yaml.safe_dump(_field_config()))
+        config["turbulence"].update(
+            {"backend": backend, "chunk_size": 4, "n_workers": 1}
+        )
+        field = MalaraTurbulenceField(config)
+        assert field.backend == backend
+        results[backend] = field.evaluate_quantity("B", time, position)
+
+    for result in results.values():
+        np.testing.assert_allclose(
+            result, results["direct"], rtol=1.0e-12, atol=1.0e-12
+        )
+
+
+def test_malara_field_defaults_to_cached_backend():
+    assert MalaraTurbulenceField(_field_config()).backend == "cached"
+
+
+def test_constant_and_legacy_none_density_flags_are_equivalent():
+    constant = _field_config()
+    legacy = yaml.safe_load(yaml.safe_dump(constant))
+    legacy["output_fields"]["n"]["fluctuation"] = "none"
+    time = np.arange(3.0)
+    position = np.zeros((2, 3, 3))
+
+    constant_values = MalaraTurbulenceField(constant).evaluate_quantity(
+        "n", time, position
+    )
+    legacy_values = MalaraTurbulenceField(legacy).evaluate_quantity(
+        "n", time, position
+    )
+
+    assert np.array_equal(constant_values, legacy_values)
+    assert np.all(constant_values == 5.0)
 
 
 def test_generation_workflow_writes_malara_truth_and_observations(tmp_path):

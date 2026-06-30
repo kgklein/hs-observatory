@@ -60,6 +60,8 @@ The first field model is `SineSumField`. Future models may include turbulent box
 
 `MalaraTurbulence` is a low-level, time-independent isotropic turbulence evaluator. It evaluates a periodic, analytically solenoidal hierarchy of compact intermittent eddies directly at arbitrary positions. `MalaraTurbulenceField` adapts it to constant density and optional velocity/magnetic fluctuations in the observation generator. Anisotropic, critical-balance, and compressive-density extensions remain future work.
 
+The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. The direct implementation remains the scientific reference. Caching stores only deterministic eddy data for cells actually touched; point-dependent basis and curl calculations remain uncached. Parallel workers reconstruct the compact evaluator configuration and own separate caches, avoiding shared mutable state. All backends must preserve point ordering and match the reference numerical output. Touch statistics reuse the evaluator's local-cell selection and quantify whether caching is likely to help; they never alter scientific evaluation.
+
 ## Error models
 
 Error models should not know anything about the underlying field model.

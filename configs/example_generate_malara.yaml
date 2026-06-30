@@ -7,7 +7,7 @@ spacecraft:
 
 time:
   t_start_s: 0.0
-  t_stop_s: 10.
+  t_stop_s: 100.
   cadence_s:
     n: 0.125
     v: 0.125
@@ -23,6 +23,11 @@ field:
 
   turbulence:
     geometry: isotropic
+    # direct, chunked, cached, or parallel. Cached is the package default.
+    backend: parallel
+    chunk_size: 1000
+    n_workers: 4
+    use_cache: true
     n_scales: 10
     injection_scale_index: 2
     spectral_exponent_h: 0.3333333333333333
@@ -33,7 +38,7 @@ field:
   output_fields:
     n:
       background: 5.0
-      fluctuation: none
+      fluctuation: constant
 
     v:
       background: [400.0, 0.0, 0.0]
@@ -41,17 +46,36 @@ field:
       amplitude: 0.0
 
     B:
-      background: [5.0, 0.0, 0.0]
+      background: [10.0, 0.0, 0.0]
       fluctuation: malara
       amplitude: 0.5
 
 errors:
   random_seed: 12345
-  n_mc: 1
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
   variables:
-    n: {model: none}
-    v: {model: none}
-    B: {model: none}
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25
+      tau_s: 2.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.005
+      magnitude_tau_s: 2.0
+      direction_sigma_deg: 0.3
+      direction_tau_s: 1.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01
+      magnitude_tau_s: 0.5
+      direction_sigma_deg: 0.25
+      direction_tau_s: 0.25
 
 output:
   path: outputs/synthetic_observations_malara.h5
