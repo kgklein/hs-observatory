@@ -1,163 +1,174 @@
 # HelioSwarm Synthetic Observatory
 
-This package generates and analyzes synthetic HelioSwarm-like multi-spacecraft observations.
+`hs-observatory` generates controlled HelioSwarm-like multi-spacecraft observations and analyzes the resulting products. It is deliberately a small foundation: scientific field, instrument-error, and analysis models can grow independently without changing the storage contract.
 
-The initial purpose is to create controlled mock data sets for testing multi-spacecraft plasma analysis methods under realistic sampling geometries and measurement errors. The code is organized as a two-stage workflow:
+## Install and run
 
-1. **Generate synthetic observations** from a prescribed plasma field sampled along HelioSwarm spacecraft trajectories.
-2. **Analyze synthetic observations** using selected multi-spacecraft analysis methods.
-
-The first implemented field model is a configurable sum of sine waves. Future field models may include turbulent boxes, wave packets, imported numerical simulations, or physically constrained plasma-wave models.
-
-## Workflow
-
-A typical workflow is:
+Python 3.10 or newer is required.
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e '.[dev]'
 hsobs-generate configs/example_generate.yaml
 hsobs-analyze configs/example_analyze.yaml
 ```
 
-The generation step reads a HelioSwarm spacecraft configuration, samples an underlying plasma field at each spacecraft position and time, applies optional measurement errors, and writes the result to an HDF5 file.
+The example requests a CDF directory but enables `fallback_synthetic`, so it runs without mission files. Generation writes `outputs/synthetic_observations.h5` plus truth and geometry PNGs; analysis writes `outputs/diagnostics.json`.
 
-The analysis step reads the generated HDF5 file and applies a selected analysis method.
+## Two-stage workflow
 
-## Generated quantities
+Generation loads a spacecraft formation, evaluates a plasma field along every trajectory at each instrument's native cadence, creates a leading-dimension Monte Carlo ensemble using variable-specific error models, and writes truth plus observations to HDF5. Analysis is a separate, registry-selected step that reads that file. The built-in `diagnostics` method reports observed and residual statistics and formation-separation summaries.
 
-Each spacecraft samples:
+The CDF adapter accepts one `.cdf` file or a directory of files. It follows the conventions found in the sibling `sparse-field-reconstruction` project: variables named `Epoch`, `Position`, and `Spacecraft_Label`; records are concatenated, sorted, filtered for fill values, and selected nearest to `configuration_time`. This first version treats the selected record as a snapshot and may advect it with a common `velocity_km_s`. The example includes an illustrative common translation so its path projection is visible. Full ephemeris interpolation is a future extension.
 
-* density `n`
-* velocity vector `v`
-* magnetic field vector `B`
-
-The generated file stores both truth and observed values. This is important for testing analysis methods because it allows direct comparison between the known input field and the noisy synthetic measurements.
-
-## HDF5 layout
-
-Generated files use the following layout:
+## Array and HDF5 layout
 
 ```text
-/metadata
-/time
-/spacecraft/id
-/spacecraft/r
-/truth/n
-/truth/v
-/truth/B
-/observed/n
-/observed/v
-/observed/B
-/errors/n
-/errors/v
-/errors/B
+/metadata                 group attributes: YAML, UTC creation time, seed,
+                          model names, source details, schema version
+/time/n                   (n_time_n,)
+/time/v                   (n_time_v,)
+/time/B                   (n_time_B,)
+/spacecraft/id            (n_spacecraft,)
+/spacecraft/r/n           (n_spacecraft, n_time_n, 3)
+/spacecraft/r/v           (n_spacecraft, n_time_v, 3)
+/spacecraft/r/B           (n_spacecraft, n_time_B, 3)
+/truth/n                  (n_time_n, n_spacecraft)
+/truth/v                  (n_time_v, n_spacecraft, 3)
+/truth/B                  (n_time_B, n_spacecraft, 3)
+/observed/n               (n_mc, n_time_n, n_spacecraft)
+/observed/v               (n_mc, n_time_v, n_spacecraft, 3)
+/observed/B               (n_mc, n_time_B, n_spacecraft, 3)
+/errors/n                 same shape as observed/n (optional)
+/errors/v                 same shape as observed/v (optional)
+/errors/B                 same shape as observed/B (optional)
+/errors/time_offset       (n_mc, n_spacecraft), seconds (optional)
+/errors/position_offset   (n_mc, n_spacecraft, 3), km (optional)
 ```
 
-The expected dimensions are:
+The Monte Carlo dimension is present even when `n_mc: 1`. Numerical datasets are chunked and gzip-compressed. Schema version 2 stores a time-aligned position grid for every quantity. Positions are currently interpreted as km, time as seconds relative to the generated interval, density as cm^-3, velocity as km/s, and magnetic field as nT; a richer unit system can be added later without changing these dimensions.
 
-```text
-time                  (n_time,)
-spacecraft/r          (n_spacecraft, n_time, 3)
-
-truth/n               (n_time, n_spacecraft)
-truth/v               (n_time, n_spacecraft, 3)
-truth/B               (n_time, n_spacecraft, 3)
-
-observed/n            (n_mc, n_time, n_spacecraft)
-observed/v            (n_mc, n_time, n_spacecraft, 3)
-observed/B            (n_mc, n_time, n_spacecraft, 3)
-```
-
-The leading `n_mc` dimension is always present in observed quantities, even when only one Monte Carlo realization is generated.
-
-## Configuration files
-
-The package is controlled by YAML configuration files. Generation and analysis use separate config files.
-
-Example generation sections include:
+Configure native instrument cadences independently:
 
 ```yaml
-spacecraft:
-  source: cdf
-  cdf_directory: /path/to/helioswarm/cdfs
-  configuration_name: example_configuration
-  fallback_synthetic: true
-
 time:
-  cadence_s: 1.0
   t_start_s: 0.0
-  t_stop_s: 3600.0
-
-field:
-  model: sine_sum
-  background:
-    n: 5.0
-    v: [400.0, 0.0, 0.0]
-    B: [5.0, 0.0, 0.0]
-  modes:
-    - quantity: B
-      amplitude: [0.0, 0.5, 0.0]
-      k: [0.001, 0.0, 0.0]
-      omega: 0.02
-      phase: 0.0
-
-errors:
-  random_seed: 12345
-  n_mc: 100
-  variables:
-    n:
-      model: gaussian_relative
-      sigma: 0.05
-    v:
-      model: gaussian_absolute
-      sigma: [2.0, 2.0, 2.0]
-    B:
-      model: gaussian_absolute
-      sigma: [0.05, 0.05, 0.05]
-
-output:
-  path: outputs/synthetic_observations.h5
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
 ```
 
-## Adding a new field model
+A scalar `cadence_s` remains supported and applies the same cadence to all quantities.
 
-New field models should inherit from the base field interface and implement an `evaluate(time, position)` method returning a dictionary with keys:
+## Coordinate and measurement errors
 
-```python
-{
-    "n": n_array,
-    "v": v_array,
-    "B": B_array,
-}
-```
-
-Expected shapes are:
+Time and position uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series. The same offsets apply to `n`, `v`, and `B`. Each observation is evaluated from the field at
 
 ```text
-n: (n_time, n_spacecraft)
-v: (n_time, n_spacecraft, 3)
-B: (n_time, n_spacecraft, 3)
+t_sample = t_nominal + time_offset
+r_sample = r_nominal + position_offset
 ```
 
-## Adding a new error model
+before its variable-specific measurement error is added. The HDF5 `/time/*` and `/spacecraft/r/*` datasets intentionally retain the nominal coordinates. Analysis therefore calculates temporal and spatial differences using the assumed nominal coordinates, while the hidden realized offsets are available under `/errors` for validation.
 
-New error models should inherit from the base error interface and implement an `apply(truth, rng)` method. Error models should return both the observed value and the actual error realization where possible.
+```yaml
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n: {model: gaussian_relative, sigma: 0.05}
+    v: {model: gaussian_vector_component, sigma: [2.0, 2.0, 2.0]}
+    B: {model: gaussian_absolute, sigma: [0.05, 0.05, 0.05]}
+```
 
-Error models should be independent of the field model and should be selectable from the YAML configuration.
+Set either coordinate model to `none` to disable it. Scalar `sigma_km` applies the same width to X, Y, and Z; a three-component value sets their widths independently. `/errors/n`, `/errors/v`, and `/errors/B` contain the additive measurement-noise realizations; coordinate-induced differences are represented by the stored offsets rather than folded into those arrays.
 
-## Adding a new analysis method
+### Ornstein–Uhlenbeck measurement errors
 
-New analysis methods should inherit from the base analysis interface and register themselves in the analysis registry. The analysis config selects methods by name.
+Use `model: ornstein_uhlenbeck` for time-correlated measurement noise. OU widths are stationary standard deviations, and correlation times are in seconds. The implementation uses the exact discrete transition for each interval, so the same physical parameters work correctly with different or irregular instrument cadences.
 
-Initial analysis methods include simple diagnostics and a placeholder structure-function analysis. Future methods may include wave telescope analysis, timing analysis, k-filtering, curlometer-style estimates, and multi-spacecraft structure functions.
+```yaml
+errors:
+  variables:
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25          # absolute density units
+      tau_s: 2.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.005       # fractional |v| error
+      magnitude_tau_s: 2.0
+      direction_sigma_deg: 0.3     # RMS total angular error
+      direction_tau_s: 1.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01        # fractional |B| error
+      magnitude_tau_s: 0.5
+      direction_sigma_deg: 0.5
+      direction_tau_s: 0.25
+```
 
-## Design priorities
+Density error is additive: `n_observed = n_sampled + epsilon`. Vector magnitude is changed by `max(0, 1 + epsilon)`, preventing an unphysical negative magnitude. Directional noise is an isotropic tangent-plane OU process; `direction_sigma_deg` specifies the stationary RMS total angular deviation. `direction_tau_s` defaults to `magnitude_tau_s`, and `direction_sigma_deg` defaults to zero. Zero vectors remain zero because their direction is undefined.
 
-The package favors:
+The complete OU example can be run with:
 
-* clear scientific array shapes
-* explicit metadata
-* reproducible random seeds
-* compact binary output
-* modular field, error, and analysis models
-* tests that run without real HelioSwarm CDF files
-* readable code that can be extended by physicists and software developers
+```bash
+hsobs-generate configs/example_generate_ou.yaml
+```
+
+## Default visualizations
+
+Generation creates two nominal-truth PNGs by default:
+
+- A seven-panel truth figure, with density and the three velocity components in the left column, the legend in the upper-right, and matching velocity/magnetic components in the remaining rows.
+- A geometry figure with three hub-relative formation projections and an X-Z projection of the spacecraft paths.
+
+When any time, position, or measurement error model is enabled, generation also creates two overlay figures for one selected Monte Carlo realization:
+
+- Observed `n`, `v`, and `B` in spacecraft colors, with each spacecraft's nominal truth in grayscale underneath.
+- Observed relative positions and absolute X-Z paths in spacecraft colors, with nominal positions and paths in grayscale underneath.
+
+The overlay uses `mc_index: 0` by default rather than rendering every member of a potentially large ensemble. Change `mc_index` to inspect another realization, or set `observed_enabled: false` to suppress only the overlay pair.
+
+The HelioSwarm palette is hardcoded by spacecraft name to match the reference plots in `sparse-field-reconstruction`: N1 through N8 retain their established colors and H is pink. Plot paths default to `<hdf5_stem>_truth.png` and `<hdf5_stem>_geometry.png` beside the HDF5 file. They can be configured or disabled:
+
+```yaml
+visualization:
+  enabled: true
+  observed_enabled: true
+  mc_index: 0
+  truth_path: outputs/synthetic_observations_truth.png
+  geometry_path: outputs/synthetic_observations_geometry.png
+  observed_path: outputs/synthetic_observations_observed_mc000.png
+  observed_geometry_path: outputs/synthetic_observations_geometry_observed_mc000.png
+  dpi: 150
+```
+
+When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_observed_mcNNN.png`, and `_geometry_observed_mcNNN.png`. Observed time series are plotted against nominal time, consistent with the coordinate assumptions used by downstream analysis.
+
+## Extension points
+
+To add a field model, subclass `FieldModel` and implement `evaluate_quantity(quantity, time, position)`, then add construction by name alongside `field_from_config`. The inherited `evaluate(time, position)` convenience method evaluates all quantities on one shared grid. Field models contain no noise or file-I/O logic.
+
+To add a measurement-error model, subclass `ErrorModel` and implement `apply(truth, rng, n_mc, time=...)`. Return both observed values and realized errors with shape `(n_mc, *truth.shape)`, then add its YAML name to `error_model_from_config`. Models that do not depend on cadence may ignore `time`. Coordinate uncertainties implement `CoordinateOffsetModel` and are constructed separately because they alter where the field is sampled. These interfaces are intended to accommodate correlated noise, dropouts, cadence averaging, spin tones, and non-Gaussian models.
+
+To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. Methods return JSON-serializable products. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete binning and uncertainty estimates.
+
+## Development
+
+```bash
+pytest
+ruff check src tests
+```
+
+Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, and diagnostics analysis.

@@ -1,1 +1,25 @@
-data/
+# Virtual environments
+.venv/
+venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated observations and figures
+outputs/
+
+# Local HelioSwarm mission data
+data/helioswarm_cdf/
