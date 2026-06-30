@@ -272,3 +272,29 @@ def test_native_cadences_use_per_variable_frequency_datasets(tmp_path):
         assert handle["frequency/n"].shape == (33,)
         assert handle["frequency/B"].shape == (65,)
         assert handle["metadata"].attrs["frequency_layout"] == "per_variable"
+
+
+def test_observed_fft_truth_plot_uses_matching_spacecraft_velocity_frame(tmp_path):
+    input_path, _ = _write_fft_input(tmp_path / "frames.h5")
+    with h5py.File(input_path, "r+") as handle:
+        metadata = handle.create_group("metadata")
+        metadata.attrs["velocity_observed_frame"] = "spacecraft"
+        plasma_velocity = handle["truth/v"][...]
+        spacecraft_velocity = 3.0 * plasma_velocity
+        handle["truth"].create_dataset(
+            "v_spacecraft_frame", data=spacecraft_velocity
+        )
+        handle["observed/v"][0] = spacecraft_velocity
+
+    result = compute_timeseries_fft(
+        input_path,
+        _config(
+            variables=["v"],
+            data_group="observed",
+            plot={"enabled": True, "truth_enabled": True},
+        ),
+    )
+
+    np.testing.assert_allclose(
+        result["truth_psd"]["v_trace"], result["psd"]["v_trace"]
+    )

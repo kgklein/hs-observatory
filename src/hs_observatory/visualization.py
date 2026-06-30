@@ -40,6 +40,7 @@ def plot_truth_timeseries(
     time: Mapping[str, np.ndarray],
     truth: Mapping[str, np.ndarray],
     spacecraft_ids: Sequence[str],
+    velocity_frame: str = "plasma",
 ):
     """Return a seven-panel figure of true n, v, and B measurements."""
 
@@ -73,7 +74,10 @@ def plot_truth_timeseries(
     axes[0, 1].axis("off")
     handles, labels = axes[0, 0].get_legend_handles_labels()
     axes[0, 1].legend(handles, labels, loc="center", ncol=3, frameon=False)
-    fig.suptitle("HelioSwarm Synthetic Observatory: True Measurements")
+    fig.suptitle(
+        "HelioSwarm Synthetic Observatory: True Measurements "
+        f"({velocity_frame.capitalize()}-Frame Velocity)"
+    )
     return fig, axes
 
 
@@ -402,6 +406,7 @@ def save_default_visualizations(
     truth: Mapping[str, np.ndarray],
     position: Mapping[str, np.ndarray],
     spacecraft_ids: Sequence[str],
+    velocity_frame: str = "plasma",
 ) -> tuple[Path, Path]:
     """Write the default truth and geometry PNGs and close their figures."""
 
@@ -410,7 +415,9 @@ def save_default_visualizations(
     geometry_path.parent.mkdir(parents=True, exist_ok=True)
     dpi = int(config.get("dpi", 150))
 
-    truth_figure, _ = plot_truth_timeseries(time, truth, spacecraft_ids)
+    truth_figure, _ = plot_truth_timeseries(
+        time, truth, spacecraft_ids, velocity_frame=velocity_frame
+    )
     truth_figure.savefig(truth_path, dpi=dpi)
     plt.close(truth_figure)
 

@@ -34,8 +34,14 @@ class DiagnosticsAnalysis(AnalysisMethod):
             "observed": {q: _stats(data["observed"][q]) for q in ("n", "v", "B")},
         }
         if "truth" in data:
+            residual_truth = {q: data["truth"][q] for q in ("n", "v", "B")}
+            if (
+                data["metadata"].get("velocity_observed_frame") == "spacecraft"
+                and "v_spacecraft_frame" in data["truth"]
+            ):
+                residual_truth["v"] = data["truth"]["v_spacecraft_frame"]
             result["residual"] = {
-                q: _stats(data["observed"][q] - data["truth"][q][None, ...])
+                q: _stats(data["observed"][q] - residual_truth[q][None, ...])
                 for q in ("n", "v", "B")
             }
 

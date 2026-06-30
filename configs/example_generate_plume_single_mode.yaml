@@ -1,0 +1,83 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-06-01T00:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [100.0, 0.0, 250.]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: plume_single_mode
+
+  background:
+    n: 5.0
+    v: [0.0, 0.0, 0.0]
+    B: [0.0, 0.0, 5.0]
+
+  plume:
+    path: ~/Codes/PLUME/data/klein/kaw_check_b00_kperp_1_1000.mode1
+    n_components: 2
+    row_index: 256
+    row_index_base: 0
+
+    T_ref_eV: 10.0
+    B_ref_nT: 5.0
+
+    output_species: ref
+    phase0: 0.0
+    include_growth: false
+
+    geometry:
+      k_perp_axis: x
+      k_parallel_axis: z
+
+    amplitude:
+      B_rms_nT: 0.1
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25
+      tau_s: 10.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.03
+      magnitude_tau_s: 10.0
+      direction_sigma_deg: 0.25
+      direction_tau_s: 10.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01
+      magnitude_tau_s: 10.0
+      direction_sigma_deg: 0.5
+      direction_tau_s: 10.0
+
+output:
+  path: outputs/synthetic_observations_plume_single_mode.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  truth_velocity_frame: spacecraft
+  truth_path: outputs/synthetic_observations_plume_single_mode_truth.png
+  geometry_path: outputs/synthetic_observations_plume_single_mode_geometry.png
+  dpi: 150

@@ -100,7 +100,14 @@ def _read_values(
     variable: str,
     settings: dict[str, Any],
 ) -> tuple[np.ndarray, np.ndarray, float]:
-    path = f"{settings['data_group']}/{variable}"
+    dataset_name = variable
+    if (
+        settings["data_group"] == "truth"
+        and variable == "v"
+        and settings.get("velocity_truth_frame") == "spacecraft"
+    ):
+        dataset_name = "v_spacecraft_frame"
+    path = f"{settings['data_group']}/{dataset_name}"
     if path not in handle:
         raise KeyError(f"Requested variable '{variable}' is missing from /{settings['data_group']}")
     values = np.asarray(handle[path], dtype=float)
@@ -222,6 +229,18 @@ def compute_timeseries_fft(
         if compute_truth:
             truth_settings = dict(settings)
             truth_settings["data_group"] = "truth"
+            observed_velocity_frame = "plasma"
+            if "metadata" in handle:
+                observed_velocity_frame = str(
+                    handle["metadata"].attrs.get(
+                        "velocity_observed_frame", "plasma"
+                    )
+                )
+            if (
+                observed_velocity_frame == "spacecraft"
+                and "truth/v_spacecraft_frame" in handle
+            ):
+                truth_settings["velocity_truth_frame"] = "spacecraft"
             for variable in settings["variables"]:
                 values, time, dt = _read_values(handle, variable, truth_settings)
                 truth_frequency = np.fft.rfftfreq(time.size, d=dt)

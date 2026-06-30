@@ -19,7 +19,22 @@ def _run(description: str, workflow: Callable[[str], Path], argv: list[str] | No
 def generate_main(argv: list[str] | None = None) -> int:
     from hs_observatory.generate import generate_from_config
 
-    return _run("Generate synthetic HelioSwarm observations", generate_from_config, argv)
+    parser = argparse.ArgumentParser(
+        description="Generate synthetic HelioSwarm observations"
+    )
+    parser.add_argument("config", help="YAML configuration file")
+    parser.add_argument(
+        "--truth-velocity-frame",
+        choices=("spacecraft", "plasma"),
+        help="override the velocity frame used only in the truth visualization",
+    )
+    args = parser.parse_args(argv)
+    output = generate_from_config(
+        args.config,
+        truth_velocity_frame=args.truth_velocity_frame,
+    )
+    print(output)
+    return 0
 
 
 def analyze_main(argv: list[str] | None = None) -> int:

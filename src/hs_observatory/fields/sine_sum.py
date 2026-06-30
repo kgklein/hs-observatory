@@ -82,4 +82,8 @@ def field_from_config(config: dict[str, Any]) -> FieldModel:
         from hs_observatory.fields.malara import MalaraTurbulenceField
 
         return MalaraTurbulenceField(config)
+    if model == "plume_single_mode":
+        from hs_observatory.fields.plume_single_mode import PlumeSingleModeField
+
+        return PlumeSingleModeField(config)
     raise ValueError(f"Unknown field model: {model}")

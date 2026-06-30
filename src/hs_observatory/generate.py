@@ -59,6 +59,11 @@ def _spacecraft_on_time_axes(
             quantity_time,
             master.position[:, indices, :],
             metadata=dict(master.metadata),
+            velocity=(
+                None
+                if master.velocity is None
+                else master.velocity[:, indices, :]
+            ),
         )
     return result
 
@@ -75,18 +80,39 @@ def _has_configured_errors(config: dict) -> bool:
     )
 
 
-def generate_from_config(config_path: str | Path) -> Path:
+def generate_from_config(
+    config_path: str | Path,
+    *,
+    truth_velocity_frame: str | None = None,
+) -> Path:
     loaded = load_generation_config(config_path)
     config = loaded.data
     time = _time_axes(config["time"])
     spacecraft = _spacecraft_on_time_axes(config["spacecraft"], time)
     field = field_from_config(config["field"])
+    velocity_frame = str(
+        config.get("measurement", {}).get("velocity_frame", "spacecraft")
+    ).lower()
     truth = {
         quantity: field.evaluate_quantity(
             quantity, time[quantity], spacecraft[quantity].position
         )
         for quantity in ("n", "v", "B")
     }
+    spacecraft_velocity = spacecraft["v"].velocity
+    if spacecraft_velocity is None:
+        if velocity_frame == "spacecraft":
+            raise ValueError(
+                "measurement.velocity_frame is 'spacecraft', but no spacecraft "
+                "velocity is available; provide spacecraft.velocity_km_s or a "
+                "trajectory source with velocity"
+            )
+        spacecraft_velocity_time_first = None
+    else:
+        spacecraft_velocity_time_first = np.swapaxes(spacecraft_velocity, 0, 1)
+        truth["v_spacecraft_frame"] = (
+            truth["v"] - spacecraft_velocity_time_first
+        )
 
     errors_config = config["errors"]
     n_mc = int(errors_config.get("n_mc", 1))
@@ -120,6 +146,9 @@ def generate_from_config(config_path: str | Path) -> Path:
             sampled[mc_index] = field.evaluate_quantity(
                 quantity, sampled_time, sampled_position
             )
+            if quantity == "v" and velocity_frame == "spacecraft":
+                assert spacecraft_velocity_time_first is not None
+                sampled[mc_index] -= spacecraft_velocity_time_first
         model = error_model_from_config(variable_configs.get(quantity), quantity=quantity)
         observed[quantity], realized_errors[quantity] = model.apply_ensemble(
             sampled, rng, time=time[quantity]
@@ -129,6 +158,23 @@ def generate_from_config(config_path: str | Path) -> Path:
     output_path = Path(config["output"]["path"])
     visualization_config = config.get("visualization", {})
     visualization_enabled = bool(visualization_config.get("enabled", True))
+    requested_truth_velocity_frame = str(
+        truth_velocity_frame
+        or visualization_config.get("truth_velocity_frame", "spacecraft")
+    ).lower()
+    if requested_truth_velocity_frame not in {"spacecraft", "plasma"}:
+        raise ValueError(
+            "truth visualization velocity frame must be 'spacecraft' or 'plasma'"
+        )
+    truth_visualization_velocity_frame = requested_truth_velocity_frame
+    if (
+        truth_visualization_velocity_frame == "spacecraft"
+        and "v_spacecraft_frame" not in truth
+    ):
+        truth_visualization_velocity_frame = "plasma"
+    truth_for_visualization = dict(truth)
+    if truth_visualization_velocity_frame == "spacecraft":
+        truth_for_visualization["v"] = truth["v_spacecraft_frame"]
     observed_visualization_enabled = (
         visualization_enabled
         and bool(visualization_config.get("observed_enabled", True))
@@ -151,6 +197,9 @@ def generate_from_config(config_path: str | Path) -> Path:
         "random_seed": "null" if seed is None else int(seed),
         "n_mc": n_mc,
         "field_model": field.name,
+        "field_metadata": json.dumps(
+            getattr(field, "metadata", {}), sort_keys=True
+        ),
         "error_models": json.dumps(
             {
                 "measurements": measurement_error_names,
@@ -161,6 +210,10 @@ def generate_from_config(config_path: str | Path) -> Path:
         ),
         "spacecraft_source": json.dumps(spacecraft["n"].metadata, sort_keys=True),
         "schema_version": "2",
+        "velocity_truth_frame": "plasma",
+        "velocity_observed_frame": velocity_frame,
+        "velocity_error_applied_frame": velocity_frame,
+        "truth_visualization_velocity_frame": truth_visualization_velocity_frame,
         "visualization_enabled": visualization_enabled,
         "truth_plot_path": str(truth_plot_path) if visualization_enabled else "null",
         "geometry_plot_path": str(geometry_plot_path) if visualization_enabled else "null",
@@ -188,16 +241,20 @@ def generate_from_config(config_path: str | Path) -> Path:
             output_path=output,
             config=visualization_config,
             time=time,
-            truth=truth,
+            truth=truth_for_visualization,
             position={quantity: spacecraft[quantity].position for quantity in ("n", "v", "B")},
             spacecraft_ids=spacecraft["n"].spacecraft_ids,
+            velocity_frame=truth_visualization_velocity_frame,
         )
     if observed_visualization_enabled:
+        observed_truth = dict(truth)
+        if velocity_frame == "spacecraft":
+            observed_truth["v"] = truth["v_spacecraft_frame"]
         save_observed_visualizations(
             output_path=output,
             config=visualization_config,
             time=time,
-            truth=truth,
+            truth=observed_truth,
             observed=observed,
             position={quantity: spacecraft[quantity].position for quantity in ("n", "v", "B")},
             position_offset=position_offset,

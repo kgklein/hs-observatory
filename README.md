@@ -36,7 +36,8 @@ The CDF adapter accepts one `.cdf` file or a directory of files. It follows the 
 /spacecraft/r/v           (n_spacecraft, n_time_v, 3)
 /spacecraft/r/B           (n_spacecraft, n_time_B, 3)
 /truth/n                  (n_time_n, n_spacecraft)
-/truth/v                  (n_time_v, n_spacecraft, 3)
+/truth/v                  (n_time_v, n_spacecraft, 3), plasma frame
+/truth/v_spacecraft_frame (n_time_v, n_spacecraft, 3)
 /truth/B                  (n_time_B, n_spacecraft, 3)
 /observed/n               (n_mc, n_time_n, n_spacecraft)
 /observed/v               (n_mc, n_time_v, n_spacecraft, 3)
@@ -64,6 +65,40 @@ time:
 
 A scalar `cadence_s` remains supported and applies the same cadence to all quantities.
 
+## Velocity-frame convention
+
+Field models always generate physical plasma-frame velocity truth. Spacecraft velocity controls the sampling path and is also used to construct
+
+```text
+v_spacecraft_frame = v_plasma - V_spacecraft.
+```
+
+By default, the velocity measurement-error model is applied in the spacecraft frame. `/truth/v` remains plasma-frame truth for backward compatibility, `/truth/v_spacecraft_frame` stores the transformed truth, and `/observed/v` is stored in the selected measurement frame. Density and magnetic field are not transformed.
+
+```yaml
+spacecraft:
+  velocity_km_s: [100.0, 0.0, 250.0]
+
+measurement:
+  velocity_frame: spacecraft  # spacecraft (default) or plasma
+```
+
+A constant `velocity_km_s` is broadcast over every spacecraft and time. Trajectory readers may instead provide `(spacecraft, time, 3)` velocity arrays. Selecting the spacecraft frame without an available spacecraft velocity raises an error. The HDF5 metadata attributes `velocity_truth_frame`, `velocity_observed_frame`, and `velocity_error_applied_frame` record the convention used.
+
+The default truth time-series figure uses spacecraft-frame velocity when that truth is available, without changing `/truth/v` in the file. Select the plotted frame in YAML or override it for one command:
+
+```yaml
+visualization:
+  truth_velocity_frame: spacecraft  # spacecraft (default) or plasma
+```
+
+```bash
+hsobs-generate configs/example_generate_plume_single_mode.yaml \
+  --truth-velocity-frame plasma
+```
+
+The effective plotted frame is stored as `truth_visualization_velocity_frame` in HDF5 metadata.
+
 ## Coordinate and measurement errors
 
 Time and position uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series. The same offsets apply to `n`, `v`, and `B`. Each observation is evaluated from the field at
@@ -73,7 +108,7 @@ t_sample = t_nominal + time_offset
 r_sample = r_nominal + position_offset
 ```
 
-before its variable-specific measurement error is added. The HDF5 `/time/*` and `/spacecraft/r/*` datasets intentionally retain the nominal coordinates. Analysis therefore calculates temporal and spatial differences using the assumed nominal coordinates, while the hidden realized offsets are available under `/errors` for validation.
+before its variable-specific measurement error is added. For velocity, the selected plasma- or spacecraft-frame transformation occurs before applying that measurement error. The HDF5 `/time/*` and `/spacecraft/r/*` datasets intentionally retain the nominal coordinates. Analysis therefore calculates temporal and spatial differences using the assumed nominal coordinates, while the hidden realized offsets are available under `/errors` for validation.
 
 ```yaml
 errors:
@@ -248,6 +283,55 @@ By default, positions are independent uniform samples. `--trajectory-like` inste
 `collect_touched_eddy_statistics(positions)` reports total eddy touches, unique `(scale, i, j, k)` identities, per-scale counts, and their reuse factor. A large reuse factor indicates that caching deterministic eddy parameters may avoid substantial repeated reconstruction. The benchmark prints these diagnostics for its largest requested case. Pass `--chunk-sizes 100,1000,10000` to compare several chunk sizes for chunked or parallel backends.
 
 Every optimized benchmark row reports `max_abs_diff_from_direct`. Zero means bit-for-bit agreement for that run; a small nonzero value would quantify floating-point disagreement and should be investigated before adopting that backend. Cache entry and hit-rate columns apply to the in-process cached backend. Parallel cache statistics are shown as unavailable because worker-local dictionaries are deliberately not transferred back to the parent process.
+
+### PLUME single-mode plane wave
+
+`field.model: plume_single_mode` reads one explicitly selected numeric row from a whitespace-delimited PLUME `.mode1` file and evaluates
+
+```text
+delta q(r,t) = Re[q_complex exp(i(k dot r - omega_r t + phase0))].
+```
+
+The user must provide `n_components`, `row_index`, and whether that index is zero- or one-based. Column maps for two-, three-, and four-component eigenfunction outputs follow PLUME's documented ordering and use zero-based indices internally. `output_species: ref` selects the reference component; a one-based integer selects another component.
+
+The initial geometry is fixed to PLUME coordinates: the background field and parallel wave number lie along z, the perpendicular wave number lies along x, and `k_y=0`. Arbitrary rotations and multimode sums are not yet implemented. The growth rate is parsed, converted, and stored as metadata, but is not applied; `include_growth` must remain false.
+
+For a proton reference species, the physical conversion uses
+
+```text
+Omega_ref = e B_ref / m_p
+vth_ref   = sqrt(2 T_ref_eV e / m_p)
+rho_ref   = vth_ref / Omega_ref
+```
+
+`Omega_ref` is an angular frequency in rad/s with no additional `2*pi`. Positions remain in km, so the evaluator stores `rho_ref` in km and `k` in inverse km. PLUME eigenfunctions are normalized to `E_x`; electric fields are not generated. Their relative amplitudes and phases are retained, while one real scale factor makes the complex magnetic trace amplitude equal to `B_rms_nT`. The same factor is applied to density and velocity eigenfunctions.
+
+```bash
+hsobs-generate configs/example_generate_plume_single_mode.yaml
+```
+
+```yaml
+field:
+  model: plume_single_mode
+  background:
+    n: 5.0
+    v: [400.0, 0.0, 0.0]
+    B: [5.0, 0.0, 0.0]
+  plume:
+    path: ~/Codes/PLUME/data/klein/kaw_check_b00_kperp_1_1000.mode1
+    n_components: 2
+    row_index: 256
+    row_index_base: 0
+    T_ref_eV: 10.0
+    B_ref_nT: 5.0
+    output_species: ref
+    phase0: 0.0
+    include_growth: false
+    geometry: {k_perp_axis: x, k_parallel_axis: z}
+    amplitude: {B_rms_nT: 0.1}
+```
+
+The selected dimensionless and physical mode values are reported at construction and serialized into the generated HDF5 `/metadata` attribute `field_metadata`.
 
 To add a measurement-error model, subclass `ErrorModel` and implement `apply(truth, rng, n_mc, time=...)`. Return both observed values and realized errors with shape `(n_mc, *truth.shape)`, then add its YAML name to `error_model_from_config`. Models that do not depend on cadence may ignore `time`. Coordinate uncertainties implement `CoordinateOffsetModel` and are constructed separately because they alter where the field is sampled. These interfaces are intended to accommodate correlated noise, dropouts, cadence averaging, spin tones, and non-Gaussian models.
 

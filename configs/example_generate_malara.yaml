@@ -50,6 +50,9 @@ field:
       fluctuation: malara
       amplitude: 0.5
 
+measurement:
+  velocity_frame: spacecraft
+
 errors:
   random_seed: 12345
   n_mc: 10
@@ -83,6 +86,7 @@ output:
 
 visualization:
   enabled: true
+  truth_velocity_frame: spacecraft
   truth_path: outputs/synthetic_observations_malara_truth.png
   geometry_path: outputs/synthetic_observations_malara_geometry.png
   dpi: 150

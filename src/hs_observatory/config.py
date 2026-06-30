@@ -60,6 +60,12 @@ def load_generation_config(path: str | Path) -> LoadedConfig:
         raise ValueError("Missing required field.model setting")
     if int(cfg["errors"].get("n_mc", 1)) < 1:
         raise ValueError("errors.n_mc must be at least one")
+    measurement = cfg.get("measurement", {})
+    if not isinstance(measurement, dict):
+        raise ValueError("Configuration section 'measurement' must be a mapping")
+    velocity_frame = str(measurement.get("velocity_frame", "spacecraft")).lower()
+    if velocity_frame not in {"spacecraft", "plasma"}:
+        raise ValueError("measurement.velocity_frame must be 'spacecraft' or 'plasma'")
     for coordinate_error in ("time", "position"):
         value = cfg["errors"].get(coordinate_error, {})
         if not isinstance(value, dict):
@@ -73,6 +79,13 @@ def load_generation_config(path: str | Path) -> LoadedConfig:
         raise ValueError("visualization.dpi must be positive")
     if int(visualization.get("mc_index", 0)) < 0:
         raise ValueError("visualization.mc_index must be non-negative")
+    truth_velocity_frame = str(
+        visualization.get("truth_velocity_frame", "spacecraft")
+    ).lower()
+    if truth_velocity_frame not in {"spacecraft", "plasma"}:
+        raise ValueError(
+            "visualization.truth_velocity_frame must be 'spacecraft' or 'plasma'"
+        )
     return loaded
 
 

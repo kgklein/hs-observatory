@@ -10,15 +10,18 @@ import numpy as np
 
 @dataclass
 class SpacecraftConfiguration:
-    """Positions of a spacecraft formation over time.
+    """Positions and optional velocities of a spacecraft formation over time.
 
-    ``position`` always has shape ``(n_spacecraft, n_time, 3)``.
+    ``position`` and canonical ``velocity`` have shape
+    ``(n_spacecraft, n_time, 3)``. Velocity input may also be a constant
+    three-vector or time-first ``(n_time, n_spacecraft, 3)`` array.
     """
 
     spacecraft_ids: Sequence[str]
     time: np.ndarray
     position: np.ndarray
     metadata: dict[str, Any] = field(default_factory=dict)
+    velocity: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.spacecraft_ids = tuple(str(value) for value in self.spacecraft_ids)
@@ -33,6 +36,23 @@ class SpacecraftConfiguration:
             raise ValueError("spacecraft_ids must be unique")
         if not np.all(np.isfinite(self.position)):
             raise ValueError("position contains non-finite values")
+        if self.velocity is not None:
+            velocity = np.asarray(self.velocity, dtype=float)
+            if velocity.shape == (3,):
+                velocity = np.broadcast_to(velocity, expected).copy()
+            elif velocity.shape == expected:
+                velocity = velocity.copy()
+            elif velocity.shape == (len(self.time), len(self.spacecraft_ids), 3):
+                velocity = np.swapaxes(velocity, 0, 1)
+            else:
+                raise ValueError(
+                    "velocity must have shape (3,), "
+                    f"{expected}, or {(len(self.time), len(self.spacecraft_ids), 3)}; "
+                    f"got {velocity.shape}"
+                )
+            if not np.all(np.isfinite(velocity)):
+                raise ValueError("velocity contains non-finite values")
+            self.velocity = velocity
 
 
 def synthetic_configuration(
@@ -66,4 +86,5 @@ def synthetic_configuration(
         time,
         position,
         metadata={"source": "synthetic_fallback", "position_units": "km"},
+        velocity=velocity,
     )

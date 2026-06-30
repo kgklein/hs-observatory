@@ -36,7 +36,8 @@ Truth quantities:
 
 ```text
 truth/n: (n_time_n, n_spacecraft)
-truth/v: (n_time_v, n_spacecraft, 3)
+truth/v: (n_time_v, n_spacecraft, 3)  # plasma frame
+truth/v_spacecraft_frame: (n_time_v, n_spacecraft, 3)
 truth/B: (n_time_B, n_spacecraft, 3)
 ```
 
@@ -60,6 +61,8 @@ The first field model is `SineSumField`. Future models may include turbulent box
 
 `MalaraTurbulence` is a low-level, time-independent isotropic turbulence evaluator. It evaluates a periodic, analytically solenoidal hierarchy of compact intermittent eddies directly at arbitrary positions. `MalaraTurbulenceField` adapts it to constant density and optional velocity/magnetic fluctuations in the observation generator. Anisotropic, critical-balance, and compressive-density extensions remain future work.
 
+`PlumeSingleModeField` reads one explicitly selected PLUME eigenmode row and evaluates its physically phased real plane wave. It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units, and normalizes all eigenfunctions through a requested magnetic trace amplitude. Growth/damping, electric-field output, arbitrary rotations, and multimode sums remain future work.
+
 The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. The direct implementation remains the scientific reference. Caching stores only deterministic eddy data for cells actually touched; point-dependent basis and curl calculations remain uncached. Parallel workers reconstruct the compact evaluator configuration and own separate caches, avoiding shared mutable state. All backends must preserve point ordering and match the reference numerical output. Touch statistics reuse the evaluator's local-cell selection and quantify whether caching is likely to help; they never alter scientific evaluation.
 
 ## Error models
@@ -71,6 +74,8 @@ They receive truth values and a random number generator. They return observed va
 Time-correlated measurement errors also receive the quantity's native time axis. Correlation parameters should be expressed in physical time rather than sample counts so models remain consistent across instrument cadences.
 
 Coordinate errors are drawn once per Monte Carlo realization and spacecraft. They modify the coordinates passed to the field model, while nominal coordinates remain stored for downstream analysis. Measurement errors are applied afterward to the resulting sampled ensemble.
+
+Field models return plasma-frame velocity. Generation derives spacecraft-frame velocity by subtracting the aligned spacecraft trajectory velocity. The configured velocity measurement frame determines both the input to the error model and the frame stored in `/observed/v`; plasma truth remains `/truth/v`.
 
 Prefer reproducible random-number generation using `numpy.random.default_rng(seed)`.
 

@@ -31,7 +31,9 @@ def write_observations(
 
     Each quantity has its own time and position grid. Truth arrays are
     ``n(time_n, sc)``, ``v(time_v, sc, component)``, and
-    ``B(time_B, sc, component)``.
+    ``B(time_B, sc, component)``. Generated products may additionally contain
+    ``v_spacecraft_frame(time_v, sc, component)`` while retaining ``v`` as
+    plasma-frame truth.
     Observations/errors have the same trailing dimensions plus leading ``mc``.
     Each position array is ``r[quantity](sc, time_quantity, component)``.
     """
@@ -58,7 +60,8 @@ def write_observations(
 
         for group_name, values in (("truth", truth), ("observed", observed)):
             group = handle.create_group(group_name)
-            for quantity in ("n", "v", "B"):
+            names = values if group_name == "truth" else ("n", "v", "B")
+            for quantity in names:
                 _dataset(group, quantity, values[quantity])
         if errors is not None:
             group = handle.create_group("errors")
@@ -93,6 +96,10 @@ def read_observations(path: str | Path) -> dict[str, Any]:
             "truth": {q: handle[f"truth/{q}"][...] for q in ("n", "v", "B")},
             "observed": {q: handle[f"observed/{q}"][...] for q in ("n", "v", "B")},
         }
+        if "truth/v_spacecraft_frame" in handle:
+            result["truth"]["v_spacecraft_frame"] = handle[
+                "truth/v_spacecraft_frame"
+            ][...]
         if "errors" in handle:
             result["errors"] = {
                 name: handle[f"errors/{name}"][...] for name in handle["errors"]

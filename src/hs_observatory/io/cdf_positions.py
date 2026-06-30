@@ -85,7 +85,7 @@ def configuration_from_cdf(
     time: np.ndarray,
     *,
     requested_time: str | None = None,
-    velocity_km_s: Sequence[float] = (0.0, 0.0, 0.0),
+    velocity_km_s: Sequence[float] | None = None,
 ) -> SpacecraftConfiguration:
     """Select the nearest valid CDF formation and repeat/advect it over ``time``.
 
@@ -104,7 +104,11 @@ def configuration_from_cdf(
         raise ValueError("Selected CDF record contains no valid spacecraft positions")
 
     time = np.asarray(time, dtype=float)
-    velocity = np.asarray(velocity_km_s, dtype=float)
+    velocity = (
+        np.zeros(3, dtype=float)
+        if velocity_km_s is None
+        else np.asarray(velocity_km_s, dtype=float)
+    )
     if velocity.shape != (3,):
         raise ValueError("spacecraft.velocity_km_s must contain three components")
     base = selected[valid]
@@ -119,15 +123,26 @@ def configuration_from_cdf(
         "position_units": "km",
         "selection": "nearest_record_snapshot",
     }
-    return SpacecraftConfiguration(selected_labels, time, trajectory, metadata)
+    return SpacecraftConfiguration(
+        selected_labels,
+        time,
+        trajectory,
+        metadata,
+        velocity=None if velocity_km_s is None else velocity,
+    )
 
 
 def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> SpacecraftConfiguration:
     """Load a CDF configuration, optionally falling back to synthetic geometry."""
 
     source = str(config.get("source", "synthetic")).lower()
-    velocity = config.get("velocity_km_s", (0.0, 0.0, 0.0))
+    configured_velocity = config.get("velocity_km_s")
     if source in {"synthetic", "synthetic_fallback"}:
+        velocity = (
+            (0.0, 0.0, 0.0)
+            if configured_velocity is None
+            else configured_velocity
+        )
         return synthetic_configuration(time, velocity_km_s=velocity)
     if source != "cdf":
         raise ValueError(f"Unknown spacecraft source: {source}")
@@ -135,6 +150,11 @@ def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> S
     cdf_path = config.get("cdf_path", config.get("cdf_directory"))
     if not cdf_path:
         if config.get("fallback_synthetic", False):
+            velocity = (
+                (0.0, 0.0, 0.0)
+                if configured_velocity is None
+                else configured_velocity
+            )
             return synthetic_configuration(time, velocity_km_s=velocity)
         raise ValueError("CDF spacecraft source requires cdf_path or cdf_directory")
     try:
@@ -142,11 +162,16 @@ def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> S
             cdf_path,
             time,
             requested_time=config.get("configuration_time"),
-            velocity_km_s=velocity,
+            velocity_km_s=configured_velocity,
         )
     except (FileNotFoundError, ImportError, ValueError) as exc:
         if not config.get("fallback_synthetic", False):
             raise
+        velocity = (
+            (0.0, 0.0, 0.0)
+            if configured_velocity is None
+            else configured_velocity
+        )
         fallback = synthetic_configuration(time, velocity_km_s=velocity)
         fallback.metadata["fallback_reason"] = str(exc)
         fallback.metadata["requested_cdf_path"] = str(cdf_path)
