@@ -162,7 +162,50 @@ To add a field model, subclass `FieldModel` and implement `evaluate_quantity(qua
 
 To add a measurement-error model, subclass `ErrorModel` and implement `apply(truth, rng, n_mc, time=...)`. Return both observed values and realized errors with shape `(n_mc, *truth.shape)`, then add its YAML name to `error_model_from_config`. Models that do not depend on cadence may ignore `time`. Coordinate uncertainties implement `CoordinateOffsetModel` and are constructed separately because they alter where the field is sampled. These interfaces are intended to accommodate correlated noise, dropouts, cadence averaging, spin tones, and non-Gaussian models.
 
-To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. Methods return JSON-serializable products. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete binning and uncertainty estimates.
+To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. JSON is the default output; binary analyses can override `write_result`, as `static_decorrelation` does for HDF5. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete higher-order science.
+
+## Static spatial decorrelation analysis
+
+`static_decorrelation` estimates simultaneous pairwise correlation as a function of spacecraft separation and computes the matching second-order pair-difference structure function. It treats every time index as an independent spatial snapshot. This first method intentionally includes no time lags, temporal evolution, Taylor hypothesis, flow advection, or wave propagation.
+
+Run it after generating observations:
+
+```bash
+hsobs-generate configs/example_generate.yaml
+hsobs-analyze configs/example_static_decorrelation.yaml
+```
+
+The analysis supports scalar density correlation, vector dot-product correlation, optional vector-component correlations, normalized or raw products, and linear or logarithmic separation bins. `data_group: observed` selects one `mc_index`; `data_group: truth` ignores it. `mc_index: all` is reserved for future ensemble statistics and currently raises `NotImplementedError`.
+
+The default `per_time` mean subtracts the constellation mean independently at each snapshot. `global` subtracts one scalar or vector mean over all selected times and spacecraft. With the current native-cadence HDF5 schema, each variable uses its matching `/spacecraft/r/{variable}` positions. All selected variables share common bin edges, while `/counts/{variable}` records cadence-dependent sample counts.
+
+The HDF5 output contains bin edges, lower and upper edges, centers, per-variable counts, correlation means/standard deviations/standard errors, and corresponding second-order structure-function statistics. Empty bins have count zero and NaN statistics. A default diagnostic PNG is written beside the HDF5 file as `<output_stem>_diagnostic.png`; it shows correlation and standard-error bands in the left column and second-order structure functions in the right column.
+
+```yaml
+analysis:
+  method: static_decorrelation
+
+decorrelation:
+  variables: [n, v, B]
+  data_group: observed
+  mc_index: 0
+  mean: {method: per_time}
+  separation:
+    units: km
+    binning: log
+    n_bins: 30
+    r_min: null
+    r_max: null
+  correlation:
+    vector_mode: dot
+    component_correlations: true
+    normalize: true
+  structure_function: {compute: true, order: 2}
+  visualization:
+    enabled: true
+    path: outputs/static_decorrelation_diagnostic.png
+    dpi: 150
+```
 
 ## Development
 
@@ -171,4 +214,4 @@ pytest
 ruff check src tests
 ```
 
-Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, and diagnostics analysis.
+Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, diagnostics, and static spatial decorrelation.

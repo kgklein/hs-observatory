@@ -6,9 +6,6 @@ import argparse
 from collections.abc import Callable
 from pathlib import Path
 
-from hs_observatory.analyze import analyze_from_config
-from hs_observatory.generate import generate_from_config
-
 
 def _run(description: str, workflow: Callable[[str], Path], argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(description=description)
@@ -20,8 +17,12 @@ def _run(description: str, workflow: Callable[[str], Path], argv: list[str] | No
 
 
 def generate_main(argv: list[str] | None = None) -> int:
+    from hs_observatory.generate import generate_from_config
+
     return _run("Generate synthetic HelioSwarm observations", generate_from_config, argv)
 
 
 def analyze_main(argv: list[str] | None = None) -> int:
+    from hs_observatory.analyze import analyze_from_config
+
     return _run("Analyze synthetic HelioSwarm observations", analyze_from_config, argv)

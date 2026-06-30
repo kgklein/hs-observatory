@@ -1,0 +1,37 @@
+input:
+  path: outputs/synthetic_observations.h5
+
+analysis:
+  method: static_decorrelation
+
+output:
+  path: outputs/static_decorrelation.h5
+
+decorrelation:
+  variables: ["n", "v", "B"]
+  data_group: observed
+  mc_index: 0
+
+  mean:
+    method: per_time
+
+  separation:
+    units: km
+    binning: log
+    n_bins: 30
+    r_min: null
+    r_max: null
+
+  correlation:
+    vector_mode: dot
+    component_correlations: true
+    normalize: true
+
+  structure_function:
+    compute: true
+    order: 2
+
+  visualization:
+    enabled: true
+    path: outputs/static_decorrelation_diagnostic.png
+    dpi: 150

@@ -21,7 +21,7 @@ def register_analysis(cls: T) -> T:
 
 def _load_builtins() -> None:
     # Import side effects populate the registry while keeping base imports light.
-    from hs_observatory.analysis import diagnostics, structure_function  # noqa: F401
+    from hs_observatory.analysis import diagnostics, static_decorrelation, structure_function  # noqa: F401
 
 
 def get_analysis(name: str) -> type[AnalysisMethod]:
