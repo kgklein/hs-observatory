@@ -58,6 +58,8 @@ A field model receives time and spacecraft position and returns truth values for
 
 The first field model is `SineSumField`. Future models may include turbulent boxes, wave packets, imported simulations, or analytic plasma-wave modes.
 
+`MalaraTurbulence` is a low-level, time-independent isotropic turbulence evaluator. It evaluates a periodic, analytically solenoidal hierarchy of compact intermittent eddies directly at arbitrary positions. `MalaraTurbulenceField` adapts it to constant density and optional velocity/magnetic fluctuations in the observation generator. Anisotropic, critical-balance, and compressive-density extensions remain future work.
+
 ## Error models
 
 Error models should not know anything about the underlying field model.

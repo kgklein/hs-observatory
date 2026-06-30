@@ -78,4 +78,8 @@ def field_from_config(config: dict[str, Any]) -> FieldModel:
     model = str(config.get("model", "")).lower()
     if model == "sine_sum":
         return SineSumField(config.get("background", {}), config.get("modes", []))
+    if model == "malara_turbulence":
+        from hs_observatory.fields.malara import MalaraTurbulenceField
+
+        return MalaraTurbulenceField(config)
     raise ValueError(f"Unknown field model: {model}")

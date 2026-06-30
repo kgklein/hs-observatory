@@ -1,7 +1,7 @@
 spacecraft:
   source: cdf
-  cdf_directory: data/helioswarm_cdf
-  configuration_time: "2029-06-01T00:00:00"
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-06-01T00:00:00"
   fallback_synthetic: true
   velocity_km_s: [1.0, 0.0, 0.25]
 

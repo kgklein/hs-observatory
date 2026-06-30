@@ -160,6 +160,55 @@ When paths are omitted, they are derived beside the HDF5 output as `_truth.png`,
 
 To add a field model, subclass `FieldModel` and implement `evaluate_quantity(quantity, time, position)`, then add construction by name alongside `field_from_config`. The inherited `evaluate(time, position)` convenience method evaluates all quantities on one shared grid. Field models contain no noise or file-I/O logic.
 
+### Malara-style intermittent turbulence evaluator
+
+`fields/malara.py` provides a low-level isotropic evaluator inspired by Malara et al., [“Fast algorithm for a three-dimensional synthetic model of intermittent turbulence”](https://doi.org/10.1103/PhysRevE.94.053109). `MalaraTurbulence.evaluate_vector(positions)` evaluates a deterministic three-component turbulent field directly at arbitrary points without constructing a spatial grid.
+
+The current evaluator is time-independent, periodic in all three directions, intermittent through a deterministic p-model cascade, and solenoidal by construction from the curl of compact vector-potential eddies. At each dyadic scale it evaluates only the neighboring eddies whose overlapping supports contain the point. Anisotropic and critical-balance variants are future extensions.
+
+`field.model: malara_turbulence` connects it to generated observations. Density remains constant; magnetic and optional velocity fluctuations are scaled copies of a Malara realization. With no realization offset, `v` and `B` share the same vector field. Set `realization_offset` to select an independent realization. The adapter defaults the low-level vector-potential amplitude to the characteristic domain length, making output-field amplitudes meaningful in their physical units; an explicit `turbulence.amplitude` overrides this normalization.
+
+```python
+from hs_observatory.fields.malara import MalaraConfig, MalaraTurbulence
+
+model = MalaraTurbulence(MalaraConfig(n_scales=6, realization=1))
+u = model.evaluate_vector(positions)  # positions and u both end in dimension 3
+```
+
+Run the integrated example with:
+
+```bash
+hsobs-generate configs/example_generate_malara.yaml
+```
+
+```yaml
+field:
+  model: malara_turbulence
+  domain:
+    L: [100000.0, 100000.0, 100000.0]
+    units: km
+    origin: [0.0, 0.0, 0.0]
+  turbulence:
+    geometry: isotropic
+    n_scales: 8
+    injection_scale_index: 2
+    intermittency_p: 0.7
+    base_seed: 12345
+    realization: 1
+  output_fields:
+    n: {background: 5.0, fluctuation: none}
+    v:
+      background: [400.0, 0.0, 0.0]
+      fluctuation: none
+      amplitude: 0.0
+    B:
+      background: [5.0, 0.0, 0.0]
+      fluctuation: malara
+      amplitude: 0.5
+```
+
+Compressive density turbulence is deliberately unsupported for now. The explicit `n.fluctuation` setting leaves a clean extension point for a future density model.
+
 To add a measurement-error model, subclass `ErrorModel` and implement `apply(truth, rng, n_mc, time=...)`. Return both observed values and realized errors with shape `(n_mc, *truth.shape)`, then add its YAML name to `error_model_from_config`. Models that do not depend on cadence may ignore `time`. Coordinate uncertainties implement `CoordinateOffsetModel` and are constructed separately because they alter where the field is sampled. These interfaces are intended to accommodate correlated noise, dropouts, cadence averaging, spin tones, and non-Gaussian models.
 
 To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. JSON is the default output; binary analyses can override `write_result`, as `static_decorrelation` does for HDF5. `StructureFunctionAnalysis` demonstrates a minimal pairwise scaffold and contains the TODO boundary for scientifically complete higher-order science.
