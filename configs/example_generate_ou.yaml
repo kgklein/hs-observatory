@@ -1,0 +1,78 @@
+spacecraft:
+  source: cdf
+  cdf_directory: data/helioswarm_cdf
+  configuration_time: "2029-06-01T00:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [1.0, 0.0, 0.25]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: sine_sum
+  background:
+    n: 5.0
+    v: [400.0, 0.0, 0.0]
+    B: [5.0, 0.0, 0.0]
+  modes:
+    - quantity: n
+      amplitude: 0.25
+      k: [0.01, 0.0, 0.0]
+      omega: 0.05
+      phase: 0.0
+    - quantity: v
+      amplitude: [0.0, 8.0, 2.0]
+      k: [0.004, 0.003, 0.0]
+      omega: 0.025
+      phase: 0.5
+    - quantity: B
+      amplitude: [0.0, 0.5, 0.2]
+      k: [0.001, 0.002, 0.0]
+      omega: 0.02
+      phase: 0.0
+
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25
+      tau_s: 2.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.005
+      magnitude_tau_s: 2.0
+      direction_sigma_deg: 0.3
+      direction_tau_s: 1.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01
+      magnitude_tau_s: 0.5
+      direction_sigma_deg: 0.5
+      direction_tau_s: 0.25
+
+output:
+  path: outputs/synthetic_observations_ou.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  observed_enabled: true
+  mc_index: 0
+  truth_path: outputs/synthetic_observations_ou_truth.png
+  geometry_path: outputs/synthetic_observations_ou_geometry.png
+  observed_path: outputs/synthetic_observations_ou_observed_mc000.png
+  observed_geometry_path: outputs/synthetic_observations_ou_geometry_observed_mc000.png
+  dpi: 150

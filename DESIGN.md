@@ -11,7 +11,8 @@ Do not mix these responsibilities:
 3. Sampling the field along spacecraft paths.
 4. Applying measurement errors.
 5. Writing generated observations.
-6. Running analysis methods.
+6. Rendering optional visualization products.
+7. Running analysis methods.
 
 Each responsibility should live in a separate module with a small, documented interface.
 
@@ -21,30 +22,30 @@ Use the following conventions consistently:
 
 ```text
 n_spacecraft = 9 for HelioSwarm
-n_time       = number of time samples
+n_time_q     = number of native time samples for quantity q
 n_mc         = number of Monte Carlo realizations
 ```
 
 Spacecraft positions:
 
 ```text
-position: (n_spacecraft, n_time, 3)
+position[q]: (n_spacecraft, n_time_q, 3)
 ```
 
 Truth quantities:
 
 ```text
-truth/n: (n_time, n_spacecraft)
-truth/v: (n_time, n_spacecraft, 3)
-truth/B: (n_time, n_spacecraft, 3)
+truth/n: (n_time_n, n_spacecraft)
+truth/v: (n_time_v, n_spacecraft, 3)
+truth/B: (n_time_B, n_spacecraft, 3)
 ```
 
 Observed quantities:
 
 ```text
-observed/n: (n_mc, n_time, n_spacecraft)
-observed/v: (n_mc, n_time, n_spacecraft, 3)
-observed/B: (n_mc, n_time, n_spacecraft, 3)
+observed/n: (n_mc, n_time_n, n_spacecraft)
+observed/v: (n_mc, n_time_v, n_spacecraft, 3)
+observed/B: (n_mc, n_time_B, n_spacecraft, 3)
 ```
 
 The Monte Carlo dimension should always be present for observed data.
@@ -62,6 +63,10 @@ The first field model is `SineSumField`. Future models may include turbulent box
 Error models should not know anything about the underlying field model.
 
 They receive truth values and a random number generator. They return observed values and, where possible, the actual error realization.
+
+Time-correlated measurement errors also receive the quantity's native time axis. Correlation parameters should be expressed in physical time rather than sample counts so models remain consistent across instrument cadences.
+
+Coordinate errors are drawn once per Monte Carlo realization and spacecraft. They modify the coordinates passed to the field model, while nominal coordinates remain stored for downstream analysis. Measurement errors are applied afterward to the resulting sampled ensemble.
 
 Prefer reproducible random-number generation using `numpy.random.default_rng(seed)`.
 
