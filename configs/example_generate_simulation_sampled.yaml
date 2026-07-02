@@ -1,0 +1,98 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-06-01T00:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [100.0, 0.0, 250.0]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: simulation_sampled
+
+  background:
+    n: 5.0
+    v: [0.0, 0.0, 0.0]
+    B: [5.0, 0.0, 0.0]
+
+  simulation:
+    format: bp
+    sources:
+      field: ../gkeyll/data/ot3D_field_75.bp
+      moments: ../gkeyll/data/ot3D_ion_75.bp
+
+    # Packed Gkeyll CartGridField conventions. Bulk v = (n*u) / n.
+    layout:
+      field_variable: CartGridField
+      moments_variable: CartGridField
+      B_components: [3, 4, 5]
+      density_component: 0
+      momentum_components: [1, 2, 3]
+      velocity_representation: momentum_density
+
+    coordinates:
+      units: rho_p
+      box_size_rho_p: [314.15926, 314.15926, 1570.79632]
+      rho_p_km: 100.0
+
+    coordinate_mapping:
+      # Put H at box center at t_start, then retain the formation translation.
+      method: hub_centered
+      hub_spacecraft: 0
+
+    boundary: periodic
+
+    fields_are:
+      n: total
+      v: total
+      B: total
+
+    # Convert provider values to cm^-3, km/s, and nT. Unit factors of 1.0
+    # assume the supplied files already use those units; calibrate as needed.
+    scale_factors:
+      n: 1.0
+      v: 1.0
+      B: 1.0
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n:
+      model: ornstein_uhlenbeck
+      sigma: 0.25
+      tau_s: 10.0
+    v:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.03
+      magnitude_tau_s: 10.0
+      direction_sigma_deg: 0.25
+      direction_tau_s: 10.0
+    B:
+      model: ornstein_uhlenbeck
+      magnitude_sigma: 0.01
+      magnitude_tau_s: 10.0
+      direction_sigma_deg: 0.5
+      direction_tau_s: 10.0
+
+output:
+  path: outputs/synthetic_observations_simulation_sampled.h5
+  write_errors: true
+
+visualization:
+  enabled: true

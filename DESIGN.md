@@ -63,6 +63,27 @@ The first field model is `SineSumField`. Future models may include turbulent box
 
 `PlumeSingleModeField` reads one explicitly selected PLUME eigenmode row and evaluates its physically phased real plane wave. It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units, and normalizes all eigenfunctions through a requested magnetic trace amplitude. Growth/damping, electric-field output, arbitrary rotations, and multimode sums remain future work.
 
+`SimulationSampledField` samples static numerical `.npy` snapshots or split
+Gkeyll/ADIOS2 `.bp` field and ion-moment files without delegating to an external
+simulation repository at runtime. Loading and layout validation live in
+`io/simulation_npy.py` and `io/simulation_bp.py`; the field adapter owns
+physical scaling, hub-centered mapping, background semantics, and generation metadata.
+Uniform snapshot nodes are endpoint-excluded in the periodic `[0,L)` box and
+are sampled with a local NumPy trilinear interpolator. Coordinate configuration
+accepts direct km, generic code-length conversion, or `rho_p` plus `rho_p_km`,
+the latter matching the physical scaling concept used by the development
+reference in `sparse-field-reconstruction`. The BP adapter extracts magnetic
+components 3–5 from the field `CartGridField`, density 0 and momentum-density
+components 1–3 from the ion `CartGridField`, and computes `v=(n*u)/n`; every
+mapping remains configurable. ADIOS2 is an optional dependency. The initial
+adapter applies no rotation and supports one static snapshot state only.
+
+Hub-centered simulation mapping is anchored to the Hub position at the first
+sample, not its instantaneous position. Thus the initial Hub maps to the box
+center while common translational motion remains in every later sample. Using
+the instantaneous Hub position would cancel rigid formation motion and produce
+constant time series from a static snapshot.
+
 The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. The direct implementation remains the scientific reference. Caching stores only deterministic eddy data for cells actually touched; point-dependent basis and curl calculations remain uncached. Parallel workers reconstruct the compact evaluator configuration and own separate caches, avoiding shared mutable state. All backends must preserve point ordering and match the reference numerical output. Touch statistics reuse the evaluator's local-cell selection and quantify whether caching is likely to help; they never alter scientific evaluation.
 
 ## Error models

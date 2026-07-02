@@ -46,9 +46,7 @@ class SineSumField(FieldModel):
         elif time.shape == (n_time, n_sc):
             time_by_spacecraft = time
         else:
-            raise ValueError(
-                "time must have shape (n_time,) or (n_time, n_spacecraft)"
-            )
+            raise ValueError("time must have shape (n_time,) or (n_time, n_spacecraft)")
         if quantity == "n":
             values = np.full((n_time, n_sc), self.background_n, dtype=float)
         else:
@@ -86,4 +84,8 @@ def field_from_config(config: dict[str, Any]) -> FieldModel:
         from hs_observatory.fields.plume_single_mode import PlumeSingleModeField
 
         return PlumeSingleModeField(config)
+    if model == "simulation_sampled":
+        from hs_observatory.fields.simulation_sampled import SimulationSampledField
+
+        return SimulationSampledField(config)
     raise ValueError(f"Unknown field model: {model}")

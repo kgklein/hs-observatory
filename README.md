@@ -388,6 +388,118 @@ By default, positions are independent uniform samples. `--trajectory-like` inste
 
 Every optimized benchmark row reports `max_abs_diff_from_direct`. Zero means bit-for-bit agreement for that run; a small nonzero value would quantify floating-point disagreement and should be investigated before adopting that backend. Cache entry and hit-rate columns apply to the in-process cached backend. Parallel cache statistics are shown as unavailable because worker-local dictionaries are deliberately not transferred back to the parent process.
 
+### Static numerical simulation sampling
+
+Use `field.model: simulation_sampled` to sample static uniform-grid `.npy` or
+split Gkeyll `.bp` snapshots along the configured spacecraft positions. BP
+input requires the optional ADIOS2 dependency:
+
+```bash
+python -m pip install -e '.[simulation-bp]'
+```
+
+```bash
+hsobs-generate configs/example_generate_simulation_sampled.yaml
+```
+
+The example matches the provider files in `../gkeyll/data`. It combines two
+packed ADIOS2 variables named `CartGridField`:
+
+```text
+ot3D_field_75.bp: components 3,4,5 -> Bx,By,Bz
+ot3D_ion_75.bp:   component 0    -> n
+                  components 1,2,3 -> n*ux,n*uy,n*uz
+v = (n*u) / n
+```
+
+The names, component indices, and whether the three ion components are
+momentum density or already velocity are configurable under
+`simulation.layout`. The loader requests only those component slabs from
+ADIOS2 and verifies that the field and moment grids match.
+
+```yaml
+simulation:
+  format: bp
+  sources:
+    field: ../gkeyll/data/ot3D_field_75.bp
+    moments: ../gkeyll/data/ot3D_ion_75.bp
+  layout:
+    field_variable: CartGridField
+    moments_variable: CartGridField
+    B_components: [3, 4, 5]
+    density_component: 0
+    momentum_components: [1, 2, 3]
+    velocity_representation: momentum_density
+```
+
+For `.npy` input, the default snapshot layout is a combined fields-last array
+`(nx, ny, nz, 7)` with components `[n, vx, vy, vz, Bx, By, Bz]`.
+
+A fields-first `(7, nx, ny, nz)` array and different component indices are
+supported through `simulation.layout`:
+
+```yaml
+simulation:
+  layout:
+    array_order: fields_last  # or fields_first
+    variables:
+      n: 0
+      v: [1, 2, 3]
+      B: [4, 5, 6]
+```
+
+The reference workflow's legacy magnetic-only `(nx, ny, nz, 3)` snapshots are
+also supported by mapping only `B: [0, 1, 2]`. Omitted fields must be marked
+`fluctuation`; their zero snapshot fluctuation then yields the configured
+background density or velocity.
+
+The grid is uniform and endpoint-excluded: index `(i, j, k)` is located at
+`(i Lx/nx, j Ly/ny, k Lz/nz)` in the periodic domain `[0,Lx) × [0,Ly) ×
+[0,Lz)`. Sampling uses NumPy trilinear interpolation and periodic indices.
+The Hub is selected by zero-based `hub_spacecraft` (normally `0`, the package's
+`H` spacecraft) and mapped to the box center at the first sample. Subsequent
+samples preserve the absolute motion of the complete formation:
+
+```text
+r_sim(t) = box_size/2 + (r_spacecraft(t) - r_hub(t_start))
+r_wrapped = r_sim mod box_size
+```
+
+No rotation is applied. Common formation translation is retained, so a rigidly
+moving observatory traverses the static snapshot while the initial Hub begins
+at the box center.
+
+Coordinate lengths can be supplied directly in km, in generic code units, or
+in the proton-gyroradius convention used by the reference simulation workflow:
+
+```yaml
+coordinates: {units: km, box_size_km: [100000, 100000, 100000]}
+# or
+coordinates: {units: code, box_size_code: [1, 1, 1], code_length_to_km: 100000}
+# or
+coordinates: {units: rho_p, box_size_rho_p: [64, 64, 64], rho_p_km: 100}
+```
+
+There is no universal conversion from simulation amplitudes to plasma units.
+`scale_factors.n`, `.v`, and `.B` therefore explicitly convert selected
+snapshot values to cm^-3, km/s, and nT. A field marked `fluctuation` receives
+the configured background after scaling; `total` uses the scaled sample
+directly. The generated HDF5 field metadata records the source path and shape,
+layout, physical box, mapping, boundary, interpolation, field semantics, and
+scale factors.
+
+The implementation was informed by the neighboring
+`sparse-field-reconstruction` workflow, whose legacy `.npy` convention is a
+fields-last three-component vector cube and whose Gkeyll workflow uses the
+split packed-BP extraction above plus `rho_p_km` coordinate scaling. All
+loader, mapping, and interpolation code is implemented locally;
+`hs-observatory` has no runtime dependency on that repository.
+
+Current limitations are one static snapshot state, no coordinate rotation,
+and periodic boundaries only. Future extensions may add time-dependent
+snapshots, more formats, rotations, advecting-box models, and anti-aliasing or
+filtering for long sampled tracks.
+
 ### PLUME single-mode plane wave
 
 `field.model: plume_single_mode` reads one explicitly selected numeric row from a whitespace-delimited PLUME `.mode1` file and evaluates
