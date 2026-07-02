@@ -98,6 +98,27 @@ Analysis methods should be selected by name from a registry. They should read HD
 
 Initial analysis can be simple diagnostics. More advanced methods, such as wave telescope analysis and structure functions, should be added as separate modules.
 
+Common physical derived quantities belong under `analysis/derived`, separate
+from selectable I/O wrappers. In particular, all future analyses that need
+Elsasser fields must reuse `analysis.derived.elsasser`. It defines
+`z_plus = delta_v + delta_b` and `z_minus = delta_v - delta_b`, with magnetic
+field converted from nT to km/s using proton density in cm^-3. The defaults are
+full-time, per-spacecraft density normalization and per-spacecraft mean
+subtraction; neither operation averages across the observatory. The standalone
+`elsasser` method handles truth/observed selection, plasma-frame velocity
+recovery, and linear alignment to the slower n/v time grid before calling the
+shared implementation.
+
+`elsasser_increment_pdf_static` is a downstream consumer of that shared
+Elsasser layer. It interprets all `(time, spacecraft)` samples as points in a
+single frozen field and streams the complete unique unordered pair triangle in
+bounded chunks. Pair enumeration and perpendicular projection live in
+`analysis.derived.pairs` so future static pair analyses can reuse them. The
+method uses a local pairwise magnetic-field direction with a global fallback,
+perpendicular scale and increment magnitude by default, and a geometric mean
+within each scale bin to normalize its PDFs. This approximation deliberately
+does not assign dynamics to time separation or invoke Taylor's hypothesis.
+
 ## Coding style
 
 Prefer readable, explicit scientific Python.

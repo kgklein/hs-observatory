@@ -23,6 +23,8 @@ def _load_builtins() -> None:
     # Import side effects populate the registry while keeping base imports light.
     from hs_observatory.analysis import (  # noqa: F401
         diagnostics,
+        elsasser,
+        elsasser_increment_pdf_static,
         static_decorrelation,
         structure_function,
         timeseries_fft,

@@ -1,0 +1,32 @@
+analysis:
+  method: elsasser
+
+input:
+  path: outputs/synthetic_observations.h5
+
+output:
+  path: outputs/elsasser.h5
+
+elsasser:
+  data_group: observed
+  mc_index: 0
+
+  velocity:
+    frame: auto
+    spacecraft_correction: auto
+
+  density_normalization:
+    method: global_per_spacecraft
+    species: proton
+
+  mean_subtraction:
+    method: global_per_spacecraft
+
+  timebase:
+    method: slower_of_n_and_v
+    interpolation: linear
+
+  plot:
+    enabled: true
+    path: outputs/elsasser_timeseries.png
+    dpi: 150

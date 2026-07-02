@@ -17,6 +17,110 @@ hsobs-analyze configs/example_analyze.yaml
 
 The example requests a CDF directory but enables `fallback_synthetic`, so it runs without mission files. Generation writes `outputs/synthetic_observations.h5` plus truth and geometry PNGs; analysis writes `outputs/diagnostics.json`.
 
+## Elsasser derived quantities
+
+The selectable `elsasser` analysis computes the convention
+
+```text
+z_plus  = delta_v + delta_b
+z_minus = delta_v - delta_b
+```
+
+where `b = B / sqrt(mu0 n m_p)` is magnetic field in Alfvén-speed units and
+`delta_v` and `delta_b` subtract a separate full-time mean for every
+spacecraft. Inputs use the package conventions `n` in cm^-3, `B` in nT, and
+`v` in km/s; `b` and both Elsasser fields are written in km/s. This first
+implementation assumes proton mass density only. Both density normalization
+and mean subtraction default to `global_per_spacecraft`; density normalization
+may instead be `instantaneous`.
+
+Run the observed-data example with:
+
+```bash
+hsobs-analyze configs/example_elsasser.yaml
+```
+
+Set `elsasser.data_group: truth` to use plasma-frame `/truth/v`, `/truth/n`,
+and `/truth/B`. Observed analysis selects one `mc_index`. Its velocity frame
+can be explicit or inferred from generated-file metadata; spacecraft-frame
+velocity is restored to the plasma frame using stored trajectory information.
+The method chooses the slower native `n`/`v` grid and linearly interpolates
+the other variables, including higher-cadence `B`, onto it. Anti-alias
+filtering for large cadence ratios is a future extension.
+
+The output layout is:
+
+```text
+/metadata                         convention, selection, units, and methods
+/time                             (n_time_out,)
+/spacecraft/id                    (n_spacecraft,)
+/elsasser/z_plus                  (n_time_out, n_spacecraft, 3)
+/elsasser/z_minus                 (n_time_out, n_spacecraft, 3)
+/alfven/b                         (n_time_out, n_spacecraft, 3)
+/alfven/delta_b                   (n_time_out, n_spacecraft, 3)
+/velocity/v_plasma                (n_time_out, n_spacecraft, 3)
+/velocity/delta_v                 (n_time_out, n_spacecraft, 3)
+/density/n                        (n_time_out, n_spacecraft)
+/density/n_normalization          (n_spacecraft,) for the default method,
+                                   otherwise (n_time_out, n_spacecraft)
+```
+
+When plotting is enabled, the diagnostic is a three-row by two-column grid:
+x/y/z components by `z_plus`/`z_minus`, with all spacecraft overlaid.
+
+The physical calculation lives in
+`hs_observatory.analysis.derived.elsasser`, independently of the HDF5 wrapper.
+Future analyses should import that common utility rather than implementing a
+second Elsasser convention.
+
+### Static Elsasser-increment PDFs
+
+`elsasser_increment_pdf_static` creates scale-conditioned PDFs inspired by
+Mallet et al. (2015), Fig. 1:
+
+```bash
+hsobs-analyze configs/example_elsasser_increment_pdf_static.yaml
+```
+
+The method reads an ordinary synthetic-observation file and calls the common
+Elsasser implementation internally for both truth and one configured observed
+MC member. It treats every `(time, spacecraft)` sample as a point in one frozen
+spatial field. All unique unordered pairs are included: simultaneous
+inter-spacecraft baselines, different-time cross-spacecraft baselines, and
+same-spacecraft track baselines. Time differences have no dynamical meaning;
+the method uses neither temporal lags nor Taylor's hypothesis.
+
+By default, the pair scale and Elsasser increments are projected perpendicular
+to the local pairwise mean field `0.5 * (B_A + B_B)`. A global mean-field
+direction is used when that local field is too small. Each positive increment
+is normalized within its scale bin by
+`exp(mean(log(increment)))`. The pair upper triangle is streamed repeatedly in
+bounded chunks: one pass finds scale limits, one accumulates moments and
+geometric means, a bounded priority sample estimates the normalized-increment
+percentile, and a final pass builds PDF histograms. `pair_sampling.mode:
+random` is also available and samples unique pairs reproducibly without
+replacement; `max_pairs` bounds either mode for debugging.
+
+The HDF5 product contains one subtree per configured dataset:
+
+```text
+/results/<dataset>/lambda/bin_edges
+/results/<dataset>/lambda/bin_centers
+/results/<dataset>/lambda/counts
+/results/<dataset>/lambda/valid_bin
+/results/<dataset>/pdf/z_plus/{bin_edges,bin_centers,density,counts}
+/results/<dataset>/pdf/z_plus/{typical_increment,rms_increment,fourth_root_increment}
+/results/<dataset>/pdf/z_minus/...       same products
+/results/<dataset>/alignment/{mean_sin_theta,counts}
+/results/<dataset>/samples/...           only when explicitly enabled
+```
+
+Plotting writes one normalized `z_plus` PDF figure for each dataset, with one
+curve per sufficiently populated perpendicular-scale bin. The method does not
+yet implement the Fig. 1 inset, parallel coherence length, nonlinear or
+Alfvén times, refined-critical-balance `chi`, or the Fig. 4 conditional
+alignment diagnostic.
+
 ## Two-stage workflow
 
 Generation loads a spacecraft formation, evaluates a plasma field along every trajectory at each instrument's native cadence, creates a leading-dimension Monte Carlo ensemble using variable-specific error models, and writes truth plus observations to HDF5. Analysis is a separate, registry-selected step that reads that file. The built-in `diagnostics` method reports observed and residual statistics and formation-separation summaries.
