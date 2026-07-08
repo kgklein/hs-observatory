@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 import numpy as np
 
+from hs_observatory.analysis.derived.elsasser import magnetic_field_to_alfven_units
+
 
 # Palette adapted from sparse-field-reconstruction. Mapping by name preserves
 # the established colors even though hs-observatory stores the Hub first.
@@ -136,6 +138,210 @@ def plot_observed_timeseries(
     labels.append("Nominal truth")
     axes[0, 1].legend(handles, labels, loc="center", ncol=3, frameon=False)
     fig.suptitle(f"Observed Measurements with Nominal Truth: MC {mc_index}")
+    return fig, axes
+
+
+def _density_on_target_time(
+    source_time: np.ndarray,
+    density: np.ndarray,
+    target_time: np.ndarray,
+) -> np.ndarray:
+    """Interpolate density per spacecraft onto the magnetic-field time grid."""
+
+    source_time = np.asarray(source_time, dtype=float)
+    target_time = np.asarray(target_time, dtype=float)
+    density = np.asarray(density, dtype=float)
+    if density.ndim != 2 or density.shape[0] != len(source_time):
+        raise ValueError("density must have shape (time_n, spacecraft)")
+    return np.stack(
+        [
+            np.interp(target_time, source_time, density[:, spacecraft_index])
+            for spacecraft_index in range(density.shape[1])
+        ],
+        axis=1,
+    )
+
+
+def _alfven_velocity_units(
+    time: Mapping[str, np.ndarray],
+    values: Mapping[str, np.ndarray],
+) -> np.ndarray:
+    density_at_B = _density_on_target_time(time["n"], values["n"], time["B"])
+    return magnetic_field_to_alfven_units(values["B"], density_at_B)
+
+
+def _component_ylim(*arrays: np.ndarray) -> tuple[float, float]:
+    finite = np.concatenate([np.ravel(array[np.isfinite(array)]) for array in arrays])
+    if finite.size == 0:
+        return -1.0, 1.0
+    lo = float(np.min(finite))
+    hi = float(np.max(finite))
+    if lo == hi:
+        pad = max(abs(lo) * 0.05, 1.0)
+    else:
+        pad = 0.06 * (hi - lo)
+    return lo - pad, hi + pad
+
+
+def plot_velocity_alfven_timeseries(
+    time: Mapping[str, np.ndarray],
+    values: Mapping[str, np.ndarray],
+    spacecraft_ids: Sequence[str],
+    velocity_frame: str = "plasma",
+    fluctuations: bool = False,
+):
+    """Plot velocity and magnetic field in Alfvén-speed units.
+
+    The diagnostic converts ``B`` from nT to km/s as
+    ``b = B / sqrt(mu0 m_p n)`` using instantaneous density interpolated onto
+    the magnetic-field cadence. This is intentionally a normalization check and
+    does not change the Elsasser analysis density-normalization defaults.
+    """
+
+    velocity = np.asarray(values["v"], dtype=float)
+    alfven = _alfven_velocity_units(time, values)
+    symbol_prefix = r"\delta " if fluctuations else ""
+    title_prefix = "Fluctuating " if fluctuations else ""
+    if fluctuations:
+        velocity = velocity - np.mean(velocity, axis=0, keepdims=True)
+        alfven = alfven - np.mean(alfven, axis=0, keepdims=True)
+    fig, axes = plt.subplots(3, 2, figsize=(15, 10), constrained_layout=True)
+    labels = ("x", "y", "z")
+    for component, label in enumerate(labels):
+        u_ax = axes[component, 0]
+        b_ax = axes[component, 1]
+        for spacecraft_id_index, spacecraft_id in enumerate(spacecraft_ids):
+            color = spacecraft_color(spacecraft_id)
+            u_ax.plot(
+                time["v"],
+                velocity[:, spacecraft_id_index, component],
+                color=color,
+                label=spacecraft_id,
+                linewidth=1.3,
+            )
+            b_ax.plot(
+                time["B"],
+                alfven[:, spacecraft_id_index, component],
+                color=color,
+                label=spacecraft_id,
+                linewidth=1.3,
+            )
+        ylim = _component_ylim(
+            velocity[:, :, component],
+            alfven[:, :, component],
+        )
+        u_ax.set_ylim(*ylim)
+        b_ax.set_ylim(*ylim)
+        u_ax.set_ylabel(rf"${symbol_prefix}U_{label}$ (km s$^{{-1}}$)")
+        b_ax.set_ylabel(rf"${symbol_prefix}b_{label}$ (km s$^{{-1}}$)")
+        u_ax.grid(alpha=0.3)
+        b_ax.grid(alpha=0.3)
+
+    axes[0, 0].set_title(r"Velocity $U$")
+    axes[0, 1].set_title(r"Magnetic Field $b$ in Velocity Units")
+    axes[-1, 0].set_xlabel("Time (s)")
+    axes[-1, 1].set_xlabel("Time (s)")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    axes[0, 1].legend(handles, labels, loc="best", ncol=3, fontsize=8, frameon=False)
+    fig.suptitle(
+        f"{title_prefix}Velocity and Alfvén-Speed Magnetic Field "
+        f"({velocity_frame.capitalize()}-Frame Velocity)"
+    )
+    return fig, axes
+
+
+def plot_observed_velocity_alfven_timeseries(
+    time: Mapping[str, np.ndarray],
+    truth: Mapping[str, np.ndarray],
+    observed: Mapping[str, np.ndarray],
+    spacecraft_ids: Sequence[str],
+    mc_index: int,
+    fluctuations: bool = False,
+):
+    """Overlay one observed U/b realization over nominal truth in grayscale."""
+
+    truth_u = np.asarray(truth["v"], dtype=float)
+    truth_b = _alfven_velocity_units(time, truth)
+    observed_values = {
+        "n": np.asarray(observed["n"][mc_index], dtype=float),
+        "v": np.asarray(observed["v"][mc_index], dtype=float),
+        "B": np.asarray(observed["B"][mc_index], dtype=float),
+    }
+    observed_u = observed_values["v"]
+    observed_b = _alfven_velocity_units(time, observed_values)
+    symbol_prefix = r"\delta " if fluctuations else ""
+    title_prefix = "Fluctuating " if fluctuations else ""
+    if fluctuations:
+        truth_u = truth_u - np.mean(truth_u, axis=0, keepdims=True)
+        truth_b = truth_b - np.mean(truth_b, axis=0, keepdims=True)
+        observed_u = observed_u - np.mean(observed_u, axis=0, keepdims=True)
+        observed_b = observed_b - np.mean(observed_b, axis=0, keepdims=True)
+
+    fig, axes = plt.subplots(3, 2, figsize=(15, 10), constrained_layout=True)
+    gray_colors = plt.cm.Greys(np.linspace(0.35, 0.75, len(spacecraft_ids)))
+    labels = ("x", "y", "z")
+    for component, label in enumerate(labels):
+        u_ax = axes[component, 0]
+        b_ax = axes[component, 1]
+        for spacecraft_index, _spacecraft_id in enumerate(spacecraft_ids):
+            u_ax.plot(
+                time["v"],
+                truth_u[:, spacecraft_index, component],
+                color=gray_colors[spacecraft_index],
+                linewidth=2.0,
+                alpha=0.65,
+                zorder=1,
+            )
+            b_ax.plot(
+                time["B"],
+                truth_b[:, spacecraft_index, component],
+                color=gray_colors[spacecraft_index],
+                linewidth=2.0,
+                alpha=0.65,
+                zorder=1,
+            )
+        for spacecraft_index, spacecraft_id in enumerate(spacecraft_ids):
+            color = spacecraft_color(spacecraft_id)
+            u_ax.plot(
+                time["v"],
+                observed_u[:, spacecraft_index, component],
+                color=color,
+                label=spacecraft_id,
+                linewidth=1.1,
+                zorder=2,
+            )
+            b_ax.plot(
+                time["B"],
+                observed_b[:, spacecraft_index, component],
+                color=color,
+                label=spacecraft_id,
+                linewidth=1.1,
+                zorder=2,
+            )
+        ylim = _component_ylim(
+            truth_u[:, :, component],
+            truth_b[:, :, component],
+            observed_u[:, :, component],
+            observed_b[:, :, component],
+        )
+        u_ax.set_ylim(*ylim)
+        b_ax.set_ylim(*ylim)
+        u_ax.set_ylabel(rf"${symbol_prefix}U_{label}$ (km s$^{{-1}}$)")
+        b_ax.set_ylabel(rf"${symbol_prefix}b_{label}$ (km s$^{{-1}}$)")
+        u_ax.grid(alpha=0.3)
+        b_ax.grid(alpha=0.3)
+
+    axes[0, 0].set_title(r"Velocity $U$")
+    axes[0, 1].set_title(r"Magnetic Field $b$ in Velocity Units")
+    axes[-1, 0].set_xlabel("Nominal time (s)")
+    axes[-1, 1].set_xlabel("Nominal time (s)")
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    handles.append(Line2D([0], [0], color="#777777", linewidth=2.0, label="Nominal truth"))
+    labels.append("Nominal truth")
+    axes[0, 1].legend(handles, labels, loc="best", ncol=3, fontsize=8, frameon=False)
+    fig.suptitle(
+        f"Observed {title_prefix}Velocity and Alfvén-Speed Magnetic Field: MC {mc_index}"
+    )
     return fig, axes
 
 
@@ -398,6 +604,29 @@ def observed_visualization_paths(
     return observed_path, observed_geometry_path
 
 
+def alfven_visualization_path(output_path: str | Path, config: dict) -> Path:
+    """Resolve the truth U/b diagnostic path."""
+
+    output = Path(output_path)
+    return Path(
+        config.get("alfven_path", output.with_name(f"{output.stem}_velocity_alfven.png"))
+    )
+
+
+def observed_alfven_visualization_path(
+    output_path: str | Path, config: dict, mc_index: int
+) -> Path:
+    """Resolve the observed U/b diagnostic path."""
+
+    output = Path(output_path)
+    return Path(
+        config.get(
+            "observed_alfven_path",
+            output.with_name(f"{output.stem}_velocity_alfven_observed_mc{mc_index:03d}.png"),
+        )
+    )
+
+
 def save_default_visualizations(
     *,
     output_path: str | Path,
@@ -427,6 +656,18 @@ def save_default_visualizations(
     )
     geometry_figure.savefig(geometry_path, dpi=dpi)
     plt.close(geometry_figure)
+    if bool(config.get("alfven_enabled", True)):
+        alfven_path = alfven_visualization_path(output_path, config)
+        alfven_path.parent.mkdir(parents=True, exist_ok=True)
+        alfven_figure, _ = plot_velocity_alfven_timeseries(
+            time,
+            truth,
+            spacecraft_ids,
+            velocity_frame=velocity_frame,
+            fluctuations=bool(config.get("alfven_fluctuations", True)),
+        )
+        alfven_figure.savefig(alfven_path, dpi=dpi)
+        plt.close(alfven_figure)
     return truth_path, geometry_path
 
 
@@ -465,4 +706,17 @@ def save_observed_visualizations(
     )
     geometry_figure.savefig(geometry_path, dpi=dpi)
     plt.close(geometry_figure)
+    if bool(config.get("alfven_enabled", True)):
+        alfven_path = observed_alfven_visualization_path(output_path, config, mc_index)
+        alfven_path.parent.mkdir(parents=True, exist_ok=True)
+        alfven_figure, _ = plot_observed_velocity_alfven_timeseries(
+            time,
+            truth,
+            observed,
+            spacecraft_ids,
+            mc_index,
+            fluctuations=bool(config.get("alfven_fluctuations", True)),
+        )
+        alfven_figure.savefig(alfven_path, dpi=dpi)
+        plt.close(alfven_figure)
     return observed_path, geometry_path

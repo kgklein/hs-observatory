@@ -71,6 +71,15 @@ def write_observations(
                     dataset.attrs["units"] = "s"
                 elif name == "position_offset":
                     dataset.attrs["units"] = "km"
+                elif name in {"magnetic_dc_offset", "magnetic_ac_noise"}:
+                    dataset.attrs["units"] = "nT"
+                elif name in {
+                    "velocity_alignment_rotvec",
+                    "magnetic_alignment_rotvec",
+                    "velocity_angle_alpha",
+                    "velocity_angle_beta",
+                }:
+                    dataset.attrs["units"] = "rad"
     return output
 
 

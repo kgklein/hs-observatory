@@ -6,8 +6,10 @@ from hs_observatory.visualization import (
     SPACECRAFT_COLORS,
     plot_observed_spacecraft_geometry,
     plot_observed_timeseries,
+    plot_observed_velocity_alfven_timeseries,
     plot_spacecraft_geometry,
     plot_truth_timeseries,
+    plot_velocity_alfven_timeseries,
 )
 
 
@@ -85,4 +87,68 @@ def test_observed_geometry_overlays_offsets_on_nominal_positions():
     true_n1 = axes[0, 0].collections[2].get_offsets()[0]
     measured_n1 = axes[0, 0].collections[3].get_offsets()[0]
     assert np.allclose(measured_n1 - true_n1, (2.0, 4.0))
+    plt.close(figure)
+
+
+def test_velocity_alfven_plot_converts_b_to_velocity_units():
+    ids = ("H", "N1")
+    time = {"n": np.array([0.0, 2.0]), "v": np.array([0.0, 1.0]), "B": np.array([0.0, 1.0, 2.0])}
+    values = {
+        "n": np.full((2, 2), 5.0),
+        "v": np.zeros((2, 2, 3)),
+        "B": np.zeros((3, 2, 3)),
+    }
+    values["v"][:, :, 0] = 100.0
+    values["B"][:, :, 0] = 5.0
+
+    figure, axes = plot_velocity_alfven_timeseries(time, values, ids)
+
+    assert axes.shape == (3, 2)
+    assert len(axes[0, 0].lines) == 2
+    assert len(axes[0, 1].lines) == 2
+    assert axes[0, 0].get_ylabel().startswith("$U_x$")
+    assert axes[0, 1].get_ylabel().startswith("$b_x$")
+    assert np.all(np.asarray(axes[0, 1].lines[0].get_ydata()) > 40.0)
+    assert np.all(np.asarray(axes[0, 1].lines[0].get_ydata()) < 60.0)
+    plt.close(figure)
+
+
+def test_velocity_alfven_plot_can_show_fluctuations():
+    ids = ("H",)
+    time = {"n": np.array([0.0, 1.0, 2.0]), "v": np.array([0.0, 1.0, 2.0]), "B": np.array([0.0, 1.0, 2.0])}
+    values = {
+        "n": np.full((3, 1), 5.0),
+        "v": np.array([[[10.0, 0.0, 0.0]], [[11.0, 0.0, 0.0]], [[12.0, 0.0, 0.0]]]),
+        "B": np.zeros((3, 1, 3)),
+    }
+
+    figure, axes = plot_velocity_alfven_timeseries(time, values, ids, fluctuations=True)
+
+    assert np.allclose(axes[0, 0].lines[0].get_ydata(), [-1.0, 0.0, 1.0])
+    assert axes[0, 0].get_ylabel().startswith("$\\delta U_x$")
+    plt.close(figure)
+
+
+def test_observed_velocity_alfven_plot_overlays_truth_and_observed():
+    ids = ("H", "N1")
+    time = {"n": np.array([0.0, 2.0]), "v": np.array([0.0, 1.0]), "B": np.array([0.0, 1.0, 2.0])}
+    truth = {
+        "n": np.full((2, 2), 5.0),
+        "v": np.ones((2, 2, 3)),
+        "B": np.ones((3, 2, 3)),
+    }
+    observed = {
+        "n": np.stack((truth["n"], truth["n"] * 1.1)),
+        "v": np.stack((truth["v"], truth["v"] * 2.0)),
+        "B": np.stack((truth["B"], truth["B"] * 2.0)),
+    }
+
+    figure, axes = plot_observed_velocity_alfven_timeseries(
+        time, truth, observed, ids, mc_index=1
+    )
+
+    assert axes.shape == (3, 2)
+    assert len(axes[0, 0].lines) == 4
+    assert len(axes[0, 1].lines) == 4
+    assert axes[0, 0].lines[2].get_color() == SPACECRAFT_COLORS["H"]
     plt.close(figure)

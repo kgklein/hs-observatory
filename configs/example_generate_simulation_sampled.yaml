@@ -27,14 +27,16 @@ field:
       field: ../gkeyll/data/ot3D_field_75.bp
       moments: ../gkeyll/data/ot3D_ion_75.bp
 
-    # Packed Gkeyll CartGridField conventions. Bulk v = (n*u) / n.
+    # Packed Gkeyll CartGridField conventions for this dataset. The ion
+    # components are already bulk velocity; set momentum_density only for files
+    # that truly store n*u.
     layout:
       field_variable: CartGridField
       moments_variable: CartGridField
       B_components: [3, 4, 5]
       density_component: 0
       momentum_components: [1, 2, 3]
-      velocity_representation: momentum_density
+      velocity_representation: velocity
 
     coordinates:
       units: rho_p
@@ -53,10 +55,10 @@ field:
       v: total
       B: total
 
-    # Convert provider values to cm^-3, km/s, and nT. Unit factors of 1.0
-    # assume the supplied files already use those units; calibrate as needed.
+    # Convert provider values to cm^-3, km/s, and nT. The reference BP density
+    # has mean 100 in code units, so 0.05 maps it to 5 cm^-3.
     scale_factors:
-      n: 1.0
+      n: 0.05
       v: 1.0
       B: 1.0
 

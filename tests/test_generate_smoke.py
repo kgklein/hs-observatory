@@ -44,8 +44,10 @@ output:
     assert generate_from_config(generation_config) == h5_path
     assert (tmp_path / "generated_truth.png").is_file()
     assert (tmp_path / "generated_geometry.png").is_file()
+    assert (tmp_path / "generated_velocity_alfven.png").is_file()
     assert (tmp_path / "generated_observed_mc000.png").is_file()
     assert (tmp_path / "generated_geometry_observed_mc000.png").is_file()
+    assert (tmp_path / "generated_velocity_alfven_observed_mc000.png").is_file()
 
     with h5py.File(h5_path) as handle:
         assert handle["time/n"].shape == (3,)

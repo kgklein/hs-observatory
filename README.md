@@ -232,6 +232,22 @@ errors:
 
 Set either coordinate model to `none` to disable it. Scalar `sigma_km` applies the same width to X, Y, and Z; a three-component value sets their widths independently. `/errors/n`, `/errors/v`, and `/errors/B` contain the additive measurement-noise realizations; coordinate-induced differences are represented by the stored offsets rather than folded into those arrays.
 
+### Observatory requirement model
+
+Use `errors.model: observatory` for the requirement-motivated HelioSwarm-like
+model. It samples constant timing and position offsets, multiplicative
+density/speed bias plus OU noise, transverse velocity angular precision,
+magnetic DC offsets, merged-product colored magnetic AC noise, and independent
+constant B/V alignment rotations. The updated plume example uses this model:
+
+```bash
+hsobs-generate configs/example_generate_plume_single_mode.yaml
+```
+
+See `docs/observatory_error_model.md` for assumptions, units, default
+requirements, and the additional `/errors` datasets written for each Monte
+Carlo realization.
+
 ### Ornstein–Uhlenbeck measurement errors
 
 Use `model: ornstein_uhlenbeck` for time-correlated measurement noise. OU widths are stationary standard deviations, and correlation times are in seconds. The implementation uses the exact discrete transition for each interval, so the same physical parameters work correctly with different or irregular instrument cadences.
@@ -267,15 +283,22 @@ hsobs-generate configs/example_generate_ou.yaml
 
 ## Default visualizations
 
-Generation creates two nominal-truth PNGs by default:
+Generation creates three nominal-truth PNGs by default:
 
 - A seven-panel truth figure, with density and the three velocity components in the left column, the legend in the upper-right, and matching velocity/magnetic components in the remaining rows.
 - A geometry figure with three hub-relative formation projections and an X-Z projection of the spacecraft paths.
+- A velocity/Alfvén-speed comparison figure for `delta U` and
+  `delta b = delta[B / sqrt(mu0 m_p n)]` in km/s by default. This diagnostic
+  uses instantaneous density interpolated onto the magnetic-field cadence,
+  subtracts a full-interval per-spacecraft mean when
+  `alfven_fluctuations: true`, and shares each component's y-axis range between
+  the matching velocity and magnetic panels.
 
-When any time, position, or measurement error model is enabled, generation also creates two overlay figures for one selected Monte Carlo realization:
+When any time, position, or measurement error model is enabled, generation also creates overlay figures for one selected Monte Carlo realization:
 
 - Observed `n`, `v`, and `B` in spacecraft colors, with each spacecraft's nominal truth in grayscale underneath.
 - Observed relative positions and absolute X-Z paths in spacecraft colors, with nominal positions and paths in grayscale underneath.
+- Observed `U` and `b` in spacecraft colors, with nominal truth in grayscale.
 
 The overlay uses `mc_index: 0` by default rather than rendering every member of a potentially large ensemble. Change `mc_index` to inspect another realization, or set `observed_enabled: false` to suppress only the overlay pair.
 
@@ -284,16 +307,20 @@ The HelioSwarm palette is hardcoded by spacecraft name to match the reference pl
 ```yaml
 visualization:
   enabled: true
+  alfven_enabled: true
+  alfven_fluctuations: true
   observed_enabled: true
   mc_index: 0
   truth_path: outputs/synthetic_observations_truth.png
   geometry_path: outputs/synthetic_observations_geometry.png
+  alfven_path: outputs/synthetic_observations_velocity_alfven.png
   observed_path: outputs/synthetic_observations_observed_mc000.png
   observed_geometry_path: outputs/synthetic_observations_geometry_observed_mc000.png
+  observed_alfven_path: outputs/synthetic_observations_velocity_alfven_observed_mc000.png
   dpi: 150
 ```
 
-When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_observed_mcNNN.png`, and `_geometry_observed_mcNNN.png`. Observed time series are plotted against nominal time, consistent with the coordinate assumptions used by downstream analysis.
+When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_velocity_alfven.png`, `_observed_mcNNN.png`, `_geometry_observed_mcNNN.png`, and `_velocity_alfven_observed_mcNNN.png`. Observed time series are plotted against nominal time, consistent with the coordinate assumptions used by downstream analysis.
 
 ## Extension points
 
@@ -403,13 +430,15 @@ hsobs-generate configs/example_generate_simulation_sampled.yaml
 ```
 
 The example matches the provider files in `../gkeyll/data`. It combines two
-packed ADIOS2 variables named `CartGridField`:
+packed ADIOS2 variables named `CartGridField`. For the reference
+`ot3D_ion_75.bp` file used here, the ion components are already bulk velocity;
+use `velocity_representation: momentum_density` only for files whose selected
+ion components truly store `n*u`.
 
 ```text
 ot3D_field_75.bp: components 3,4,5 -> Bx,By,Bz
 ot3D_ion_75.bp:   component 0    -> n
-                  components 1,2,3 -> n*ux,n*uy,n*uz
-v = (n*u) / n
+                  components 1,2,3 -> ux,uy,uz
 ```
 
 The names, component indices, and whether the three ion components are
@@ -429,7 +458,7 @@ simulation:
     B_components: [3, 4, 5]
     density_component: 0
     momentum_components: [1, 2, 3]
-    velocity_representation: momentum_density
+    velocity_representation: velocity
 ```
 
 For `.npy` input, the default snapshot layout is a combined fields-last array
@@ -482,11 +511,15 @@ coordinates: {units: rho_p, box_size_rho_p: [64, 64, 64], rho_p_km: 100}
 
 There is no universal conversion from simulation amplitudes to plasma units.
 `scale_factors.n`, `.v`, and `.B` therefore explicitly convert selected
-snapshot values to cm^-3, km/s, and nT. A field marked `fluctuation` receives
-the configured background after scaling; `total` uses the scaled sample
-directly. The generated HDF5 field metadata records the source path and shape,
-layout, physical box, mapping, boundary, interpolation, field semantics, and
-scale factors.
+snapshot values to cm^-3, km/s, and nT. For the reference BP file, density has
+mean 100 in code units and the example uses `scale_factors.n: 0.05`, giving a
+mean physical density of 5 cm^-3. With that density scale and
+`velocity_representation: velocity`, the full-cube RMS of `U` and
+`B/sqrt(mu0 m_p n)` are comparable. A field marked `fluctuation` receives the
+configured background after scaling; `total` uses the scaled sample directly.
+The generated HDF5 field metadata records the source path and shape, layout,
+physical box, mapping, boundary, interpolation, field semantics, and scale
+factors.
 
 The implementation was informed by the neighboring
 `sparse-field-reconstruction` workflow, whose legacy `.npy` convention is a

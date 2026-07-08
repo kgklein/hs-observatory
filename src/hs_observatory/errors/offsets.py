@@ -7,6 +7,11 @@ from typing import Any
 
 import numpy as np
 
+from hs_observatory.errors.observatory import (
+    component_sigma_from_3d_radial_3sigma,
+    sigma_from_3sigma,
+)
+
 
 class CoordinateOffsetModel(ABC):
     """Draw offsets that remain fixed over an entire spacecraft time series."""
@@ -69,18 +74,34 @@ class GaussianPositionOffset(CoordinateOffsetModel):
 def time_offset_model_from_config(config: dict[str, Any] | None) -> CoordinateOffsetModel:
     config = config or {"model": "none"}
     model = str(config.get("model", "none")).lower()
+    if not bool(config.get("enabled", True)):
+        return NoTimeOffset()
     if model in {"none", "no_error"}:
         return NoTimeOffset()
     if model in {"gaussian_constant", "gaussian_time_offset"}:
         return GaussianTimeOffset(config["sigma_s"])
+    if model in {"constant_per_spacecraft", "observatory_timing"}:
+        requirement_ms = float(config.get("requirement_3sigma_ms", 12.5))
+        return GaussianTimeOffset(sigma_from_3sigma(requirement_ms) * 1.0e-3)
     raise ValueError(f"Unknown time-offset model: {model}")
 
 
 def position_offset_model_from_config(config: dict[str, Any] | None) -> CoordinateOffsetModel:
     config = config or {"model": "none"}
     model = str(config.get("model", "none")).lower()
+    if not bool(config.get("enabled", True)):
+        return NoPositionOffset()
     if model in {"none", "no_error"}:
         return NoPositionOffset()
     if model in {"gaussian_constant", "gaussian_position_offset"}:
         return GaussianPositionOffset(config["sigma_km"])
+    if model in {
+        "isotropic_3d_gaussian_position_error",
+        "observatory_position",
+    }:
+        radius = float(config.get("requirement_3sigma_magnitude_km", 2.5))
+        probability = float(config.get("radial_probability", 0.9973))
+        return GaussianPositionOffset(
+            component_sigma_from_3d_radial_3sigma(radius, probability)
+        )
     raise ValueError(f"Unknown position-offset model: {model}")

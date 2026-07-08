@@ -14,11 +14,18 @@ from hs_observatory.errors.offsets import (
     position_offset_model_from_config,
     time_offset_model_from_config,
 )
+from hs_observatory.errors.observatory import (
+    apply_observatory_measurement_errors,
+    normalized_observatory_config,
+    observatory_errors_enabled,
+)
 from hs_observatory.fields.sine_sum import field_from_config
 from hs_observatory.io.cdf_positions import load_spacecraft_configuration
 from hs_observatory.io.hdf5 import write_observations
 from hs_observatory.spacecraft.configuration import SpacecraftConfiguration
 from hs_observatory.visualization import (
+    alfven_visualization_path,
+    observed_alfven_visualization_path,
     observed_visualization_paths,
     save_default_visualizations,
     save_observed_visualizations,
@@ -69,6 +76,9 @@ def _spacecraft_on_time_axes(
 
 
 def _has_configured_errors(config: dict) -> bool:
+    if observatory_errors_enabled(config):
+        return True
+
     def enabled(model_config: dict | None) -> bool:
         model = str((model_config or {}).get("model", "none")).lower()
         return model not in {"none", "no_error"}
@@ -119,8 +129,22 @@ def generate_from_config(
     seed = errors_config.get("random_seed")
     rng = np.random.default_rng(seed)
     n_spacecraft = len(spacecraft["n"].spacecraft_ids)
-    time_offset_model = time_offset_model_from_config(errors_config.get("time"))
-    position_offset_model = position_offset_model_from_config(errors_config.get("position"))
+    use_observatory_errors = observatory_errors_enabled(errors_config)
+    observatory_config = (
+        normalized_observatory_config(errors_config) if use_observatory_errors else None
+    )
+    time_config = (
+        observatory_config["timing"]
+        if use_observatory_errors
+        else errors_config.get("time")
+    )
+    position_config = (
+        observatory_config["position"]
+        if use_observatory_errors
+        else errors_config.get("position")
+    )
+    time_offset_model = time_offset_model_from_config(time_config)
+    position_offset_model = position_offset_model_from_config(position_config)
     time_offset = time_offset_model.draw(rng, n_mc, n_spacecraft)  # (mc, spacecraft), seconds
     position_offset = position_offset_model.draw(
         rng, n_mc, n_spacecraft
@@ -133,6 +157,7 @@ def generate_from_config(
     }
     variable_configs = errors_config.get("variables", {})
     measurement_error_names = {}
+    sampled_by_quantity: dict[str, np.ndarray] = {}
     for quantity in ("n", "v", "B"):
         sampled = np.empty((n_mc, *truth[quantity].shape), dtype=float)
         for mc_index in range(n_mc):
@@ -149,11 +174,28 @@ def generate_from_config(
             if quantity == "v" and velocity_frame == "spacecraft":
                 assert spacecraft_velocity_time_first is not None
                 sampled[mc_index] -= spacecraft_velocity_time_first
-        model = error_model_from_config(variable_configs.get(quantity), quantity=quantity)
-        observed[quantity], realized_errors[quantity] = model.apply_ensemble(
-            sampled, rng, time=time[quantity]
+        sampled_by_quantity[quantity] = sampled
+
+    if use_observatory_errors:
+        result = apply_observatory_measurement_errors(
+            sampled_by_quantity, time, errors_config, rng
         )
-        measurement_error_names[quantity] = model.name
+        observed.update(result.observed)
+        realized_errors.update(result.errors)
+        measurement_error_names = {
+            "n": "observatory_density",
+            "v": "observatory_velocity_speed_angle_alignment",
+            "B": "observatory_magnetic_dc_ac_alignment",
+        }
+        observatory_metadata = result.metadata
+    else:
+        observatory_metadata = {}
+        for quantity in ("n", "v", "B"):
+            model = error_model_from_config(variable_configs.get(quantity), quantity=quantity)
+            observed[quantity], realized_errors[quantity] = model.apply_ensemble(
+                sampled_by_quantity[quantity], rng, time=time[quantity]
+            )
+            measurement_error_names[quantity] = model.name
 
     output_path = Path(config["output"]["path"])
     visualization_config = config.get("visualization", {})
@@ -187,8 +229,22 @@ def generate_from_config(
             f"got {observed_mc_index}"
         )
     truth_plot_path, geometry_plot_path = visualization_paths(output_path, visualization_config)
+    alfven_plot_path = alfven_visualization_path(output_path, visualization_config)
     observed_plot_path, observed_geometry_plot_path = observed_visualization_paths(
         output_path, visualization_config, observed_mc_index
+    )
+    observed_alfven_plot_path = observed_alfven_visualization_path(
+        output_path, visualization_config, observed_mc_index
+    )
+    alfven_visualization_enabled = visualization_enabled and bool(
+        visualization_config.get("alfven_enabled", True)
+    )
+    alfven_visualization_fluctuations = bool(
+        visualization_config.get("alfven_fluctuations", True)
+    )
+    observed_alfven_visualization_enabled = (
+        observed_visualization_enabled
+        and bool(visualization_config.get("alfven_enabled", True))
     )
     metadata = {
         "config_yaml": loaded.yaml_text,
@@ -205,9 +261,11 @@ def generate_from_config(
                 "measurements": measurement_error_names,
                 "time": time_offset_model.name,
                 "position": position_offset_model.name,
+                "observatory": bool(use_observatory_errors),
             },
             sort_keys=True,
         ),
+        **observatory_metadata,
         "spacecraft_source": json.dumps(spacecraft["n"].metadata, sort_keys=True),
         "schema_version": "2",
         "velocity_truth_frame": "plasma",
@@ -217,6 +275,11 @@ def generate_from_config(
         "visualization_enabled": visualization_enabled,
         "truth_plot_path": str(truth_plot_path) if visualization_enabled else "null",
         "geometry_plot_path": str(geometry_plot_path) if visualization_enabled else "null",
+        "alfven_visualization_enabled": alfven_visualization_enabled,
+        "alfven_visualization_fluctuations": alfven_visualization_fluctuations,
+        "alfven_plot_path": (
+            str(alfven_plot_path) if alfven_visualization_enabled else "null"
+        ),
         "observed_visualization_enabled": observed_visualization_enabled,
         "observed_visualization_mc_index": observed_mc_index,
         "observed_plot_path": (
@@ -224,6 +287,12 @@ def generate_from_config(
         ),
         "observed_geometry_plot_path": (
             str(observed_geometry_plot_path) if observed_visualization_enabled else "null"
+        ),
+        "observed_alfven_visualization_enabled": observed_alfven_visualization_enabled,
+        "observed_alfven_plot_path": (
+            str(observed_alfven_plot_path)
+            if observed_alfven_visualization_enabled
+            else "null"
         ),
     }
     output = write_observations(
