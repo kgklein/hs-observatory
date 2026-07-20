@@ -20,14 +20,20 @@ from hs_observatory.errors.observatory import (
     observatory_errors_enabled,
 )
 from hs_observatory.fields.sine_sum import field_from_config
-from hs_observatory.io.cdf_positions import load_spacecraft_configuration
+from hs_observatory.io.cdf_positions import (
+    FILL_VALUE_THRESHOLD,
+    load_spacecraft_configuration,
+    select_cdf_configuration_sample,
+)
 from hs_observatory.io.hdf5 import write_observations
 from hs_observatory.spacecraft.configuration import SpacecraftConfiguration
 from hs_observatory.visualization import (
     alfven_visualization_path,
+    geometry_summary_paths,
     observed_alfven_visualization_path,
     observed_visualization_paths,
     save_default_visualizations,
+    save_geometry_summary,
     save_observed_visualizations,
     visualization_paths,
 )
@@ -88,6 +94,28 @@ def _has_configured_errors(config: dict) -> bool:
         or enabled(config.get("position"))
         or any(enabled(value) for value in config.get("variables", {}).values())
     )
+
+
+def _geometry_context_trajectory(config: dict, metadata: dict) -> np.ndarray | None:
+    """Return full CDF hub trajectory context when it is available."""
+
+    if metadata.get("source") != "cdf":
+        return None
+    cdf_path = config.get("cdf_path", config.get("cdf_directory"))
+    if not cdf_path:
+        return None
+    sample = select_cdf_configuration_sample(
+        cdf_path,
+        requested_time=config.get("configuration_time"),
+    )
+    valid = np.asarray(sample["valid"], dtype=bool)
+    positions = np.asarray(sample["positions"], dtype=float)[:, valid, :]
+    hub_trajectory = positions[:, 0, :]
+    keep = np.all(hub_trajectory > FILL_VALUE_THRESHOLD, axis=1)
+    keep &= np.all(np.isfinite(hub_trajectory), axis=1)
+    if not np.any(keep):
+        return None
+    return hub_trajectory[keep]
 
 
 def generate_from_config(
@@ -229,6 +257,9 @@ def generate_from_config(
             f"got {observed_mc_index}"
         )
     truth_plot_path, geometry_plot_path = visualization_paths(output_path, visualization_config)
+    geometry_summary_pdf_path, geometry_summary_png_path = geometry_summary_paths(
+        output_path, spacecraft["n"].metadata
+    )
     alfven_plot_path = alfven_visualization_path(output_path, visualization_config)
     observed_plot_path, observed_geometry_plot_path = observed_visualization_paths(
         output_path, visualization_config, observed_mc_index
@@ -275,6 +306,12 @@ def generate_from_config(
         "visualization_enabled": visualization_enabled,
         "truth_plot_path": str(truth_plot_path) if visualization_enabled else "null",
         "geometry_plot_path": str(geometry_plot_path) if visualization_enabled else "null",
+        "geometry_summary_pdf_path": (
+            str(geometry_summary_pdf_path) if visualization_enabled else "null"
+        ),
+        "geometry_summary_png_path": (
+            str(geometry_summary_png_path) if visualization_enabled else "null"
+        ),
         "alfven_visualization_enabled": alfven_visualization_enabled,
         "alfven_visualization_fluctuations": alfven_visualization_fluctuations,
         "alfven_plot_path": (
@@ -314,6 +351,39 @@ def generate_from_config(
             position={quantity: spacecraft[quantity].position for quantity in ("n", "v", "B")},
             spacecraft_ids=spacecraft["n"].spacecraft_ids,
             velocity_frame=truth_visualization_velocity_frame,
+        )
+        path_quantity = max(("n", "v", "B"), key=lambda quantity: len(time[quantity]))
+        pdf_path, png_path, geometry_diagnostics = save_geometry_summary(
+            output_path=output,
+            config=visualization_config,
+            time=time[path_quantity],
+            position=spacecraft[path_quantity].position,
+            spacecraft_ids=spacecraft["n"].spacecraft_ids,
+            metadata=spacecraft["n"].metadata,
+            context_trajectory=_geometry_context_trajectory(
+                config["spacecraft"], spacecraft["n"].metadata
+            ),
+        )
+        print(
+            "Geometry summary diagnostics:\n"
+            f"  requested configuration_time: "
+            f"{geometry_diagnostics['requested_configuration_time']}\n"
+            f"  matched CDF sample time: "
+            f"{geometry_diagnostics['matched_cdf_sample_time']}\n"
+            f"  matched sample index: {geometry_diagnostics['matched_sample_index']}\n"
+            f"  hub index: {geometry_diagnostics['hub_index']}\n"
+            f"  number of spacecraft: {geometry_diagnostics['n_spacecraft']}\n"
+            f"  number of unique baselines: {geometry_diagnostics['n_baselines']}\n"
+            f"  baseline magnitude range: "
+            f"{geometry_diagnostics['baseline_min_km']:.6g} to "
+            f"{geometry_diagnostics['baseline_max_km']:.6g} km\n"
+            f"  number of polyhedra: {geometry_diagnostics['n_polyhedra']}\n"
+            f"  regular polyhedra with Q<=0.6: "
+            f"{geometry_diagnostics['n_regular_polyhedra']}\n"
+            f"  regular size ratio >= 3: "
+            f"{geometry_diagnostics['regular_size_ratio_at_least_3']}\n"
+            f"  output PDF path: {pdf_path}\n"
+            f"  output PNG path: {png_path}"
         )
     if observed_visualization_enabled:
         observed_truth = dict(truth)

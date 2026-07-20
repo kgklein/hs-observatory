@@ -44,6 +44,9 @@ output:
     assert generate_from_config(generation_config) == h5_path
     assert (tmp_path / "generated_truth.png").is_file()
     assert (tmp_path / "generated_geometry.png").is_file()
+    overview_dir = tmp_path / "geometry_overviews"
+    assert any(overview_dir.glob("generated_geometry_summary_*.pdf"))
+    assert any(overview_dir.glob("generated_geometry_summary_*.png"))
     assert (tmp_path / "generated_velocity_alfven.png").is_file()
     assert (tmp_path / "generated_observed_mc000.png").is_file()
     assert (tmp_path / "generated_geometry_observed_mc000.png").is_file()
