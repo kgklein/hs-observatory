@@ -22,6 +22,35 @@ from hs_observatory.spacecraft.configuration import (
 FILL_VALUE_THRESHOLD = -1.0e30
 
 
+def select_cdf_configuration_sample(
+    path: str | Path,
+    *,
+    requested_time: str | None = None,
+) -> dict[str, Any]:
+    """Return the nearest valid CDF formation sample and its source context."""
+
+    epochs, positions, labels, sources = read_cdf_positions(path)
+    target = epochs[0] if requested_time is None else np.datetime64(requested_time)
+    index = int(np.argmin(np.abs(epochs - target)))
+    selected = positions[index]
+    valid = np.all(selected > FILL_VALUE_THRESHOLD, axis=1)
+    valid &= np.asarray([label != "N/A" for label in labels])
+    if not np.any(valid):
+        raise ValueError("Selected CDF record contains no valid spacecraft positions")
+    return {
+        "epochs": epochs,
+        "positions": positions,
+        "labels": labels,
+        "source_files": sources,
+        "requested_time": requested_time,
+        "selected_time": str(epochs[index]),
+        "selected_index": index,
+        "selected_position": selected,
+        "valid": valid,
+        "source_file": sources[index],
+    }
+
+
 def _cdf_files(path: str | Path) -> list[Path]:
     source = Path(path).expanduser()
     if source.is_file() and source.suffix.lower() == ".cdf":
@@ -94,14 +123,9 @@ def configuration_from_cdf(
     readers may interpolate full ephemerides without changing downstream APIs.
     """
 
-    epochs, positions, labels, sources = read_cdf_positions(path)
-    target = epochs[0] if requested_time is None else np.datetime64(requested_time)
-    index = int(np.argmin(np.abs(epochs - target)))
-    selected = positions[index]
-    valid = np.all(selected > FILL_VALUE_THRESHOLD, axis=1)
-    valid &= np.asarray([label != "N/A" for label in labels])
-    if not np.any(valid):
-        raise ValueError("Selected CDF record contains no valid spacecraft positions")
+    sample = select_cdf_configuration_sample(path, requested_time=requested_time)
+    selected = sample["selected_position"]
+    valid = sample["valid"]
 
     time = np.asarray(time, dtype=float)
     velocity = (
@@ -113,13 +137,14 @@ def configuration_from_cdf(
         raise ValueError("spacecraft.velocity_km_s must contain three components")
     base = selected[valid]
     trajectory = base[:, None, :] + time[None, :, None] * velocity[None, None, :]
-    selected_labels = [label for label, keep in zip(labels, valid) if keep]
+    selected_labels = [label for label, keep in zip(sample["labels"], valid) if keep]
     metadata: dict[str, Any] = {
         "source": "cdf",
         "cdf_path": str(Path(path).expanduser()),
-        "source_file": sources[index],
+        "source_file": sample["source_file"],
         "requested_time": requested_time,
-        "selected_time": str(epochs[index]),
+        "selected_time": sample["selected_time"],
+        "selected_index": sample["selected_index"],
         "position_units": "km",
         "selection": "nearest_record_snapshot",
     }
