@@ -15,6 +15,8 @@ DEFAULT_BP_LAYOUT = {
     "moments_variable": "CartGridField",
     "B_components": (3, 4, 5),
     "density_component": 0,
+    "density_representation": "number_density",
+    "density_mass": 1.0,
     "momentum_components": (1, 2, 3),
     "velocity_representation": "momentum_density",
 }
@@ -134,6 +136,14 @@ def load_simulation_bp(
     B_indices = _vector_indices(config["B_components"], "B_components")
     momentum_indices = _vector_indices(config["momentum_components"], "momentum_components")
     density_index = int(config["density_component"])
+    density_representation = str(config["density_representation"]).lower()
+    density_mass = float(config["density_mass"])
+    if density_representation not in {"number_density", "mass_density"}:
+        raise ValueError(
+            "simulation.layout.density_representation must be number_density or mass_density"
+        )
+    if density_mass <= 0.0 or not np.isfinite(density_mass):
+        raise ValueError("simulation.layout.density_mass must be positive and finite")
     representation = str(config["velocity_representation"]).lower()
     if representation not in {"momentum_density", "velocity"}:
         raise ValueError(
@@ -152,20 +162,24 @@ def load_simulation_bp(
             "Field and ion-moment BP grids must match; got "
             f"{field_shape[:3]} and {moment_shape[:3]}"
         )
-    n = np.asarray(moment_components[density_index], dtype=float)
+    density_raw = np.asarray(moment_components[density_index], dtype=float)
     momentum_or_velocity = np.stack(
         [moment_components[index] for index in momentum_indices], axis=-1
     )
     if representation == "momentum_density":
-        if np.any(~np.isfinite(n)) or np.any(n == 0.0):
+        if np.any(~np.isfinite(density_raw)) or np.any(density_raw == 0.0):
             raise ValueError(
                 "Ion density must be finite and nonzero to convert momentum density to velocity"
             )
-        v = momentum_or_velocity / n[..., None]
+        v = momentum_or_velocity / density_raw[..., None]
     else:
         v = momentum_or_velocity
+    if density_representation == "mass_density":
+        n = density_raw / density_mass
+    else:
+        n = density_raw
     B = np.stack([field_components[index] for index in B_indices], axis=-1)
-    if not np.all(np.isfinite(v)) or not np.all(np.isfinite(B)):
+    if not np.all(np.isfinite(n)) or not np.all(np.isfinite(v)) or not np.all(np.isfinite(B)):
         raise ValueError("Selected BP density, velocity, or magnetic values are non-finite")
 
     normalized_layout = {
@@ -174,6 +188,8 @@ def load_simulation_bp(
         "moments_variable": moments_variable,
         "B_components": list(B_indices),
         "density_component": density_index,
+        "density_representation": density_representation,
+        "density_mass": density_mass,
         "momentum_components": list(momentum_indices),
         "velocity_representation": representation,
         "field_source_shape": list(field_shape),

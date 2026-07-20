@@ -25,8 +25,10 @@ def _load_builtins() -> None:
         diagnostics,
         elsasser,
         elsasser_increment_pdf_static,
+        rbf_reconstruction,
         static_decorrelation,
         structure_function,
+        timesync,
         timeseries_fft,
     )
 

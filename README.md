@@ -430,15 +430,18 @@ hsobs-generate configs/example_generate_simulation_sampled.yaml
 ```
 
 The example matches the provider files in `../gkeyll/data`. It combines two
-packed ADIOS2 variables named `CartGridField`. For the reference
-`ot3D_ion_75.bp` file used here, the ion components are already bulk velocity;
-use `velocity_representation: momentum_density` only for files whose selected
-ion components truly store `n*u`.
+packed ADIOS2 variables named `CartGridField`. The field component order comes
+from the local loading note. The ion component order is described there as
+`n,nux,nuy,nuz,p`, but the Lua input uses Gkeyll Euler variables: component 0
+is ion mass density `rho_i = n_i m_i`, and components 1,2,3 are momentum
+density `rho_i u_i`.
 
 ```text
 ot3D_field_75.bp: components 3,4,5 -> Bx,By,Bz
-ot3D_ion_75.bp:   component 0    -> n
-                  components 1,2,3 -> ux,uy,uz
+ot3D_ion_75.bp:   component 0    -> rho_i = n_i m_i
+                  components 1,2,3 -> rho_i ux,rho_i uy,rho_i uz
+u = (rho_i u) / rho_i
+n_i = rho_i / m_i
 ```
 
 The names, component indices, and whether the three ion components are
@@ -457,8 +460,10 @@ simulation:
     moments_variable: CartGridField
     B_components: [3, 4, 5]
     density_component: 0
+    density_representation: mass_density
+    density_mass: 100.0
     momentum_components: [1, 2, 3]
-    velocity_representation: velocity
+    velocity_representation: momentum_density
 ```
 
 For `.npy` input, the default snapshot layout is a combined fields-last array
@@ -511,15 +516,18 @@ coordinates: {units: rho_p, box_size_rho_p: [64, 64, 64], rho_p_km: 100}
 
 There is no universal conversion from simulation amplitudes to plasma units.
 `scale_factors.n`, `.v`, and `.B` therefore explicitly convert selected
-snapshot values to cm^-3, km/s, and nT. For the reference BP file, density has
-mean 100 in code units and the example uses `scale_factors.n: 0.05`, giving a
-mean physical density of 5 cm^-3. With that density scale and
-`velocity_representation: velocity`, the full-cube RMS of `U` and
-`B/sqrt(mu0 m_p n)` are comparable. A field marked `fluctuation` receives the
-configured background after scaling; `total` uses the scaled sample directly.
-The generated HDF5 field metadata records the source path and shape, layout,
-physical box, mapping, boundary, interpolation, field semantics, and scale
-factors.
+snapshot values to cm^-3, km/s, and nT. For the reference BP file, ion mass
+density has mean 100 in code units because `ionMass = 100`; after
+`density_representation: mass_density`, the code number density has mean 1.
+The example then uses `scale_factors.n: 5`, giving a mean physical density of
+5 cm^-3. The field guide value is `Bz = 0.2` in code units;
+`scale_factors.B: 25` maps it to 5 nT. The matching velocity factor is about
+2438 km/s per code velocity unit, so `U` and `B/sqrt(mu0 m_p n)` retain their
+Alfvenic amplitude relation in physical units. A field marked `fluctuation`
+receives the configured background after scaling; `total` uses the scaled
+sample directly. The generated HDF5 field metadata records the source path and
+shape, layout, physical box, mapping, boundary, interpolation, field semantics,
+and scale factors.
 
 The implementation was informed by the neighboring
 `sparse-field-reconstruction` workflow, whose legacy `.npy` convention is a

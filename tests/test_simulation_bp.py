@@ -94,6 +94,32 @@ def test_bp_loader_supports_configurable_components_and_direct_velocity(tmp_path
     np.testing.assert_allclose(snapshot.B, np.broadcast_to([7.0, 8.0, 9.0], snapshot.B.shape))
 
 
+def test_bp_loader_can_convert_mass_density_to_number_density(tmp_path, monkeypatch):
+    field_path = tmp_path / "field.bp"
+    moments_path = tmp_path / "ion.bp"
+    field_path.touch()
+    moments_path.touch()
+    field, moments, _density, velocity, _magnetic = _bp_arrays(shape=(2, 2, 2))
+    moments[..., 0] = 100.0
+    moments[..., 1:4] = moments[..., 0, None] * velocity
+    _install_fake_adios2(monkeypatch, {str(field_path): field, str(moments_path): moments})
+
+    snapshot = load_simulation_bp(
+        field_path,
+        moments_path,
+        {
+            "density_representation": "mass_density",
+            "density_mass": 100.0,
+            "velocity_representation": "momentum_density",
+        },
+    )
+
+    np.testing.assert_allclose(snapshot.n, 1.0)
+    np.testing.assert_allclose(snapshot.v, velocity)
+    assert snapshot.layout["density_representation"] == "mass_density"
+    assert snapshot.layout["density_mass"] == 100.0
+
+
 def test_bp_loader_rejects_zero_density_for_momentum_conversion(tmp_path, monkeypatch):
     field_path = tmp_path / "field.bp"
     moments_path = tmp_path / "ion.bp"
