@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
+import matplotlib.colors
 import numpy as np
+import pytest
 
 from hs_observatory.spacecraft.configuration import synthetic_configuration
 from hs_observatory.visualization import (
     EARTH_RADIUS_KM,
+    SPACECRAFT_COLORS,
     classify_gse_region,
     formisano_bow_shock_value,
     plot_geometry_summary,
@@ -180,7 +183,9 @@ def test_geometry_summary_uses_requested_two_by_four_panel_order():
 
     titles = [axis.get_title() for axis in figure.axes]
     assert titles[0] == r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$"
-    assert titles[1] == r"Orbit Context: $Y_{GSE}$ vs $X_{GSE}$ ($R_E$)"
+    assert titles[1] == "Orbit Context:"
+    assert "$X_{GSE}$ ($R_E$)" in figure.axes[1].get_xlabel()
+    assert "$Y_{GSE}$ ($R_E$)" in figure.axes[1].get_ylabel()
     assert titles[2] == r"$|\lambda_Y|$ vs $|\lambda_X|$"
     assert titles[3] == "Polyhedral Configuration Summary"
     assert titles[5] == r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$"
@@ -202,4 +207,43 @@ def test_geometry_summary_title_truncates_fractional_seconds():
 
     assert "2030-05-31T23:50:35" in figure._suptitle.get_text()
     assert "810100000" not in figure._suptitle.get_text()
+    plt.close(figure)
+
+
+def test_geometry_summary_delta_panels_use_sparse_x_ticks():
+    spacecraft = synthetic_configuration(np.array([0.0, 1.0]))
+
+    figure, _diagnostics = plot_geometry_summary(
+        spacecraft.position,
+        spacecraft.spacecraft_ids,
+        time=spacecraft.time,
+    )
+
+    for axis_index in (0, 5, 6):
+        assert np.array_equal(
+            figure.axes[axis_index].get_xticks(),
+            np.array([-2000.0, -1000.0, 0.0, 1000.0, 2000.0]),
+        )
+    plt.close(figure)
+
+
+def test_geometry_summary_delta_panels_use_spacecraft_palette():
+    spacecraft = synthetic_configuration(np.array([0.0, 1.0]))
+
+    figure, _diagnostics = plot_geometry_summary(
+        spacecraft.position,
+        spacecraft.spacecraft_ids,
+        time=spacecraft.time,
+    )
+
+    first_delta_axis = figure.axes[0]
+    assert first_delta_axis.collections[0].get_facecolor()[0] == pytest.approx(
+        matplotlib.colors.to_rgba(SPACECRAFT_COLORS["H"])
+    )
+    assert first_delta_axis.collections[1].get_facecolor()[0] == pytest.approx(
+        matplotlib.colors.to_rgba(SPACECRAFT_COLORS["N1"])
+    )
+    assert first_delta_axis.collections[1].get_edgecolor()[0] == pytest.approx(
+        matplotlib.colors.to_rgba("#111111")
+    )
     plt.close(figure)

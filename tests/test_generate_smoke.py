@@ -1,9 +1,40 @@
 import json
 
 import h5py
+import numpy as np
 
 from hs_observatory.analyze import analyze_from_config
-from hs_observatory.generate import generate_from_config
+from hs_observatory.generate import _evaluate_quantity_with_progress, generate_from_config
+
+
+class _ProgressField:
+    name = "malara_turbulence"
+
+    def evaluate_quantity(self, quantity, time, position):
+        del quantity
+        values = np.asarray(time, dtype=float)
+        if values.ndim == 2:
+            values = values[:, 0]
+        return np.broadcast_to(values[:, None], (len(values), position.shape[0])).copy()
+
+
+def test_malara_progress_prints_every_ten_measurement_seconds(capsys):
+    time = np.array([0.0, 5.0, 10.0, 15.0, 20.0])
+    position = np.zeros((2, len(time), 3))
+
+    result = _evaluate_quantity_with_progress(
+        _ProgressField(),
+        "n",
+        time,
+        position,
+        label="truth n",
+    )
+
+    assert result.shape == (5, 2)
+    assert np.array_equal(result[:, 0], time)
+    output = capsys.readouterr().out
+    assert "truth n: generated through t=10 measurement s" in output
+    assert "truth n: generated through t=20 measurement s" in output
 
 
 def test_generation_and_analysis_with_synthetic_fallback(tmp_path):

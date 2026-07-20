@@ -790,6 +790,7 @@ def _axis_limits(values: np.ndarray, pad: float = 0.08) -> tuple[float, float]:
 def _plot_summary_relative_projection(
     ax,
     relative: np.ndarray,
+    spacecraft_ids: Sequence[str],
     x_index: int,
     y_index: int,
     title: str,
@@ -797,24 +798,17 @@ def _plot_summary_relative_projection(
     labels = ("X", "Y", "Z")
     extent = float(np.max(np.abs(relative[:, [x_index, y_index]])))
     limit = 1.12 * extent if extent > 0 else 1.0
-    ax.scatter(
-        relative[1:, x_index],
-        relative[1:, y_index],
-        s=120,
-        c="#111111",
-        edgecolors="white",
-        linewidths=0.45,
-        zorder=3,
-    )
-    ax.scatter(
-        relative[0, x_index],
-        relative[0, y_index],
-        s=192,
-        c="#d62728",
-        edgecolors="#111111",
-        linewidths=0.55,
-        zorder=4,
-    )
+    for index, spacecraft_id in enumerate(spacecraft_ids):
+        is_hub = index == 0
+        ax.scatter(
+            relative[index, x_index],
+            relative[index, y_index],
+            s=192 if is_hub else 120,
+            c=spacecraft_color(spacecraft_id),
+            edgecolors="#111111",
+            linewidths=0.55 if is_hub else 0.45,
+            zorder=4 if is_hub else 3,
+        )
     ax.axhline(0.0, color="#333333", linewidth=0.6, alpha=0.35)
     ax.axvline(0.0, color="#333333", linewidth=0.6, alpha=0.35)
     ax.set(
@@ -824,6 +818,7 @@ def _plot_summary_relative_projection(
         ylabel=rf"$\Delta {labels[y_index]}_{{GSE}}$ (km)",
         title=title,
     )
+    ax.set_xticks(np.arange(-2000.0, 2000.1, 1000.0))
     ax.set_aspect("equal")
     ax.grid(alpha=0.22, linewidth=0.5)
 
@@ -1104,9 +1099,6 @@ def plot_geometry_summary(
     relative = sample - sample[hub_index]
     mesocenter = np.mean(sample, axis=0)
     title_time = _selected_time_title_label(metadata)
-    region = diagnostics["region"]
-    regular_exists = diagnostics["n_regular_polyhedra"] > 0
-    ratio_exists = diagnostics["regular_size_ratio_at_least_3"]
 
     with plt.rc_context(
         {
@@ -1135,6 +1127,7 @@ def plot_geometry_summary(
         _plot_summary_relative_projection(
             fig.add_subplot(grid[0, 0]),
             relative,
+            spacecraft_ids,
             0,
             1,
             r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
@@ -1147,7 +1140,7 @@ def plot_geometry_summary(
             mesocenter,
             0,
             1,
-            r"Orbit Context: $Y_{GSE}$ vs $X_{GSE}$ ($R_E$)",
+            r"Orbit Context:",
             moon_position=moon_position,
         )
         context_ax.legend(
@@ -1200,27 +1193,11 @@ def plot_geometry_summary(
         poly_ax.set_yscale("log")
         poly_ax.set_xlim(left=0.0)
         poly_ax.set(
-            xlabel=r"$Q = \sqrt{E^2 + P^2}$",
-            ylabel=r"$L = 2a$ (km)",
+            xlabel=r"$\sqrt{E^2 + P^2}$",
+            ylabel=r"$L$ (km)",
             title="Polyhedral Configuration Summary",
         )
         poly_ax.grid(alpha=0.2, linewidth=0.5, which="both")
-        status_text = (
-            f"Region: {region}\n"
-            f"Regular: {'yes' if regular_exists else 'no'}\n"
-            f"Size ratio >= 3: {'yes' if ratio_exists else 'no'}"
-        )
-        poly_ax.text(
-            0.02,
-            0.96,
-            status_text,
-            va="top",
-            ha="left",
-            fontsize=20.4,
-            color="#222222",
-            transform=poly_ax.transAxes,
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 2.0},
-        )
         colorbar = fig.colorbar(
             scatter,
             ax=poly_ax,
@@ -1234,6 +1211,7 @@ def plot_geometry_summary(
         _plot_summary_relative_projection(
             fig.add_subplot(grid[1, 0]),
             relative,
+            spacecraft_ids,
             0,
             2,
             r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
@@ -1241,6 +1219,7 @@ def plot_geometry_summary(
         _plot_summary_relative_projection(
             fig.add_subplot(grid[1, 1]),
             relative,
+            spacecraft_ids,
             1,
             2,
             r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
@@ -1263,22 +1242,22 @@ def plot_geometry_summary(
             r"$|\lambda_Z|$ vs $|\lambda_Y|$",
             baseline_limits,
         )
-        lambda_z_y_ax.text(
-            0.04,
-            0.96,
-            f"Kinetic: < {KINETIC_SCALE_KM:g} km\n"
-            f"Transition: {KINETIC_SCALE_KM:g}-{MHD_SCALE_KM:g} km\n"
-            f"MHD: > {MHD_SCALE_KM:g} km",
-            va="top",
-            ha="left",
-            fontsize=20.4,
-            color="#222222",
-            transform=lambda_z_y_ax.transAxes,
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.68, "pad": 2.0},
-        )
+        #lambda_z_y_ax.text(
+        #    0.04,
+        #    0.96,
+        #    f"Kinetic: < {KINETIC_SCALE_KM:g} km\n"
+        #    f"Transition: {KINETIC_SCALE_KM:g}-{MHD_SCALE_KM:g} km\n"
+        #    f"MHD: > {MHD_SCALE_KM:g} km",
+        #    va="top",
+        #    ha="left",
+        #    fontsize=20.4,
+        #    color="#222222",
+        #    transform=lambda_z_y_ax.transAxes,
+        #    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.68, "pad": 2.0},
+        #)
 
         fig.suptitle(
-            f"HelioSwarm Geometry Summary - Matched configuration: {title_time}",
+            f"HelioSwarm Design Reference Mission Geometry: {title_time}",
             y=0.985,
         )
     return fig, diagnostics
