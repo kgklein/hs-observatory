@@ -97,7 +97,7 @@ def _has_configured_errors(config: dict) -> bool:
 
 
 def _geometry_context_trajectory(config: dict, metadata: dict) -> np.ndarray | None:
-    """Return full CDF hub trajectory context when it is available."""
+    """Return full CDF observatory trajectory context when it is available."""
 
     if metadata.get("source") != "cdf":
         return None
@@ -110,12 +110,11 @@ def _geometry_context_trajectory(config: dict, metadata: dict) -> np.ndarray | N
     )
     valid = np.asarray(sample["valid"], dtype=bool)
     positions = np.asarray(sample["positions"], dtype=float)[:, valid, :]
-    hub_trajectory = positions[:, 0, :]
-    keep = np.all(hub_trajectory > FILL_VALUE_THRESHOLD, axis=1)
-    keep &= np.all(np.isfinite(hub_trajectory), axis=1)
+    keep = np.all(positions > FILL_VALUE_THRESHOLD, axis=(1, 2))
+    keep &= np.all(np.isfinite(positions), axis=(1, 2))
     if not np.any(keep):
         return None
-    return hub_trajectory[keep]
+    return np.swapaxes(positions[keep], 0, 1)
 
 
 def generate_from_config(

@@ -34,10 +34,23 @@ SPACECRAFT_COLORS = {
 }
 
 EARTH_RADIUS_KM = 6371.0
-MOON_DISTANCE_KM = 384400.0
 REGULAR_POLYHEDRON_Q_LIMIT = 0.6
 KINETIC_SCALE_KM = 100.0
 MHD_SCALE_KM = 1200.0
+LAMBDA_SCALE_COLORS = {
+    "kinetic": "#f6e58d",
+    "transition": "#d7bde2",
+    "mhd": "#d7ccc8",
+}
+FORMISANO_COEFFICIENTS = {
+    "a11": 0.016,
+    "a22": 1.0,
+    "a33": 0.840,
+    "a12": 0.171,
+    "a14": 39.269,
+    "a24": -1.675,
+    "a44": -564.29,
+}
 
 
 def spacecraft_color(spacecraft_id: str) -> str:
@@ -639,23 +652,69 @@ def polyhedron_metrics(positions: np.ndarray) -> list[dict[str, Any]]:
     return records
 
 
-def classify_gse_region(position_km: np.ndarray) -> str:
-    """Classify a GSE position for plotting context with a lightweight heuristic."""
+def formisano_bow_shock_value(position_km: np.ndarray) -> np.ndarray:
+    """Evaluate the Formisano bow-shock surface function in GSE Earth radii."""
 
-    point = np.asarray(position_km, dtype=float)
-    radial_re = float(np.linalg.norm(point) / EARTH_RADIUS_KM)
-    x_re = float(point[0] / EARTH_RADIUS_KM)
-    if radial_re <= 12.0:
+    point = np.asarray(position_km, dtype=float) / EARTH_RADIUS_KM
+    x = point[..., 0]
+    y = point[..., 1]
+    z = point[..., 2]
+    c = FORMISANO_COEFFICIENTS
+    return (
+        c["a11"] * x**2
+        + c["a22"] * y**2
+        + c["a33"] * z**2
+        + c["a12"] * x * y
+        + c["a14"] * x
+        + c["a24"] * y
+        + c["a44"]
+    )
+
+
+def _connection_line_intersects_bow_shock(position_km: np.ndarray) -> bool:
+    return _formisano_line_intersects_bow_shock(position_km, y_sign=-1.0)
+
+
+def _formisano_line_intersects_bow_shock(position_km: np.ndarray, *, y_sign: float) -> bool:
+    point = np.asarray(position_km, dtype=float) / EARTH_RADIUS_KM
+    c = FORMISANO_COEFFICIENTS
+    direction = np.array([1.0, y_sign, 0.0]) / np.sqrt(2.0)
+    x0, y0, z0 = point
+    dx, dy, dz = direction
+    quadratic = (
+        c["a11"] * dx**2
+        + c["a22"] * dy**2
+        + c["a33"] * dz**2
+        + c["a12"] * dx * dy
+    )
+    linear = (
+        2.0 * c["a11"] * x0 * dx
+        + 2.0 * c["a22"] * y0 * dy
+        + 2.0 * c["a33"] * z0 * dz
+        + c["a12"] * (x0 * dy + y0 * dx)
+        + c["a14"] * dx
+        + c["a24"] * dy
+    )
+    constant = float(formisano_bow_shock_value(position_km))
+    if abs(quadratic) < np.finfo(float).eps:
+        return abs(linear) > np.finfo(float).eps
+    return linear**2 - 4.0 * quadratic * constant >= 0.0
+
+
+def classify_gse_region(position_km: np.ndarray) -> str:
+    """Classify a GSE position using the Formisano bow-shock model."""
+
+    if float(formisano_bow_shock_value(position_km)) < 0.0:
         return "Magnetosphere / Magnetosheath"
-    if x_re > 0.0 and radial_re <= 35.0:
+    if _connection_line_intersects_bow_shock(position_km):
         return "Connected Foreshock"
     return "Solar Wind"
 
 
 REGION_COLORS = {
-    "Solar Wind": "#8ecae6",
-    "Connected Foreshock": "#f4a261",
-    "Magnetosphere / Magnetosheath": "#90be6d",
+    "Solar Wind": "#d73027",
+    "Connected Foreshock": "#1a9850",
+    "Magnetosphere / Magnetosheath": "#4575b4",
 }
 
 
@@ -687,6 +746,16 @@ def _selected_time_label(metadata: Mapping[str, Any] | None) -> str:
         or metadata.get("configuration_time")
         or "unknown-time"
     )
+
+
+def _selected_time_title_label(metadata: Mapping[str, Any] | None) -> str:
+    label = _selected_time_label(metadata)
+    if label == "unknown-time":
+        return label
+    try:
+        return str(np.datetime64(label, "s"))
+    except ValueError:
+        return label.split(".")[0]
 
 
 def geometry_summary_paths(
@@ -731,7 +800,7 @@ def _plot_summary_relative_projection(
     ax.scatter(
         relative[1:, x_index],
         relative[1:, y_index],
-        s=22,
+        s=120,
         c="#111111",
         edgecolors="white",
         linewidths=0.45,
@@ -740,7 +809,7 @@ def _plot_summary_relative_projection(
     ax.scatter(
         relative[0, x_index],
         relative[0, y_index],
-        s=36,
+        s=192,
         c="#d62728",
         edgecolors="#111111",
         linewidths=0.55,
@@ -766,58 +835,108 @@ def _plot_context_projection(
     x_index: int,
     y_index: int,
     title: str,
+    moon_position: np.ndarray | None = None,
 ) -> None:
     labels = ("X", "Y", "Z")
-    center = np.mean(trajectory, axis=0)
+    trajectory_re = trajectory / EARTH_RADIUS_KM
+    selected_re = selected / EARTH_RADIUS_KM
     ax.add_patch(
         plt.Circle(
             (0.0, 0.0),
-            EARTH_RADIUS_KM,
+            1.0,
             color="#3a86ff",
             alpha=0.95,
             zorder=3,
         )
     )
-    ax.scatter(
-        [MOON_DISTANCE_KM],
-        [0.0],
-        s=18,
-        c="#a8a8a8",
-        edgecolors="#444444",
-        linewidths=0.4,
-        zorder=3,
-    )
     ax.plot(
-        trajectory[:, x_index],
-        trajectory[:, y_index],
-        color="#2a2a2a",
-        linewidth=1.0,
-        alpha=0.85,
-        zorder=2,
+        trajectory_re[:, x_index],
+        trajectory_re[:, y_index],
+        color="#777777",
+        linewidth=0.55,
+        alpha=0.45,
+        zorder=1,
     )
+    for start, stop in zip(trajectory[:-1], trajectory[1:]):
+        segment_region = classify_gse_region((start + stop) * 0.5)
+        start_re = start / EARTH_RADIUS_KM
+        stop_re = stop / EARTH_RADIUS_KM
+        ax.plot(
+            [start_re[x_index], stop_re[x_index]],
+            [start_re[y_index], stop_re[y_index]],
+            color=REGION_COLORS[segment_region],
+            linewidth=0.85,
+            alpha=0.9,
+            zorder=2,
+        )
+    if moon_position is not None:
+        moon = np.asarray(moon_position, dtype=float) / EARTH_RADIUS_KM
+        ax.scatter(
+            moon[x_index],
+            moon[y_index],
+            s=72,
+            c="#a8a8a8",
+            edgecolors="#444444",
+            linewidths=0.4,
+            zorder=3,
+        )
     ax.scatter(
-        selected[x_index],
-        selected[y_index],
-        s=30,
+        selected_re[x_index],
+        selected_re[y_index],
+        s=136,
         c="#d62728",
         edgecolors="#111111",
         linewidths=0.45,
         zorder=4,
     )
     ax.set(
-        xlabel=rf"${labels[x_index]}_{{GSE}}$ (km)",
-        ylabel=rf"${labels[y_index]}_{{GSE}}$ (km)",
+        xlabel=rf"${labels[x_index]}_{{GSE}}$ ($R_E$)",
+        ylabel=rf"${labels[y_index]}_{{GSE}}$ ($R_E$)",
         title=title,
     )
-    all_x = np.concatenate((trajectory[:, x_index], [0.0, MOON_DISTANCE_KM, selected[x_index]]))
-    all_y = np.concatenate((trajectory[:, y_index], [0.0, 0.0, selected[y_index]]))
+    extra_x = [0.0, selected_re[x_index]]
+    extra_y = [0.0, selected_re[y_index]]
+    if moon_position is not None:
+        moon = np.asarray(moon_position, dtype=float) / EARTH_RADIUS_KM
+        extra_x.append(float(moon[x_index]))
+        extra_y.append(float(moon[y_index]))
+    all_x = np.concatenate((trajectory_re[:, x_index], extra_x))
+    all_y = np.concatenate((trajectory_re[:, y_index], extra_y))
     ax.set_xlim(*_axis_limits(all_x, pad=0.12))
     ax.set_ylim(*_axis_limits(all_y, pad=0.12))
-    region = classify_gse_region(center)
-    ax.set_facecolor(REGION_COLORS[region])
-    ax.patch.set_alpha(0.16)
     ax.grid(alpha=0.22, linewidth=0.5)
     ax.set_aspect("equal", adjustable="datalim")
+
+
+def _context_legend_handles(moon_position: np.ndarray | None = None) -> list[Line2D]:
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="none",
+            markerfacecolor="#d62728",
+            markeredgecolor="#111111",
+            label="Observatory",
+        ),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor="#3a86ff", label="Earth"),
+    ]
+    if moon_position is not None:
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="none",
+                markerfacecolor="#a8a8a8",
+                label="Moon",
+            )
+        )
+    handles.extend(
+        Line2D([0], [0], color=color, linewidth=1.3, label=name)
+        for name, color in REGION_COLORS.items()
+    )
+    return handles
 
 
 def _positive_component_limits(values: np.ndarray) -> tuple[float, float]:
@@ -830,26 +949,48 @@ def _positive_component_limits(values: np.ndarray) -> tuple[float, float]:
     return max(lo, 1.0e-6), hi
 
 
+def _baseline_component_limits(components: np.ndarray) -> tuple[float, float]:
+    values = np.maximum(np.abs(np.asarray(components, dtype=float)), 1.0e-9)
+    return _positive_component_limits(values)
+
+
 def _plot_baseline_components(
     ax,
     components: np.ndarray,
     x_index: int,
     y_index: int,
     title: str,
+    limits: tuple[float, float],
 ) -> None:
     labels = ("X", "Y", "Z")
     values = np.maximum(np.abs(components), 1.0e-9)
-    lo, hi = _positive_component_limits(values[:, [x_index, y_index]])
-    ax.axvspan(lo, KINETIC_SCALE_KM, color="#8ecae6", alpha=0.16, zorder=0)
-    ax.axvspan(KINETIC_SCALE_KM, MHD_SCALE_KM, color="#f4a261", alpha=0.13, zorder=0)
-    ax.axvspan(MHD_SCALE_KM, hi, color="#90be6d", alpha=0.13, zorder=0)
-    ax.axhspan(lo, KINETIC_SCALE_KM, color="#8ecae6", alpha=0.08, zorder=0)
-    ax.axhspan(KINETIC_SCALE_KM, MHD_SCALE_KM, color="#f4a261", alpha=0.07, zorder=0)
-    ax.axhspan(MHD_SCALE_KM, hi, color="#90be6d", alpha=0.07, zorder=0)
+    lo, hi = limits
+    ax.axvspan(
+        lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.24, zorder=0
+    )
+    ax.axvspan(
+        KINETIC_SCALE_KM,
+        MHD_SCALE_KM,
+        color=LAMBDA_SCALE_COLORS["transition"],
+        alpha=0.2,
+        zorder=0,
+    )
+    ax.axvspan(MHD_SCALE_KM, hi, color=LAMBDA_SCALE_COLORS["mhd"], alpha=0.22, zorder=0)
+    ax.axhspan(
+        lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.12, zorder=0
+    )
+    ax.axhspan(
+        KINETIC_SCALE_KM,
+        MHD_SCALE_KM,
+        color=LAMBDA_SCALE_COLORS["transition"],
+        alpha=0.1,
+        zorder=0,
+    )
+    ax.axhspan(MHD_SCALE_KM, hi, color=LAMBDA_SCALE_COLORS["mhd"], alpha=0.11, zorder=0)
     ax.scatter(
         values[:, x_index],
         values[:, y_index],
-        s=16,
+        s=64,
         c="#252525",
         alpha=0.82,
         edgecolors="white",
@@ -897,6 +1038,7 @@ def geometry_summary_diagnostics(
     baselines = unique_baselines(sample)
     metrics = polyhedron_metrics(sample)
     lengths = np.linalg.norm(baselines, axis=1)
+    mesocenter = np.mean(sample, axis=0)
     regular_count = sum(
         1 for item in metrics if float(item["Q"]) <= REGULAR_POLYHEDRON_Q_LIMIT
     )
@@ -918,7 +1060,7 @@ def geometry_summary_diagnostics(
         "n_polyhedra": len(metrics),
         "n_regular_polyhedra": regular_count,
         "regular_size_ratio_at_least_3": _regular_size_ratio_exists(metrics),
-        "region": classify_gse_region(sample[hub_index]),
+        "region": classify_gse_region(mesocenter),
     }
 
 
@@ -929,6 +1071,7 @@ def plot_geometry_summary(
     time: np.ndarray | None = None,
     metadata: Mapping[str, Any] | None = None,
     context_trajectory: np.ndarray | None = None,
+    moon_position: np.ndarray | None = None,
     hub_index: int = 0,
 ):
     """Return a compact publication-style geometry summary figure."""
@@ -940,7 +1083,7 @@ def plot_geometry_summary(
         else np.asarray(context_trajectory, dtype=float)
     )
     if trajectory_source.ndim == 3:
-        trajectory = trajectory_source[hub_index]
+        trajectory = np.mean(trajectory_source, axis=0)
     elif trajectory_source.ndim == 2 and trajectory_source.shape[1] == 3:
         trajectory = trajectory_source
     else:
@@ -959,128 +1102,73 @@ def plot_geometry_summary(
     metrics = polyhedron_metrics(sample)
     diagnostics = geometry_summary_diagnostics(sample, metadata=metadata, hub_index=hub_index)
     relative = sample - sample[hub_index]
-    title_time = _selected_time_label(metadata)
+    mesocenter = np.mean(sample, axis=0)
+    title_time = _selected_time_title_label(metadata)
     region = diagnostics["region"]
     regular_exists = diagnostics["n_regular_polyhedra"] > 0
     ratio_exists = diagnostics["regular_size_ratio_at_least_3"]
 
     with plt.rc_context(
         {
-            "font.size": 8.5,
-            "axes.titlesize": 9.5,
-            "axes.labelsize": 8.5,
-            "xtick.labelsize": 7.5,
-            "ytick.labelsize": 7.5,
-            "legend.fontsize": 7.5,
-            "figure.titlesize": 12,
+            "font.size": 24.6,
+            "axes.titlesize": 27.0,
+            "axes.labelsize": 25.5,
+            "xtick.labelsize": 22.5,
+            "ytick.labelsize": 22.5,
+            "legend.fontsize": 22.5,
+            "figure.titlesize": 33.0,
             "savefig.bbox": "tight",
         }
     ):
-        fig = plt.figure(figsize=(13.2, 9.2), constrained_layout=True)
-        grid = fig.add_gridspec(4, 4, height_ratios=(1.0, 1.0, 1.0, 0.82))
+        fig = plt.figure(figsize=(31.0, 16.0), constrained_layout=True)
+        layout_engine = fig.get_layout_engine()
+        if layout_engine is not None:
+            layout_engine.set(
+                rect=(0.0, 0.0, 1.0, 0.91),
+                h_pad=0.035,
+                w_pad=0.035,
+                hspace=0.08,
+                wspace=0.035,
+            )
+        grid = fig.add_gridspec(2, 4, width_ratios=(1.0, 1.12, 1.0, 1.18))
 
         _plot_summary_relative_projection(
-            fig.add_subplot(grid[0, 0]), relative, 0, 1, r"$Y_{GSE}$ vs $X_{GSE}$"
-        )
-        _plot_summary_relative_projection(
-            fig.add_subplot(grid[0, 1]), relative, 0, 2, r"$Z_{GSE}$ vs $X_{GSE}$"
-        )
-        _plot_summary_relative_projection(
-            fig.add_subplot(grid[0, 2]), relative, 2, 1, r"$Y_{GSE}$ vs $Z_{GSE}$"
-        )
-
-        status_ax = fig.add_subplot(grid[0, 3])
-        status_ax.axis("off")
-        status_ax.set_facecolor(REGION_COLORS[region])
-        status_ax.patch.set_alpha(0.18)
-        status_lines = [
-            "Configuration Status",
-            f"Region: {region}",
-            f"Regular polyhedra: {'yes' if regular_exists else 'no'}",
-            f"Size ratio >= 3: {'yes' if ratio_exists else 'no'}",
-            f"Baselines: {diagnostics['n_baselines']}",
-            f"Polyhedra: {diagnostics['n_polyhedra']}",
-        ]
-        status_ax.text(
-            0.04,
-            0.96,
-            "\n".join(status_lines),
-            va="top",
-            ha="left",
-            transform=status_ax.transAxes,
-            linespacing=1.55,
-        )
-
-        _plot_context_projection(
-            fig.add_subplot(grid[1, 0]),
-            trajectory,
-            sample[hub_index],
+            fig.add_subplot(grid[0, 0]),
+            relative,
             0,
             1,
-            r"Orbit Context: $Y_{GSE}$ vs $X_{GSE}$",
+            r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
         )
+
+        context_ax = fig.add_subplot(grid[0, 1])
         _plot_context_projection(
-            fig.add_subplot(grid[1, 1]),
+            context_ax,
             trajectory,
-            sample[hub_index],
+            mesocenter,
             0,
-            2,
-            r"Orbit Context: $Z_{GSE}$ vs $X_{GSE}$",
-        )
-        _plot_context_projection(
-            fig.add_subplot(grid[1, 2]),
-            trajectory,
-            sample[hub_index],
-            2,
             1,
-            r"Orbit Context: $Y_{GSE}$ vs $Z_{GSE}$",
+            r"Orbit Context: $Y_{GSE}$ vs $X_{GSE}$ ($R_E$)",
+            moon_position=moon_position,
+        )
+        context_ax.legend(
+            handles=_context_legend_handles(moon_position),
+            loc="lower left",
+            fontsize=19.8,
+            frameon=False,
+            borderaxespad=0.25,
         )
 
-        legend_ax = fig.add_subplot(grid[1, 3])
-        legend_ax.axis("off")
-        handles = [
-            Line2D([0], [0], marker="o", color="none", markerfacecolor="#d62728",
-                   markeredgecolor="#111111", label="Hub / selected"),
-            Line2D([0], [0], marker="o", color="none", markerfacecolor="#111111",
-                   markeredgecolor="white", label="Nodes"),
-            Line2D([0], [0], marker="o", color="none", markerfacecolor="#3a86ff",
-                   label="Earth"),
-            Line2D([0], [0], marker="o", color="none", markerfacecolor="#a8a8a8",
-                   label="Moon"),
-        ]
-        region_handles = [
-            Line2D([0], [0], marker="s", color="none", markerfacecolor=color, label=name)
-            for name, color in REGION_COLORS.items()
-        ]
-        legend_ax.legend(handles + region_handles, [h.get_label() for h in handles + region_handles],
-                         loc="center", frameon=False)
-
+        baseline_limits = _baseline_component_limits(baselines)
         _plot_baseline_components(
-            fig.add_subplot(grid[2, 0]), baselines, 0, 1, r"$|\lambda_X|$ vs $|\lambda_Y|$"
-        )
-        _plot_baseline_components(
-            fig.add_subplot(grid[2, 1]), baselines, 0, 2, r"$|\lambda_X|$ vs $|\lambda_Z|$"
-        )
-        _plot_baseline_components(
-            fig.add_subplot(grid[2, 2]), baselines, 1, 2, r"$|\lambda_Y|$ vs $|\lambda_Z|$"
-        )
-
-        scale_ax = fig.add_subplot(grid[2, 3])
-        scale_ax.axis("off")
-        scale_ax.text(
-            0.04,
-            0.96,
-            "Mission Scales\n"
-            f"Kinetic: < {KINETIC_SCALE_KM:g} km\n"
-            f"Transition: {KINETIC_SCALE_KM:g}-{MHD_SCALE_KM:g} km\n"
-            f"MHD: > {MHD_SCALE_KM:g} km",
-            va="top",
-            ha="left",
-            transform=scale_ax.transAxes,
-            linespacing=1.65,
+            fig.add_subplot(grid[0, 2]),
+            baselines,
+            0,
+            1,
+            r"$|\lambda_Y|$ vs $|\lambda_X|$",
+            baseline_limits,
         )
 
-        poly_ax = fig.add_subplot(grid[3, :])
+        poly_ax = fig.add_subplot(grid[0, 3])
         cmap = _discrete_polyhedron_cmap()
         norm = BoundaryNorm(np.arange(3.5, 10.5, 1.0), cmap.N)
         q_values = np.asarray([item["Q"] for item in metrics], dtype=float)
@@ -1099,7 +1187,7 @@ def plot_geometry_summary(
             c=sizes,
             cmap=cmap,
             norm=norm,
-            s=12,
+            s=48,
             alpha=0.78,
             edgecolors="none",
         )
@@ -1110,19 +1198,88 @@ def plot_geometry_summary(
             linestyle="--",
         )
         poly_ax.set_yscale("log")
+        poly_ax.set_xlim(left=0.0)
         poly_ax.set(
             xlabel=r"$Q = \sqrt{E^2 + P^2}$",
             ylabel=r"$L = 2a$ (km)",
             title="Polyhedral Configuration Summary",
         )
         poly_ax.grid(alpha=0.2, linewidth=0.5, which="both")
-        colorbar = fig.colorbar(scatter, ax=poly_ax, ticks=np.arange(4, 10), pad=0.01)
+        status_text = (
+            f"Region: {region}\n"
+            f"Regular: {'yes' if regular_exists else 'no'}\n"
+            f"Size ratio >= 3: {'yes' if ratio_exists else 'no'}"
+        )
+        poly_ax.text(
+            0.02,
+            0.96,
+            status_text,
+            va="top",
+            ha="left",
+            fontsize=20.4,
+            color="#222222",
+            transform=poly_ax.transAxes,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 2.0},
+        )
+        colorbar = fig.colorbar(
+            scatter,
+            ax=poly_ax,
+            ticks=np.arange(4, 10),
+            pad=0.01,
+            fraction=0.045,
+        )
         colorbar.set_label("# spacecraft")
+        colorbar.ax.tick_params(labelsize=24)
+
+        _plot_summary_relative_projection(
+            fig.add_subplot(grid[1, 0]),
+            relative,
+            0,
+            2,
+            r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
+        )
+        _plot_summary_relative_projection(
+            fig.add_subplot(grid[1, 1]),
+            relative,
+            1,
+            2,
+            r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
+        )
+        lambda_z_x_ax = fig.add_subplot(grid[1, 2])
+        _plot_baseline_components(
+            lambda_z_x_ax,
+            baselines,
+            0,
+            2,
+            r"$|\lambda_Z|$ vs $|\lambda_X|$",
+            baseline_limits,
+        )
+        lambda_z_y_ax = fig.add_subplot(grid[1, 3])
+        _plot_baseline_components(
+            lambda_z_y_ax,
+            baselines,
+            1,
+            2,
+            r"$|\lambda_Z|$ vs $|\lambda_Y|$",
+            baseline_limits,
+        )
+        lambda_z_y_ax.text(
+            0.04,
+            0.96,
+            f"Kinetic: < {KINETIC_SCALE_KM:g} km\n"
+            f"Transition: {KINETIC_SCALE_KM:g}-{MHD_SCALE_KM:g} km\n"
+            f"MHD: > {MHD_SCALE_KM:g} km",
+            va="top",
+            ha="left",
+            fontsize=20.4,
+            color="#222222",
+            transform=lambda_z_y_ax.transAxes,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.68, "pad": 2.0},
+        )
 
         fig.suptitle(
-            "HelioSwarm Geometry Summary\n"
-            f"Matched configuration: {title_time}",
-            y=1.02,
+            f"HelioSwarm Geometry Summary - Matched configuration: {title_time}",
+            y=0.985,
         )
     return fig, diagnostics
 
@@ -1189,6 +1346,7 @@ def save_geometry_summary(
     spacecraft_ids: Sequence[str],
     metadata: Mapping[str, Any] | None = None,
     context_trajectory: np.ndarray | None = None,
+    moon_position: np.ndarray | None = None,
 ) -> tuple[Path, Path, dict[str, Any]]:
     """Write the publication-style geometry summary as PDF and PNG."""
 
@@ -1202,6 +1360,7 @@ def save_geometry_summary(
         time=time,
         metadata=metadata,
         context_trajectory=context_trajectory,
+        moon_position=moon_position,
         hub_index=0,
     )
     figure.savefig(pdf_path)
