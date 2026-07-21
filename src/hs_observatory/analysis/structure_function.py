@@ -314,22 +314,9 @@ def _interpolate_positions_with_offsets(
     position_sc_time_km: np.ndarray,
     source_time: np.ndarray,
     output_time: np.ndarray,
-    time_offset_s: np.ndarray | None,
 ) -> np.ndarray:
     time_first = np.swapaxes(position_sc_time_km, 0, 1)
-    if time_offset_s is None:
-        return _interpolate(time_first, source_time, output_time, "spacecraft position")
-    n_spacecraft = time_first.shape[1]
-    result = np.empty((output_time.size, n_spacecraft, 3), dtype=float)
-    for spacecraft in range(n_spacecraft):
-        shifted_time = output_time + float(time_offset_s[spacecraft])
-        result[:, spacecraft] = _interpolate(
-            time_first[:, spacecraft, :],
-            source_time,
-            shifted_time,
-            f"spacecraft position S{spacecraft}",
-        )
-    return result
+    return _interpolate(time_first, source_time, output_time, "spacecraft position")
 
 
 def _candidate_position_nodes(
@@ -393,17 +380,14 @@ def _positions_for_group_member(
             position = position[member_index]
         if position.shape != (n_spacecraft, source_time.size, 3):
             raise ValueError(f"/{path} must have shape (spacecraft, time, 3)")
-        time_offset = None
         position_offset = None
-        # Current schema stores hidden realized coordinate offsets under /errors
+        # Current schema stores hidden realized spatial offsets under /errors
         # while nominal /spacecraft/r remains unchanged. For observed products,
-        # reconstruct the measured coordinates from those offsets when no
-        # group-specific measured-position dataset is available.
+        # reconstruct the measured spatial coordinates from position offsets
+        # when no group-specific measured-position dataset is available. Timing
+        # offsets affect field sampling time, but the generator does not advect
+        # spacecraft positions by those clock offsets.
         if group_name == "observed" and not group_specific:
-            if "errors/time_offset" in handle:
-                offsets = np.asarray(handle["errors/time_offset"], dtype=float)
-                time_offset = offsets[member_index] if offsets.ndim == 2 else offsets
-                notes.append("observed positions use /errors/time_offset on nominal r")
             if "errors/position_offset" in handle:
                 offsets = np.asarray(handle["errors/position_offset"], dtype=float)
                 position_offset = offsets[member_index] if offsets.ndim == 3 else offsets
@@ -412,7 +396,6 @@ def _positions_for_group_member(
             position,
             source_time,
             output_time,
-            time_offset,
         )
         if position_offset is not None:
             positions_km = positions_km + position_offset[None, :, :]
