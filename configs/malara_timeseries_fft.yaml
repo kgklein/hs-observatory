@@ -2,10 +2,10 @@ analysis:
   method: timeseries_fft
 
 input:
-  path: outputs/full_observations_malara.h5
+  path: outputs/synthetic_observations_malara_observatory.h5
 
 output:
-  path: outputs/timeseries_fft.h5
+  path: outputs/synthetic_observations_malara_observatory_fft.h5
 
 fft:
   data_group: observed

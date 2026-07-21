@@ -6,6 +6,29 @@ HDF5 products and exporting them to ParaView-readable visualization files.
 The RBF fitter remains blind to the simulation cube. Truth-field sampling here
 is only for validation and visualization.
 
+## Paper Figure 2
+
+Create the two-column, six-row representative observatory time-series figure
+from Malara and turbulent-simulation observation HDF5 files:
+
+```bash
+hsobs-plot-figure2 \
+    --malara outputs/malara_observations.h5 \
+    --simulation outputs/simulation_observations.h5 \
+    --output figs/figure2_timeseries.png
+```
+
+The command plots truth and measured member 0 for `v_x`, `B_x`, and `z_x^+`,
+using all spacecraft and the standard HelioSwarm colors without a legend.
+It assumes SI input variables by default: density in m^-3, velocity in m/s, and
+magnetic field in T. For package-native generated observation files, pass
+`--input-units repo` to use cm^-3, km/s, and nT without conversion.
+Velocity is plotted in one common frame for truth and measured panels; the
+default is plasma frame. Use `--velocity-frame spacecraft` to switch both
+velocity and `z_x^+` panels to spacecraft frame when spacecraft velocity is
+available. Use `--start-time` and `--stop-time` to choose a relative-time
+window in seconds.
+
 ## Inspect HDF5
 
 ```bash

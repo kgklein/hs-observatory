@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
+import h5py
 import numpy as np
 
+from hs_observatory.cli import plot_figure2_main
 from hs_observatory.spacecraft.configuration import synthetic_configuration
 from hs_observatory.visualization import (
     SPACECRAFT_COLORS,
+    plot_figure2_timeseries,
     plot_observed_spacecraft_geometry,
     plot_observed_timeseries,
     plot_observed_velocity_alfven_timeseries,
@@ -152,3 +155,84 @@ def test_observed_velocity_alfven_plot_overlays_truth_and_observed():
     assert len(axes[0, 1].lines) == 4
     assert axes[0, 0].lines[2].get_color() == SPACECRAFT_COLORS["H"]
     plt.close(figure)
+
+
+def _write_figure2_input(path, *, scale: float = 1.0, observed_frame: str = "plasma"):
+    ids = ("H", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8")
+    time = np.arange(5.0)
+    spacecraft_offsets = np.arange(len(ids), dtype=float)[None, :]
+    density = np.full((time.size, len(ids)), 5.0e6)
+    velocity = np.zeros((time.size, len(ids), 3))
+    magnetic = np.zeros_like(velocity)
+    velocity[..., 0] = scale * (1000.0 * time[:, None] + 10.0 * spacecraft_offsets)
+    magnetic[..., 0] = scale * (5.0e-9 + 0.1e-9 * time[:, None] + 0.01e-9 * spacecraft_offsets)
+    magnetic[..., 2] = 4.0e-9
+    spacecraft_velocity_km_s = np.zeros((time.size, len(ids), 3))
+    spacecraft_velocity_km_s[..., 0] = 0.05
+    observed_velocity = velocity + 20.0
+    if observed_frame == "spacecraft":
+        observed_velocity = observed_velocity - spacecraft_velocity_km_s * 1000.0
+    observed = {
+        "n": np.stack((density * 1.01, density * 1.02)),
+        "v": np.stack((observed_velocity, observed_velocity + 20.0)),
+        "B": np.stack((magnetic + 0.05e-9, magnetic + 0.1e-9)),
+    }
+    with h5py.File(path, "w") as handle:
+        handle.create_group("metadata").attrs["velocity_observed_frame"] = observed_frame
+        time_group = handle.create_group("time")
+        spacecraft = handle.create_group("spacecraft")
+        spacecraft.create_dataset("id", data=np.asarray(ids, dtype=h5py.string_dtype("utf-8")))
+        spacecraft.create_dataset("velocity", data=spacecraft_velocity_km_s)
+        position = spacecraft.create_group("r")
+        truth = handle.create_group("truth")
+        observed_group = handle.create_group("observed")
+        for name, values in (("n", density), ("v", velocity), ("B", magnetic)):
+            time_group.create_dataset(name, data=time)
+            position.create_dataset(name, data=np.zeros((len(ids), time.size, 3)))
+            truth.create_dataset(name, data=values)
+            observed_group.create_dataset(name, data=observed[name])
+
+
+def test_plot_figure2_timeseries_uses_nine_spacecraft_and_no_legend(tmp_path):
+    malara = tmp_path / "malara.h5"
+    simulation = tmp_path / "simulation.h5"
+    output = tmp_path / "figure2.png"
+    _write_figure2_input(malara, observed_frame="spacecraft")
+    _write_figure2_input(simulation, scale=2.0)
+
+    path = plot_figure2_timeseries(
+        malara,
+        simulation,
+        output,
+        velocity_frame="plasma",
+        start_time_s=1.0,
+        stop_time_s=3.0,
+    )
+
+    assert path == output
+    assert output.is_file() and output.stat().st_size > 0
+
+
+def test_plot_figure2_cli_smoke(tmp_path, capsys):
+    malara = tmp_path / "malara.h5"
+    simulation = tmp_path / "simulation.h5"
+    output = tmp_path / "figure2_cli.png"
+    _write_figure2_input(malara)
+    _write_figure2_input(simulation, scale=2.0)
+
+    assert plot_figure2_main(
+        [
+            "--malara",
+            str(malara),
+            "--simulation",
+            str(simulation),
+            "--output",
+            str(output),
+            "--start-time",
+            "1.0",
+            "--stop-time",
+            "3.0",
+        ]
+    ) == 0
+    assert str(output) in capsys.readouterr().out
+    assert output.is_file() and output.stat().st_size > 0

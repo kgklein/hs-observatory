@@ -208,8 +208,23 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_positions(input_path: str | Path, output_time: np.ndarray) -> np.ndarray:
-    """Return positions on the Elsasser grid as ``(time, spacecraft, 3)``."""
+def _read_positions(
+    input_path: str | Path,
+    output_time: np.ndarray,
+    *,
+    data_group: str = "truth",
+    mc_index: int = 0,
+    use_measured_observed_positions: bool = True,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Return positions on the Elsasser grid as ``(time, spacecraft, 3)``.
+
+    Observed fields are sampled at nominal spacecraft positions plus the
+    selected MC ``/errors/position_offset``.  When requested and available, use
+    that same perturbed spatial coordinate for observed lambda binning so
+    knowledge error propagates into the scale-conditioned PDFs.  Timing offsets
+    affect field sampling time in the generator, but the current generator does
+    not advect spacecraft positions by those clock offsets.
+    """
 
     with h5py.File(input_path, "r") as handle:
         if "spacecraft/r" not in handle:
@@ -236,12 +251,48 @@ def _read_positions(input_path: str | Path, output_time: np.ndarray) -> np.ndarr
                 source_time = _time_axis(handle, "v")
             else:
                 source_time = np.asarray(time_node, dtype=float)
+        position_source = (
+            f"spacecraft/r/{variable}" if isinstance(node, h5py.Group) else "spacecraft/r"
+        )
+        position_offset = None
+        offset_source = None
+        if (
+            data_group == "observed"
+            and use_measured_observed_positions
+            and "errors/position_offset" in handle
+        ):
+            offsets = np.asarray(handle["errors/position_offset"], dtype=float)
+            if offsets.ndim == 3:
+                if not 0 <= mc_index < offsets.shape[0]:
+                    raise IndexError(
+                        f"mc_index {mc_index} is outside /errors/position_offset "
+                        f"with {offsets.shape[0]} realizations"
+                    )
+                position_offset = offsets[mc_index]
+            elif offsets.ndim == 2:
+                position_offset = offsets
+            else:
+                raise ValueError("/errors/position_offset must have shape (mc, spacecraft, 3)")
+            offset_source = "errors/position_offset"
     if position.ndim != 3 or position.shape[-1] != 3:
         raise ValueError("Spacecraft positions must have shape (spacecraft, time, 3)")
     time_first = np.swapaxes(position, 0, 1)
     if time_first.shape[0] != source_time.size:
         raise ValueError("Spacecraft positions do not match their source time grid")
-    return _interpolate(time_first, source_time, output_time, "spacecraft position")
+    positions = _interpolate(time_first, source_time, output_time, "spacecraft position")
+    if position_offset is not None:
+        if position_offset.shape != (positions.shape[1], 3):
+            raise ValueError("/errors/position_offset does not match spacecraft positions")
+        positions = positions + position_offset[None, :, :]
+    return positions, {
+        "position_source": position_source,
+        "position_offset_source": offset_source,
+        "coordinate_policy": (
+            "nominal_plus_observed_position_offset"
+            if position_offset is not None
+            else "nominal_spacecraft_positions"
+        ),
+    }
 
 
 def _chunks(n_points: int, settings: dict[str, Any]):
@@ -638,7 +689,12 @@ def compute_elsasser_increment_pdf_static(
         )
         elsasser_config["plot"] = {"enabled": False}
         derived = compute_elsasser_analysis(input_path, elsasser_config)
-        positions = _read_positions(input_path, derived["time"])
+        positions, position_metadata = _read_positions(
+            input_path,
+            derived["time"],
+            data_group=dataset["data_group"],
+            mc_index=dataset["mc_index"],
+        )
         pair_result = compute_increment_pdf_for_points(
             positions,
             derived["z_plus"],
@@ -648,6 +704,7 @@ def compute_elsasser_increment_pdf_static(
         )
         pair_result["selection"] = dataset
         pair_result["elsasser_metadata"] = derived["metadata"]
+        pair_result["position_metadata"] = position_metadata
         results[dataset["name"]] = pair_result
     return {
         "metadata": {
@@ -658,6 +715,7 @@ def compute_elsasser_increment_pdf_static(
             "increment_component": settings["increment_component"],
             "scale_separation": settings["separation"],
             "mean_field_method": settings["mean_field_method"],
+            "observed_position_policy": "use_position_offset_when_available",
             "pair_sampling_mode": settings["pair_mode"],
             "chunk_size": settings["chunk_size"],
             "lambda_binning": settings["scale_binning"],
@@ -792,6 +850,11 @@ class ElsasserIncrementPDFStaticAnalysis(AnalysisMethod):
                     "mean_field_method": settings["mean_field_method"],
                     "lambda_binning": settings["scale_binning"],
                     "pdf_binning": "linear",
+                    "position_source": dataset["position_metadata"]["position_source"],
+                    "position_offset_source": dataset["position_metadata"][
+                        "position_offset_source"
+                    ],
+                    "coordinate_policy": dataset["position_metadata"]["coordinate_policy"],
                 }
                 _write_metadata(group, dataset_metadata)
                 lambda_group = group.create_group("lambda")

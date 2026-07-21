@@ -38,6 +38,8 @@ from hs_observatory.visualization import (
     visualization_paths,
 )
 
+PROGRESS_INTERVAL_S = 10.0
+
 
 def _time_axes(config: dict) -> dict[str, np.ndarray]:
     start = float(config["t_start_s"])
@@ -117,6 +119,56 @@ def _geometry_context_trajectory(config: dict, metadata: dict) -> np.ndarray | N
     return np.swapaxes(positions[keep], 0, 1)
 
 
+def _evaluate_quantity_with_progress(
+    field,
+    quantity: str,
+    time: np.ndarray,
+    position: np.ndarray,
+    *,
+    progress_time: np.ndarray | None = None,
+    label: str,
+) -> np.ndarray:
+    """Evaluate a field quantity, reporting Malara progress every 10 seconds."""
+
+    nominal_time = np.asarray(time if progress_time is None else progress_time, dtype=float)
+    if (
+        getattr(field, "name", "") != "malara_turbulence"
+        or nominal_time.ndim != 1
+        or nominal_time.size == 0
+        or nominal_time[-1] - nominal_time[0] < PROGRESS_INTERVAL_S
+    ):
+        return field.evaluate_quantity(quantity, time, position)
+
+    time_array = np.asarray(time, dtype=float)
+    position_array = np.asarray(position, dtype=float)
+    chunks = []
+    start = 0
+    elapsed_stop = nominal_time[-1] - nominal_time[0]
+    report = PROGRESS_INTERVAL_S
+    while report <= elapsed_stop + 1.0e-9:
+        stop = int(np.searchsorted(nominal_time - nominal_time[0], report, side="right"))
+        if stop > start:
+            chunks.append(
+                field.evaluate_quantity(
+                    quantity,
+                    time_array[start:stop] if time_array.ndim == 1 else time_array[start:stop, :],
+                    position_array[:, start:stop, :],
+                )
+            )
+            print(f"{label}: generated through t={report:g} measurement s", flush=True)
+            start = stop
+        report += PROGRESS_INTERVAL_S
+    if start < nominal_time.size:
+        chunks.append(
+            field.evaluate_quantity(
+                quantity,
+                time_array[start:] if time_array.ndim == 1 else time_array[start:, :],
+                position_array[:, start:, :],
+            )
+        )
+    return np.concatenate(chunks, axis=0)
+
+
 def generate_from_config(
     config_path: str | Path,
     *,
@@ -131,8 +183,12 @@ def generate_from_config(
         config.get("measurement", {}).get("velocity_frame", "spacecraft")
     ).lower()
     truth = {
-        quantity: field.evaluate_quantity(
-            quantity, time[quantity], spacecraft[quantity].position
+        quantity: _evaluate_quantity_with_progress(
+            field,
+            quantity,
+            time[quantity],
+            spacecraft[quantity].position,
+            label=f"truth {quantity}",
         )
         for quantity in ("n", "v", "B")
     }
@@ -195,8 +251,13 @@ def generate_from_config(
                 spacecraft[quantity].position
                 + position_offset[mc_index][:, None, :]
             )
-            sampled[mc_index] = field.evaluate_quantity(
-                quantity, sampled_time, sampled_position
+            sampled[mc_index] = _evaluate_quantity_with_progress(
+                field,
+                quantity,
+                sampled_time,
+                sampled_position,
+                progress_time=time[quantity],
+                label=f"sampled {quantity} MC {mc_index + 1}/{n_mc}",
             )
             if quantity == "v" and velocity_frame == "spacecraft":
                 assert spacecraft_velocity_time_first is not None

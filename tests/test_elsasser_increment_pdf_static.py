@@ -13,6 +13,7 @@ from hs_observatory.analysis.derived.pairs import (
     separation_magnitude,
 )
 from hs_observatory.analysis.elsasser_increment_pdf_static import (
+    _read_positions,
     _settings,
     compute_increment_pdf_for_points,
     geometric_mean_positive,
@@ -166,6 +167,45 @@ def test_alignment_angle_is_one_for_orthogonal_perpendicular_increments():
     assert result["alignment"]["mean_sin_theta"][0] == pytest.approx(1.0)
 
 
+def test_static_pdf_observed_positions_use_selected_mc_position_offset(tmp_path):
+    path = tmp_path / "positions.h5"
+    time = np.array([0.0, 1.0])
+    positions = np.zeros((2, 2, 3))
+    positions[1, :, 0] = 1.0
+    offsets = np.zeros((2, 2, 3))
+    offsets[1, 1, 0] = 4.0
+
+    with h5py.File(path, "w") as handle:
+        handle.create_group("metadata")
+        times = handle.create_group("time")
+        spacecraft = handle.create_group("spacecraft")
+        spacecraft.create_group("r").create_dataset("v", data=positions)
+        spacecraft["r"].create_dataset("n", data=positions)
+        spacecraft["r"].create_dataset("B", data=positions)
+        errors = handle.create_group("errors")
+        errors.create_dataset("position_offset", data=offsets)
+        for name in ("n", "v", "B"):
+            times.create_dataset(name, data=time)
+
+    truth_positions, truth_metadata = _read_positions(
+        path,
+        time,
+        data_group="truth",
+        mc_index=0,
+    )
+    observed_positions, observed_metadata = _read_positions(
+        path,
+        time,
+        data_group="observed",
+        mc_index=1,
+    )
+
+    np.testing.assert_allclose(truth_positions[:, 1, 0], [1.0, 1.0])
+    np.testing.assert_allclose(observed_positions[:, 1, 0], [5.0, 5.0])
+    assert truth_metadata["coordinate_policy"] == "nominal_spacecraft_positions"
+    assert observed_metadata["coordinate_policy"] == "nominal_plus_observed_position_offset"
+
+
 def _write_observations(path: Path) -> Path:
     n_time, n_spacecraft = 4, 2
     time = np.arange(n_time, dtype=float)
@@ -262,6 +302,11 @@ elsasser_increment_pdf_static:
             assert handle[f"results/{dataset}/samples/lambda"].shape[0] <= 5
         assert handle["results/truth"].attrs["mc_index"] == 0
         assert handle["results/observed_mc0"].attrs["mc_index"] == 1
+        assert handle["results/truth"].attrs["coordinate_policy"] == "nominal_spacecraft_positions"
+        assert (
+            handle["results/observed_mc0"].attrs["coordinate_policy"]
+            == "nominal_spacecraft_positions"
+        )
         assert handle["metadata"].attrs["sampling_assumption"] == "static_all_point_pairs"
         truth_typical = handle["results/truth/pdf/z_plus/typical_increment"][...]
         observed_typical = handle["results/observed_mc0/pdf/z_plus/typical_increment"][...]

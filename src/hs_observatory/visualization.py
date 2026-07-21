@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 import warnings
 
+import h5py
 import matplotlib
 
 # Generation is commonly run on headless systems and batch nodes.
@@ -16,7 +17,12 @@ from matplotlib.colors import BoundaryNorm, ListedColormap  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 import numpy as np
 
+from hs_observatory.analysis.derived.elsasser import (
+    compute_density_normalization,
+    compute_elsasser,
+)
 from hs_observatory.analysis.derived.elsasser import magnetic_field_to_alfven_units
+from hs_observatory.io.hdf5 import read_observations
 
 
 # Palette adapted from sparse-field-reconstruction. Mapping by name preserves
@@ -203,6 +209,406 @@ def _component_ylim(*arrays: np.ndarray) -> tuple[float, float]:
     else:
         pad = 0.06 * (hi - lo)
     return lo - pad, hi + pad
+
+
+def _select_observed_member(values: np.ndarray, truth_ndim: int, member_index: int) -> np.ndarray:
+    """Return one observed member, accepting legacy files without an MC axis."""
+
+    array = np.asarray(values, dtype=float)
+    if array.ndim == truth_ndim + 1:
+        if not 0 <= member_index < array.shape[0]:
+            raise IndexError(
+                f"member_index {member_index} is outside observed data with "
+                f"{array.shape[0]} members"
+            )
+        return array[member_index]
+    if array.ndim == truth_ndim:
+        if member_index != 0:
+            raise IndexError("member_index must be 0 when observed data has no MC axis")
+        return array
+    raise ValueError("observed data has an unsupported shape")
+
+
+def _figure2_convert_values(
+    values: Mapping[str, np.ndarray],
+    *,
+    input_units: str,
+) -> dict[str, np.ndarray]:
+    """Convert HDF5 variables to plotting/helper units.
+
+    ``input_units='si'`` assumes density in m^-3, velocity in m/s, and magnetic
+    field in T. ``input_units='repo'`` uses the package-native generated
+    observation units: cm^-3, km/s, and nT.
+    """
+
+    if input_units == "si":
+        return {
+            "n": np.asarray(values["n"], dtype=float) * 1.0e-6,
+            "v": np.asarray(values["v"], dtype=float) * 1.0e-3,
+            "B": np.asarray(values["B"], dtype=float) * 1.0e9,
+        }
+    if input_units == "repo":
+        return {name: np.asarray(values[name], dtype=float) for name in ("n", "v", "B")}
+    raise ValueError("input_units must be 'si' or 'repo'")
+
+
+def _figure2_velocity_frame(input_path: str | Path) -> str:
+    """Return the stored observed velocity frame, defaulting old files to plasma."""
+
+    with h5py.File(input_path, "r") as handle:
+        if "metadata" in handle and "velocity_observed_frame" in handle["metadata"].attrs:
+            value = handle["metadata"].attrs["velocity_observed_frame"]
+            if isinstance(value, bytes):
+                value = value.decode("utf-8")
+            frame = str(value).lower()
+            if frame in {"plasma", "spacecraft"}:
+                return frame
+        if "observed/v" in handle:
+            value = handle["observed/v"].attrs.get("frame")
+            if isinstance(value, bytes):
+                value = value.decode("utf-8")
+            frame = str(value).lower()
+            if frame in {"plasma", "spacecraft"}:
+                return frame
+    return "plasma"
+
+
+def _figure2_spacecraft_velocity(
+    input_path: str | Path,
+    time_v: np.ndarray,
+    n_spacecraft: int,
+) -> np.ndarray | None:
+    """Return spacecraft velocity in km/s on the velocity time grid when available."""
+
+    from hs_observatory.analysis.elsasser import _stored_spacecraft_velocity
+
+    with h5py.File(input_path, "r") as handle:
+        return _stored_spacecraft_velocity(handle, np.asarray(time_v, dtype=float), n_spacecraft)
+
+
+def _figure2_velocity_in_frame(
+    input_path: str | Path,
+    velocity_km_s: np.ndarray,
+    time_v: np.ndarray,
+    *,
+    source_frame: str,
+    target_frame: str,
+) -> np.ndarray:
+    """Convert velocity between plasma and spacecraft frames for plotting."""
+
+    if source_frame == target_frame:
+        return np.asarray(velocity_km_s, dtype=float)
+    if source_frame not in {"plasma", "spacecraft"} or target_frame not in {"plasma", "spacecraft"}:
+        raise ValueError("velocity frames must be 'plasma' or 'spacecraft'")
+    velocity = np.asarray(velocity_km_s, dtype=float)
+    spacecraft_velocity = _figure2_spacecraft_velocity(input_path, time_v, velocity.shape[1])
+    if spacecraft_velocity is None:
+        raise ValueError(
+            f"Cannot convert velocity from {source_frame} to {target_frame}; "
+            "spacecraft velocity is unavailable in the HDF5 file or metadata"
+        )
+    if source_frame == "spacecraft" and target_frame == "plasma":
+        return velocity + spacecraft_velocity
+    return velocity - spacecraft_velocity
+
+
+def _figure2_elsasser_plus(
+    time: Mapping[str, np.ndarray],
+    values: Mapping[str, np.ndarray],
+    *,
+    density_method: str = "global_per_spacecraft",
+    mean_method: str = "global_per_spacecraft",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return z+ and its time grid using the established Elsasser convention."""
+
+    from hs_observatory.analysis.elsasser import _interpolate
+
+    time_n = np.asarray(time["n"], dtype=float)
+    time_v = np.asarray(time["v"], dtype=float)
+    time_B = np.asarray(time["B"], dtype=float)
+    n = np.asarray(values["n"], dtype=float)
+    v = np.asarray(values["v"], dtype=float)
+    B = np.asarray(values["B"], dtype=float)
+    if n.ndim != 2 or v.ndim != 3 or B.ndim != 3 or v.shape[-1] != 3 or B.shape[-1] != 3:
+        raise ValueError("n, v, and B must have shapes (time, sc), (time, sc, 3), (time, sc, 3)")
+    dt_n = float(np.mean(np.diff(time_n))) if time_n.size > 1 else np.inf
+    dt_v = float(np.mean(np.diff(time_v))) if time_v.size > 1 else np.inf
+    output_time = time_v if np.isclose(dt_n, dt_v, rtol=1.0e-7) or dt_v > dt_n else time_n
+    n_aligned = _interpolate(n, time_n, output_time, "n")
+    v_aligned = _interpolate(v, time_v, output_time, "v")
+    B_aligned = _interpolate(B, time_B, output_time, "B")
+    normalization = compute_density_normalization(n_aligned, density_method)
+    b = magnetic_field_to_alfven_units(B_aligned, normalization)
+    return compute_elsasser(v_aligned, b, mean_method)["z_plus"], output_time
+
+
+def _relative_time(time: np.ndarray) -> np.ndarray:
+    values = np.asarray(time, dtype=float)
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("time arrays must be one-dimensional and nonempty")
+    return values - values[0]
+
+
+def _read_figure2_column(
+    input_path: str | Path,
+    *,
+    member_index: int,
+    input_units: str,
+    velocity_frame: str,
+) -> dict[str, Any]:
+    """Read one Figure 2 column from a generated-observation HDF5 file."""
+
+    data = read_observations(input_path)
+    time = {name: np.asarray(values, dtype=float) for name, values in data["time"].items()}
+    truth = _figure2_convert_values(data["truth"], input_units=input_units)
+    observed_raw = {
+        name: _select_observed_member(
+            np.asarray(data["observed"][name], dtype=float),
+            np.asarray(data["truth"][name]).ndim,
+            member_index,
+        )
+        for name in ("n", "v", "B")
+    }
+    observed = _figure2_convert_values(observed_raw, input_units=input_units)
+    observed_frame = _figure2_velocity_frame(input_path)
+    truth["v"] = _figure2_velocity_in_frame(
+        input_path,
+        truth["v"],
+        time["v"],
+        source_frame="plasma",
+        target_frame=velocity_frame,
+    )
+    observed["v"] = _figure2_velocity_in_frame(
+        input_path,
+        observed["v"],
+        time["v"],
+        source_frame=observed_frame,
+        target_frame=velocity_frame,
+    )
+    truth_z_plus, truth_z_time = _figure2_elsasser_plus(time, truth)
+    observed_z_plus, observed_z_time = _figure2_elsasser_plus(time, observed)
+    return {
+        "time": time,
+        "spacecraft_ids": list(data["spacecraft"]["id"]),
+        "truth": truth,
+        "observed": observed,
+        "truth_z_plus": truth_z_plus,
+        "truth_z_time": truth_z_time,
+        "observed_z_plus": observed_z_plus,
+        "observed_z_time": observed_z_time,
+        "velocity_frame": velocity_frame,
+        "observed_velocity_frame_input": observed_frame,
+    }
+
+
+def _visible_values(
+    time: np.ndarray,
+    values: np.ndarray,
+    *,
+    start_time_s: float | None,
+    stop_time_s: float | None,
+) -> np.ndarray:
+    relative = _relative_time(time)
+    mask = np.ones(relative.shape, dtype=bool)
+    if start_time_s is not None:
+        mask &= relative >= start_time_s
+    if stop_time_s is not None:
+        mask &= relative <= stop_time_s
+    selected = np.asarray(values, dtype=float)[mask]
+    return selected if selected.size else np.asarray(values, dtype=float)
+
+
+def _set_shared_pair_limits(
+    axis_a,
+    axis_b,
+    time_a: np.ndarray,
+    values_a: np.ndarray,
+    time_b: np.ndarray,
+    values_b: np.ndarray,
+    *,
+    start_time_s: float | None,
+    stop_time_s: float | None,
+) -> None:
+    limits = _component_ylim(
+        _visible_values(time_a, values_a, start_time_s=start_time_s, stop_time_s=stop_time_s),
+        _visible_values(time_b, values_b, start_time_s=start_time_s, stop_time_s=stop_time_s),
+    )
+    axis_a.set_ylim(*limits)
+    axis_b.set_ylim(*limits)
+
+
+def _plot_figure2_column(
+    axes: np.ndarray,
+    column: dict[str, Any],
+    title: str,
+    *,
+    panel_start: int,
+    start_time_s: float | None,
+    stop_time_s: float | None,
+) -> None:
+    panel_labels = "abcdefghijkl"
+    specs = (
+        ("truth", "v", column["time"]["v"], column["truth"]["v"], r"Truth $v_x$ (km s$^{-1}$)"),
+        (
+            "observed",
+            "v",
+            column["time"]["v"],
+            column["observed"]["v"],
+            r"Measured $v_x$ (km s$^{-1}$)",
+        ),
+        ("truth", "B", column["time"]["B"], column["truth"]["B"], r"Truth $B_x$ (nT)"),
+        (
+            "observed",
+            "B",
+            column["time"]["B"],
+            column["observed"]["B"],
+            r"Measured $B_x$ (nT)",
+        ),
+        (
+            "truth",
+            "z_plus",
+            column["truth_z_time"],
+            column["truth_z_plus"],
+            r"Truth $z_x^+$ (km s$^{-1}$)",
+        ),
+        (
+            "observed",
+            "z_plus",
+            column["observed_z_time"],
+            column["observed_z_plus"],
+            r"Measured $z_x^+$ (km s$^{-1}$)",
+        ),
+    )
+    fallback = plt.cm.tab10(np.linspace(0.0, 0.9, len(column["spacecraft_ids"])))
+    for row, (_kind, _quantity, time, values, ylabel) in enumerate(specs):
+        axis = axes[row]
+        component = np.asarray(values, dtype=float)[:, :, 0]
+        for spacecraft_index, spacecraft_id in enumerate(column["spacecraft_ids"]):
+            axis.plot(
+                _relative_time(time),
+                component[:, spacecraft_index],
+                color=SPACECRAFT_COLORS.get(spacecraft_id, fallback[spacecraft_index]),
+                linewidth=0.95,
+            )
+        axis.set_ylabel(ylabel, fontsize=14)
+        axis.tick_params(axis="both", labelsize=14)
+        axis.grid(alpha=0.22)
+        axis.text(
+            0.015,
+            0.88,
+            f"({panel_labels[panel_start + row]})",
+            transform=axis.transAxes,
+            fontsize=9,
+            fontweight="bold",
+        )
+        if row != len(specs) - 1:
+            axis.tick_params(labelbottom=False)
+    axes[0].set_title(title, fontsize=16)
+    axes[-1].set_xlabel(r"$t - t_0$ (s)", fontsize=14)
+    if start_time_s is not None or stop_time_s is not None:
+        axes[-1].set_xlim(left=start_time_s, right=stop_time_s)
+    _set_shared_pair_limits(
+        axes[0],
+        axes[1],
+        specs[0][2],
+        specs[0][3][:, :, 0],
+        specs[1][2],
+        specs[1][3][:, :, 0],
+        start_time_s=start_time_s,
+        stop_time_s=stop_time_s,
+    )
+    _set_shared_pair_limits(
+        axes[2],
+        axes[3],
+        specs[2][2],
+        specs[2][3][:, :, 0],
+        specs[3][2],
+        specs[3][3][:, :, 0],
+        start_time_s=start_time_s,
+        stop_time_s=stop_time_s,
+    )
+    _set_shared_pair_limits(
+        axes[4],
+        axes[5],
+        specs[4][2],
+        specs[4][3][:, :, 0],
+        specs[5][2],
+        specs[5][3][:, :, 0],
+        start_time_s=start_time_s,
+        stop_time_s=stop_time_s,
+    )
+
+
+def plot_figure2_timeseries(
+    malara_path: str | Path,
+    simulation_path: str | Path,
+    output_path: str | Path,
+    *,
+    member_index: int = 0,
+    malara_title: str = "Synthetic Intermittent Turbulence",
+    simulation_title: str = "Gkyell Five-Moment Simulation",
+    input_units: str = "si",
+    velocity_frame: str = "plasma",
+    start_time_s: float | None = None,
+    stop_time_s: float | None = None,
+    dpi: int = 300,
+) -> Path:
+    """Write the two-column paper Figure 2 time-series summary.
+
+    The inputs are generated-observation HDF5 files with ``time``, ``truth``,
+    ``observed``, and ``spacecraft/id`` entries compatible with
+    :func:`read_observations`. The measured panels use one observed
+    MC realization, default member 0. ``z_x^+`` is constructed from the shared
+    Elsasser helpers and therefore uses the package mean-subtraction convention.
+
+    Example:
+    ``hsobs-plot-figure2 --malara malara.h5 --simulation sim.h5 --output figure2.png``
+    """
+
+    if velocity_frame not in {"plasma", "spacecraft"}:
+        raise ValueError("velocity_frame must be 'plasma' or 'spacecraft'")
+    if start_time_s is not None and stop_time_s is not None and stop_time_s <= start_time_s:
+        raise ValueError("stop_time_s must be greater than start_time_s")
+    left = _read_figure2_column(
+        malara_path,
+        member_index=member_index,
+        input_units=input_units,
+        velocity_frame=velocity_frame,
+    )
+    right = _read_figure2_column(
+        simulation_path,
+        member_index=member_index,
+        input_units=input_units,
+        velocity_frame=velocity_frame,
+    )
+    figure, axes = plt.subplots(
+        6,
+        2,
+        figsize=(12.5, 13.0),
+        sharex="col",
+        constrained_layout=True,
+    )
+    _plot_figure2_column(
+        axes[:, 0],
+        left,
+        malara_title,
+        panel_start=0,
+        start_time_s=start_time_s,
+        stop_time_s=stop_time_s,
+    )
+    _plot_figure2_column(
+        axes[:, 1],
+        right,
+        simulation_title,
+        panel_start=6,
+        start_time_s=start_time_s,
+        stop_time_s=stop_time_s,
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=dpi)
+    plt.close(figure)
+    return output
 
 
 def plot_velocity_alfven_timeseries(
@@ -905,6 +1311,10 @@ def _plot_context_projection(
 
 def _context_legend_handles(moon_position: np.ndarray | None = None) -> list[Line2D]:
     handles = [
+        *(
+            Line2D([0], [0], color=color, linewidth=1.3, label=name)
+            for name, color in REGION_COLORS.items()
+        ),
         Line2D(
             [0],
             [0],
@@ -927,10 +1337,6 @@ def _context_legend_handles(moon_position: np.ndarray | None = None) -> list[Lin
                 label="Moon",
             )
         )
-    handles.extend(
-        Line2D([0], [0], color=color, linewidth=1.3, label=name)
-        for name, color in REGION_COLORS.items()
-    )
     return handles
 
 
@@ -1006,6 +1412,25 @@ def _plot_baseline_components(
         title=title,
     )
     ax.grid(alpha=0.18, linewidth=0.5, which="both")
+
+
+def _label_geometry_summary_panels(axes: Sequence[Any]) -> None:
+    ordered = sorted(
+        axes,
+        key=lambda axis: (-axis.get_position().y0, axis.get_position().x0),
+    )
+    for label, axis in zip("abcdefgh", ordered):
+        axis.text(
+            0.035,
+            0.94,
+            f"({label})",
+            transform=axis.transAxes,
+            ha="left",
+            va="top",
+            fontsize=24,
+            fontweight="bold",
+            color="#111111",
+        )
 
 
 def _regular_size_ratio_exists(metrics: Sequence[Mapping[str, Any]]) -> bool:
@@ -1116,7 +1541,7 @@ def plot_geometry_summary(
         layout_engine = fig.get_layout_engine()
         if layout_engine is not None:
             layout_engine.set(
-                rect=(0.0, 0.0, 1.0, 0.91),
+                rect=(0.0, 0.0, 1.0, 0.94),
                 h_pad=0.035,
                 w_pad=0.035,
                 hspace=0.08,
@@ -1133,23 +1558,26 @@ def plot_geometry_summary(
             r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
         )
 
-        context_ax = fig.add_subplot(grid[0, 1])
+        context_ax = fig.add_subplot(grid[0, 3])
         _plot_context_projection(
             context_ax,
             trajectory,
             mesocenter,
             0,
             1,
-            r"Orbit Context:",
+            r"",
             moon_position=moon_position,
         )
         context_ax.legend(
             handles=_context_legend_handles(moon_position),
-            loc="lower left",
+            loc="lower center",
+            bbox_to_anchor=(0.5, 1.02),
+            ncol=2,
             fontsize=19.8,
             frameon=False,
             borderaxespad=0.25,
         )
+        #context_ax.set_title(r"Orbit Context:")
 
         baseline_limits = _baseline_component_limits(baselines)
         _plot_baseline_components(
@@ -1161,7 +1589,7 @@ def plot_geometry_summary(
             baseline_limits,
         )
 
-        poly_ax = fig.add_subplot(grid[0, 3])
+        poly_ax = fig.add_subplot(grid[0, 1])
         cmap = _discrete_polyhedron_cmap()
         norm = BoundaryNorm(np.arange(3.5, 10.5, 1.0), cmap.N)
         q_values = np.asarray([item["Q"] for item in metrics], dtype=float)
@@ -1256,9 +1684,25 @@ def plot_geometry_summary(
         #    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.68, "pad": 2.0},
         #)
 
+        _label_geometry_summary_panels(
+            [
+                context_ax,
+                poly_ax,
+                lambda_z_x_ax,
+                lambda_z_y_ax,
+                *[
+                    axis
+                    for axis in fig.axes
+                    if axis not in {context_ax, poly_ax, lambda_z_x_ax, lambda_z_y_ax}
+                    and axis.get_title()
+                ],
+            ]
+        )
         fig.suptitle(
             f"HelioSwarm Design Reference Mission Geometry: {title_time}",
-            y=0.985,
+            x=0.055,
+            y=0.965,
+            ha="left",
         )
     return fig, diagnostics
 

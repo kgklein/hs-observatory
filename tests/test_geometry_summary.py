@@ -181,13 +181,22 @@ def test_geometry_summary_uses_requested_two_by_four_panel_order():
         time=spacecraft.time,
     )
 
+    top_axes = sorted(
+        [axis for axis in figure.axes if axis.get_title() and axis.get_position().y0 > 0.45],
+        key=lambda axis: axis.get_position().x0,
+    )
+    top_titles = [axis.get_title() for axis in top_axes]
+    assert top_titles == [
+        r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
+        "Polyhedral Configuration Summary",
+        r"$|\lambda_Y|$ vs $|\lambda_X|$",
+        "Orbit Context:",
+    ]
+    context_axis = top_axes[3]
+    assert "$X_{GSE}$ ($R_E$)" in context_axis.get_xlabel()
+    assert "$Y_{GSE}$ ($R_E$)" in context_axis.get_ylabel()
+
     titles = [axis.get_title() for axis in figure.axes]
-    assert titles[0] == r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$"
-    assert titles[1] == "Orbit Context:"
-    assert "$X_{GSE}$ ($R_E$)" in figure.axes[1].get_xlabel()
-    assert "$Y_{GSE}$ ($R_E$)" in figure.axes[1].get_ylabel()
-    assert titles[2] == r"$|\lambda_Y|$ vs $|\lambda_X|$"
-    assert titles[3] == "Polyhedral Configuration Summary"
     assert titles[5] == r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$"
     assert titles[6] == r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$"
     assert titles[7] == r"$|\lambda_Z|$ vs $|\lambda_X|$"
@@ -207,6 +216,7 @@ def test_geometry_summary_title_truncates_fractional_seconds():
 
     assert "2030-05-31T23:50:35" in figure._suptitle.get_text()
     assert "810100000" not in figure._suptitle.get_text()
+    assert figure._suptitle.get_ha() == "left"
     plt.close(figure)
 
 

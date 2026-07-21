@@ -24,6 +24,7 @@ simulation-bp = ["adios2>=2.10"]
 [project.scripts]
 hsobs-generate = "hs_observatory.cli:generate_main"
 hsobs-analyze = "hs_observatory.cli:analyze_main"
+hsobs-plot-figure2 = "hs_observatory.cli:plot_figure2_main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
