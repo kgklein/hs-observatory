@@ -12,6 +12,11 @@ import h5py
 import numpy as np
 
 from hs_observatory.analysis.base import AnalysisMethod
+from hs_observatory.analysis.derived.pairs import (
+    pair_chunks,
+    possible_pair_count,
+    selected_pair_count,
+)
 from hs_observatory.analysis.elsasser import (
     _interpolate,
     _time_axis,
@@ -70,12 +75,51 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     min_fit_bins = int(config.get("min_fit_bins", fit.get("min_bins", 3)))
     if min_fit_bins < 2:
         raise ValueError("structure_function.min_fit_bins must be at least 2")
+    max_pair_lambda_km = config.get("max_pair_lambda_km", config.get("max_lambda_km"))
+    if max_pair_lambda_km is not None:
+        max_pair_lambda_km = float(max_pair_lambda_km)
+        if max_pair_lambda_km <= 0.0:
+            raise ValueError("structure_function.max_pair_lambda_km must be positive or null")
+    increment_mode = str(config.get("increment_mode", "same_time_pairs"))
+    if increment_mode not in {"same_time_pairs", "all_spacetime_pairs"}:
+        raise ValueError(
+            "structure_function.increment_mode must be "
+            "'same_time_pairs' or 'all_spacetime_pairs'"
+        )
+    pair_sampling = _mapping(config, "pair_sampling")
+    pair_mode = str(pair_sampling.get("mode", "all"))
+    if pair_mode not in {"all", "random"}:
+        raise ValueError("structure_function.pair_sampling.mode must be 'all' or 'random'")
+    chunk_size = int(pair_sampling.get("chunk_size", 1_000_000))
+    if chunk_size < 1:
+        raise ValueError("structure_function.pair_sampling.chunk_size must be positive")
+    n_pairs = pair_sampling.get("n_pairs")
+    n_pairs = None if n_pairs is None else int(n_pairs)
+    max_pairs = pair_sampling.get("max_pairs")
+    max_pairs = None if max_pairs is None else int(max_pairs)
+    random_seed = pair_sampling.get("random_seed", 12345)
+    random_seed = None if random_seed is None else int(random_seed)
+    if pair_mode == "random" and (n_pairs is None or n_pairs < 1):
+        raise ValueError("random structure-function pair sampling requires pair_sampling.n_pairs")
+    if pair_mode == "random" and random_seed is None:
+        raise ValueError("random structure-function pair sampling requires pair_sampling.random_seed")
+    if max_pairs is not None and max_pairs < 1:
+        raise ValueError("structure_function.pair_sampling.max_pairs must be positive or null")
     return {
         "orders": list(range(min_order, max_order + 1)),
         "n_lambda_bins": n_lambda_bins,
         "lambda_bins_km": lambda_bins_km,
         "scale_ranges_km": parsed_ranges,
         "min_fit_bins": min_fit_bins,
+        "max_pair_lambda_km": max_pair_lambda_km,
+        "increment_mode": increment_mode,
+        "pair_sampling": {
+            "mode": pair_mode,
+            "chunk_size": chunk_size,
+            "n_pairs": n_pairs,
+            "max_pairs": max_pairs,
+            "random_seed": random_seed,
+        },
         "elsasser": {
             "velocity": velocity,
             "density_normalization": density,
@@ -119,10 +163,34 @@ def _lambda_edges_km(separations_km: np.ndarray, settings: dict[str, Any]) -> np
     if configured is not None:
         return np.asarray(configured, dtype=float)
     positive = separations_km[np.isfinite(separations_km) & (separations_km > 0.0)]
+    max_pair_lambda_km = settings["max_pair_lambda_km"]
+    if max_pair_lambda_km is not None:
+        positive = positive[positive <= max_pair_lambda_km]
     if positive.size == 0:
         raise ValueError("No positive pair separations are available for structure functions")
     lower = float(np.min(positive))
     upper = float(np.max(positive))
+    if upper == lower:
+        lower *= 0.9
+        upper *= 1.1
+    return np.geomspace(lower, upper, settings["n_lambda_bins"] + 1)
+
+
+def _lambda_edges_from_bounds_km(
+    lower: float,
+    upper: float,
+    settings: dict[str, Any],
+) -> np.ndarray:
+    configured = settings["lambda_bins_km"]
+    if configured is not None:
+        return np.asarray(configured, dtype=float)
+    if not np.isfinite(lower) or not np.isfinite(upper) or lower <= 0.0:
+        raise ValueError("No positive pair separations are available for structure functions")
+    max_pair_lambda_km = settings["max_pair_lambda_km"]
+    if max_pair_lambda_km is not None:
+        upper = min(upper, max_pair_lambda_km)
+        if upper < lower:
+            raise ValueError("No positive pair separations remain below max_pair_lambda_km")
     if upper == lower:
         lower *= 0.9
         upper *= 1.1
@@ -225,6 +293,7 @@ def compute_pairwise_structure_functions(
     *,
     scale_ranges_km: dict[str, list[float]] | None = None,
     min_fit_bins: int = 3,
+    max_pair_lambda_km: float | None = None,
 ) -> dict[str, Any]:
     """Compute same-time pairwise vector-increment structure functions.
 
@@ -260,6 +329,8 @@ def compute_pairwise_structure_functions(
             pair_separations[member, pair_index] = separation
             bin_index, valid = _bin_indices(separation, edges)
             valid &= separation > 0.0
+            if max_pair_lambda_km is not None:
+                valid &= separation <= max_pair_lambda_km
             for index in range(n_bins):
                 selected = valid & (bin_index == index)
                 count = int(np.sum(selected))
@@ -287,6 +358,168 @@ def compute_pairwise_structure_functions(
             if np.any(finite)
             else {"total": [float(edges[0]), float(edges[-1])]}
         )
+    products["scale_ranges_km"] = scale_ranges_km
+    for field in FIELDS:
+        S_n = np.divide(
+            sums[field],
+            counts[:, None, :],
+            out=np.full(sums[field].shape, np.nan),
+            where=counts[:, None, :] > 0,
+        )
+        products[field] = {
+            "S_n": S_n,
+            "flatness": _flatness(S_n, orders),
+            "scaling_exponents": _fit_scaling_exponents(
+                S_n, counts, centers, orders, scale_ranges_km, min_fit_bins
+            ),
+        }
+    return products
+
+
+def _sampling_kwargs(pair_sampling: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mode": pair_sampling["mode"],
+        "n_pairs": pair_sampling["n_pairs"],
+        "random_seed": pair_sampling["random_seed"],
+        "max_pairs": pair_sampling["max_pairs"],
+    }
+
+
+def _selection_count_kwargs(pair_sampling: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mode": pair_sampling["mode"],
+        "n_pairs": pair_sampling["n_pairs"],
+        "max_pairs": pair_sampling["max_pairs"],
+    }
+
+
+def _spacetime_lambda_bounds_km(
+    positions_km: np.ndarray,
+    pair_sampling: dict[str, Any],
+    max_pair_lambda_km: float | None,
+) -> tuple[float, float]:
+    lower = np.inf
+    upper = -np.inf
+    flat_position = np.asarray(positions_km, dtype=float).reshape(-1, 3)
+    for left, right in pair_chunks(
+        flat_position.shape[0],
+        pair_sampling["chunk_size"],
+        **_sampling_kwargs(pair_sampling),
+    ):
+        separation = np.linalg.norm(flat_position[right] - flat_position[left], axis=1)
+        positive = separation[np.isfinite(separation) & (separation > 0.0)]
+        if max_pair_lambda_km is not None:
+            positive = positive[positive <= max_pair_lambda_km]
+        if positive.size:
+            lower = min(lower, float(np.min(positive)))
+            upper = max(upper, float(np.max(positive)))
+    return lower, upper
+
+
+def compute_all_spacetime_structure_functions(
+    positions_km: np.ndarray,
+    z_plus: np.ndarray,
+    z_minus: np.ndarray,
+    orders: list[int],
+    lambda_edges_km: np.ndarray,
+    *,
+    pair_sampling: dict[str, Any],
+    scale_ranges_km: dict[str, list[float]] | None = None,
+    min_fit_bins: int = 3,
+    max_pair_lambda_km: float | None = None,
+) -> dict[str, Any]:
+    """Compute all-spacetime vector-increment structure functions.
+
+    Arrays are member-first and time-first: ``(member, time, spacecraft, 3)``.
+    Each member is flattened in time-major order and streamed through unique
+    unordered point pairs.  Lambda is the actual point-to-point position
+    separation for the selected member and data group.
+    """
+
+    arrays = [np.asarray(value, dtype=float) for value in (positions_km, z_plus, z_minus)]
+    if any(value.shape != arrays[0].shape for value in arrays):
+        raise ValueError("positions, z_plus, and z_minus must have matching shapes")
+    if arrays[0].ndim != 4 or arrays[0].shape[-1] != 3:
+        raise ValueError("Inputs must have shape (member, time, spacecraft, 3)")
+    if not all(np.all(np.isfinite(value)) for value in arrays):
+        raise ValueError("Structure-function inputs must contain only finite values")
+    edges = np.asarray(lambda_edges_km, dtype=float)
+    if edges.ndim != 1 or edges.size < 2 or np.any(np.diff(edges) <= 0.0):
+        raise ValueError("lambda_edges_km must be increasing one-dimensional bin edges")
+
+    n_members, n_time, n_spacecraft, _ = arrays[0].shape
+    n_points = n_time * n_spacecraft
+    if n_points < 2:
+        raise ValueError("At least two spacetime points are required")
+    n_bins = edges.size - 1
+    centers = np.sqrt(edges[:-1] * edges[1:])
+    counts = np.zeros((n_members, n_bins), dtype=np.int64)
+    sums = {field: np.zeros((n_members, len(orders), n_bins)) for field in FIELDS}
+    possible_pairs = possible_pair_count(n_points)
+    selected_pairs = selected_pair_count(n_points, **_selection_count_kwargs(pair_sampling))
+    pair_count_by_member = np.full(n_members, selected_pairs, dtype=np.int64)
+    skipped_nonpositive = np.zeros(n_members, dtype=np.int64)
+    skipped_above_max_lambda = np.zeros(n_members, dtype=np.int64)
+    outside_lambda_bins = np.zeros(n_members, dtype=np.int64)
+
+    for member in range(n_members):
+        flat_position = arrays[0][member].reshape(-1, 3)
+        flat_values = {
+            "z_plus": arrays[1][member].reshape(-1, 3),
+            "z_minus": arrays[2][member].reshape(-1, 3),
+        }
+        for left, right in pair_chunks(
+            n_points,
+            pair_sampling["chunk_size"],
+            **_sampling_kwargs(pair_sampling),
+        ):
+            separation = np.linalg.norm(flat_position[right] - flat_position[left], axis=1)
+            bin_index, valid = _bin_indices(separation, edges)
+            nonpositive = np.isfinite(separation) & (separation <= 0.0)
+            skipped_nonpositive[member] += int(np.sum(nonpositive))
+            valid &= separation > 0.0
+            above_max = np.zeros(separation.shape, dtype=bool)
+            if max_pair_lambda_km is not None:
+                above_max = np.isfinite(separation) & (separation > max_pair_lambda_km)
+                skipped_above_max_lambda[member] += int(np.sum(above_max))
+                valid &= ~above_max
+            outside_lambda_bins[member] += int(
+                np.sum(np.isfinite(separation) & (separation > 0.0) & ~above_max & ~valid)
+            )
+            for index in range(n_bins):
+                selected = valid & (bin_index == index)
+                count = int(np.sum(selected))
+                if count == 0:
+                    continue
+                counts[member, index] += count
+                for field, values in flat_values.items():
+                    magnitude = np.linalg.norm(values[right[selected]] - values[left[selected]], axis=1)
+                    for order_index, order in enumerate(orders):
+                        sums[field][member, order_index, index] += float(np.sum(magnitude**order))
+
+    products: dict[str, Any] = {
+        "orders": orders,
+        "lambda_bin_edges_km": edges,
+        "lambda_bin_centers_km": centers,
+        "spacecraft_pairs": [],
+        "pair_separations_km": None,
+        "counts": counts,
+        "spacetime_pair_counts": {
+            "possible_per_member": possible_pairs,
+            "selected_per_member": pair_count_by_member,
+            "skipped_nonpositive_separation": skipped_nonpositive,
+            "skipped_above_max_lambda": skipped_above_max_lambda,
+            "outside_lambda_bins": outside_lambda_bins,
+        },
+    }
+    if scale_ranges_km is None:
+        finite = np.isfinite(centers) & (np.sum(counts, axis=0) > 0)
+        scale_ranges_km = (
+            {"total": [float(np.min(centers[finite])), float(np.max(centers[finite]))]}
+            if np.any(finite)
+            else {"total": [float(edges[0]), float(edges[-1])]}
+        )
+    products["scale_ranges_km"] = scale_ranges_km
     for field in FIELDS:
         S_n = np.divide(
             sums[field],
@@ -436,6 +669,8 @@ class StructureFunctionAnalysis(AnalysisMethod):
 
         first_pass: dict[str, list[dict[str, Any]]] = {}
         all_separations: list[np.ndarray] = []
+        lambda_lower_km = np.inf
+        lambda_upper_km = -np.inf
         notes: list[str] = []
         field_names_used: dict[str, Any] = {}
         for group_name in groups:
@@ -457,39 +692,56 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 first_pass[group_name].append({"elsasser": elsasser, "positions_km": positions_km})
                 field_names_used[group_name]["positions"].append(position_source)
                 notes.extend(position_notes)
-                for left, right in pairs:
-                    all_separations.append(
-                        np.linalg.norm(positions_km[:, left] - positions_km[:, right], axis=1)
+                if settings["increment_mode"] == "same_time_pairs":
+                    for left, right in pairs:
+                        all_separations.append(
+                            np.linalg.norm(positions_km[:, left] - positions_km[:, right], axis=1)
+                        )
+                elif settings["lambda_bins_km"] is None:
+                    lower, upper = _spacetime_lambda_bounds_km(
+                        positions_km,
+                        settings["pair_sampling"],
+                        settings["max_pair_lambda_km"],
                     )
+                    lambda_lower_km = min(lambda_lower_km, lower)
+                    lambda_upper_km = max(lambda_upper_km, upper)
 
-        lambda_edges_km = _lambda_edges_km(np.concatenate(all_separations), settings)
-        centers_km = np.sqrt(lambda_edges_km[:-1] * lambda_edges_km[1:])
+        if settings["increment_mode"] == "same_time_pairs":
+            lambda_edges_km = _lambda_edges_km(np.concatenate(all_separations), settings)
+        else:
+            lambda_edges_km = _lambda_edges_from_bounds_km(
+                lambda_lower_km,
+                lambda_upper_km,
+                settings,
+            )
         products: dict[str, Any] = {}
         for group_name, members in first_pass.items():
             positions = np.stack([member["positions_km"] for member in members], axis=0)
             z_plus = np.stack([member["elsasser"]["z_plus"] for member in members], axis=0)
             z_minus = np.stack([member["elsasser"]["z_minus"] for member in members], axis=0)
-            # Named ranges default to the finite, nonempty bins for this group
-            # unless the user supplied explicit km ranges.
-            temporary = compute_pairwise_structure_functions(
-                positions,
-                z_plus,
-                z_minus,
-                settings["orders"],
-                lambda_edges_km,
-                min_fit_bins=settings["min_fit_bins"],
-            )
-            ranges_km = _scale_ranges_km(centers_km, temporary["counts"], settings)
-            group_result = compute_pairwise_structure_functions(
-                positions,
-                z_plus,
-                z_minus,
-                settings["orders"],
-                lambda_edges_km,
-                scale_ranges_km=ranges_km,
-                min_fit_bins=settings["min_fit_bins"],
-            )
-            group_result["scale_ranges_km"] = ranges_km
+            if settings["increment_mode"] == "same_time_pairs":
+                group_result = compute_pairwise_structure_functions(
+                    positions,
+                    z_plus,
+                    z_minus,
+                    settings["orders"],
+                    lambda_edges_km,
+                    scale_ranges_km=settings["scale_ranges_km"] or None,
+                    min_fit_bins=settings["min_fit_bins"],
+                    max_pair_lambda_km=settings["max_pair_lambda_km"],
+                )
+            else:
+                group_result = compute_all_spacetime_structure_functions(
+                    positions,
+                    z_plus,
+                    z_minus,
+                    settings["orders"],
+                    lambda_edges_km,
+                    pair_sampling=settings["pair_sampling"],
+                    scale_ranges_km=settings["scale_ranges_km"] or None,
+                    min_fit_bins=settings["min_fit_bins"],
+                    max_pair_lambda_km=settings["max_pair_lambda_km"],
+                )
             group_result["n_members"] = positions.shape[0]
             group_result["time_s"] = np.stack(
                 [member["elsasser"]["time"] for member in members], axis=0
@@ -507,6 +759,9 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 "lambda_bins_km": settings["lambda_bins_km"],
                 "scale_ranges_km": settings["scale_ranges_km"],
                 "min_fit_bins": settings["min_fit_bins"],
+                "max_pair_lambda_km": settings["max_pair_lambda_km"],
+                "increment_mode": settings["increment_mode"],
+                "pair_sampling": settings["pair_sampling"],
             },
             "spacecraft_pairs": [list(pair) for pair in pairs],
             "products": products,
@@ -521,7 +776,14 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     "time_s": "s",
                 },
                 "field_names_used": field_names_used,
-                "increment_type": "same-time vector magnitude",
+                "increment_type": (
+                    "same-time spacecraft-pair vector magnitude"
+                    if settings["increment_mode"] == "same_time_pairs"
+                    else "all-spacetime point-pair vector magnitude"
+                ),
+                "increment_mode": settings["increment_mode"],
+                "pair_sampling": settings["pair_sampling"],
+                "max_pair_lambda_km": settings["max_pair_lambda_km"],
                 "ensemble_policy": "members are processed independently and not averaged",
             },
         }
@@ -563,7 +825,9 @@ def plot_structure_function_diagnostic(
         raise ValueError("field must be 'z_plus' or 'z_minus'")
     products = result["products"][data_group]
     orders = np.asarray(products["orders"], dtype=int)
+    edges_km = np.asarray(products["lambda_bin_edges_km"], dtype=float)
     centers_km = np.asarray(products["lambda_bin_centers_km"], dtype=float)
+    counts = np.asarray(products["counts"], dtype=float)
     values = np.asarray(products[field]["S_n"], dtype=float)
     if not 0 <= member < values.shape[0]:
         raise IndexError(f"member {member} is outside {data_group}/{field}")
@@ -575,8 +839,8 @@ def plot_structure_function_diagnostic(
     flatness_values = products[field]["flatness"]
     flatness = None if flatness_values is None else np.asarray(flatness_values, dtype=float)
 
-    figure, axes = plt.subplots(1, 3, figsize=(14.0, 4.2), constrained_layout=True)
-    for axis in (axes[0], axes[2]):
+    figure, axes = plt.subplots(1, 4, figsize=(18.0, 4.2), constrained_layout=True)
+    for axis in (axes[0], axes[2], axes[3]):
         for name, bounds in ranges.items():
             axis.axvspan(bounds[0], bounds[1], alpha=0.08, label=name)
     for order_index, order in enumerate(orders):
@@ -602,12 +866,38 @@ def plot_structure_function_diagnostic(
 
     if flatness is not None:
         axes[2].loglog(centers_km, flatness[member], marker="o", label=field.replace("_", " "))
-    axes[2].axhline(3.0, color="0.35", linestyle="--", linewidth=1.0, label="Gaussian")
+    axes[2].axhline(
+        5.0 / 3.0,
+        color="0.35",
+        linestyle="--",
+        linewidth=1.0,
+        label="3D Gaussian",
+    )
     axes[2].set_xlabel(r"$\lambda$ [km]")
     axes[2].set_ylabel(r"$S_4/S_2^2$")
     axes[2].set_title("flatness")
     axes[2].grid(True, which="both", alpha=0.22)
     axes[2].legend(fontsize=8)
+
+    axes[3].stairs(counts[member], edges_km, color="#2f6f9f", linewidth=1.5)
+    axes[3].scatter(
+        centers_km,
+        counts[member],
+        color="#2f6f9f",
+        s=18,
+        zorder=3,
+    )
+    axes[3].set_xscale("log")
+    if np.any(counts[member] > 0):
+        axes[3].set_yscale("log")
+    axes[3].set_xlabel(r"$\lambda$ [km]")
+    increment_mode = result.get("metadata", {}).get("increment_mode", "same_time_pairs")
+    if increment_mode == "all_spacetime_pairs":
+        axes[3].set_ylabel("spacetime point pairs")
+    else:
+        axes[3].set_ylabel("pair-time samples")
+    axes[3].set_title(r"$\lambda$ coverage")
+    axes[3].grid(True, which="both", alpha=0.22)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

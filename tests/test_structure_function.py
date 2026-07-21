@@ -8,6 +8,7 @@ from hs_observatory.analysis.registry import list_analyses
 from hs_observatory.analysis.structure_function import (
     StructureFunctionAnalysis,
     _fit_scaling_exponents,
+    compute_all_spacetime_structure_functions,
     compute_pairwise_structure_functions,
     plot_structure_function_diagnostic,
 )
@@ -53,7 +54,7 @@ def test_vector_structure_function_preserves_members_and_empty_bins():
     np.testing.assert_allclose(result["z_plus"]["S_n"][:, 0, 0], [10.0, 1.0])
     np.testing.assert_allclose(result["z_minus"]["S_n"][:, 0, 0], [40.0, 4.0])
     assert np.isnan(result["z_plus"]["S_n"][0, 0, 1])
-    np.testing.assert_allclose(result["z_plus"]["flatness"][:, 0], [272.0 / 100.0, 1.0])
+    np.testing.assert_allclose(result["z_plus"]["flatness"][:, 0], [136.0 / 100.0, 1.0])
 
 
 def test_flatness_is_none_without_second_and_fourth_orders():
@@ -70,6 +71,88 @@ def test_flatness_is_none_without_second_and_fourth_orders():
     )
 
     assert result["z_plus"]["flatness"] is None
+
+
+def test_all_spacetime_structure_function_matches_direct_pairs_and_sampling():
+    positions = np.array(
+        [
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                [[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+            ],
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                [[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+            ],
+        ]
+    )
+    z_plus = np.zeros_like(positions)
+    z_plus[0, ..., 0] = positions[0, ..., 0] * 2.0
+    z_plus[1, ..., 0] = positions[1, ..., 0] * 3.0
+    z_minus = 0.5 * z_plus
+
+    result = compute_all_spacetime_structure_functions(
+        positions,
+        z_plus,
+        z_minus,
+        [2],
+        np.array([0.5, 1.5, 3.0, 5.0]),
+        pair_sampling={
+            "mode": "all",
+            "chunk_size": 2,
+            "n_pairs": None,
+            "max_pairs": None,
+            "random_seed": 7,
+        },
+        min_fit_bins=2,
+    )
+
+    np.testing.assert_array_equal(result["counts"], [[2, 2, 2], [2, 2, 2]])
+    np.testing.assert_allclose(result["z_plus"]["S_n"][0, 0], [4.0, 16.0, 50.0])
+    np.testing.assert_allclose(result["z_plus"]["S_n"][1, 0], [9.0, 36.0, 112.5])
+    np.testing.assert_allclose(result["z_minus"]["S_n"][0, 0], [1.0, 4.0, 12.5])
+    assert result["spacetime_pair_counts"]["possible_per_member"] == 6
+
+    sampled = compute_all_spacetime_structure_functions(
+        positions[:1],
+        z_plus[:1],
+        z_minus[:1],
+        [2],
+        np.array([0.5, 1.5, 3.0, 5.0]),
+        pair_sampling={
+            "mode": "all",
+            "chunk_size": 2,
+            "n_pairs": None,
+            "max_pairs": 3,
+            "random_seed": 7,
+        },
+        min_fit_bins=2,
+    )
+
+    np.testing.assert_array_equal(sampled["counts"], [[1, 1, 1]])
+    assert sampled["spacetime_pair_counts"]["selected_per_member"][0] == 3
+
+    limited = compute_all_spacetime_structure_functions(
+        positions[:1],
+        z_plus[:1],
+        z_minus[:1],
+        [2],
+        np.array([0.5, 1.5, 3.0, 5.0]),
+        pair_sampling={
+            "mode": "all",
+            "chunk_size": 2,
+            "n_pairs": None,
+            "max_pairs": None,
+            "random_seed": 7,
+        },
+        min_fit_bins=2,
+        max_pair_lambda_km=2.5,
+    )
+
+    np.testing.assert_array_equal(limited["counts"], [[2, 2, 0]])
+    np.testing.assert_allclose(limited["z_plus"]["S_n"][0, 0, :2], [4.0, 16.0])
+    assert np.isnan(limited["z_plus"]["S_n"][0, 0, 2])
+    assert limited["spacetime_pair_counts"]["skipped_above_max_lambda"][0] == 2
 
 
 def test_scaling_exponents_match_synthetic_power_laws():
@@ -161,12 +244,44 @@ def test_run_computes_observed_truth_and_uses_observed_position_offsets(tmp_path
     assert observed_separations[1, 1, 0] == pytest.approx(np.hypot(3.0, 20.0))
 
 
+def test_run_all_spacetime_uses_observed_position_offsets(tmp_path):
+    input_path = _write_structure_input(tmp_path / "input.h5")
+    analysis = StructureFunctionAnalysis(
+        {
+            "min_order": 2,
+            "max_order": 2,
+            "lambda_bins_km": [0.1, 2.0, 5.0, 50.0],
+            "min_fit_bins": 2,
+            "scale_ranges_km": {"total": [0.1, 50.0]},
+            "increment_mode": "all_spacetime_pairs",
+            "pair_sampling": {"mode": "all", "chunk_size": 5},
+            "elsasser": {"velocity": {"frame": "auto"}},
+        }
+    )
+
+    result = analysis.run(input_path)
+
+    truth_counts = np.asarray(result["products"]["truth"]["counts"])
+    observed_counts = np.asarray(result["products"]["observed"]["counts"])
+    np.testing.assert_array_equal(truth_counts[0], [16, 32, 0])
+    np.testing.assert_array_equal(observed_counts[0], [0, 16, 32])
+    assert result["products"]["observed"]["spacetime_pair_counts"][
+        "skipped_nonpositive_separation"
+    ][0] == 18
+    assert result["metadata"]["increment_mode"] == "all_spacetime_pairs"
+    assert "observed positions use /errors/position_offset on nominal r" in result["metadata"][
+        "notes"
+    ]
+
+
 def test_plot_helper_accepts_serialized_result(tmp_path):
     result = {
         "products": {
             "observed": {
                 "orders": [2, 4],
+                "lambda_bin_edges_km": [0.75, 1.5, 3.0, 6.0],
                 "lambda_bin_centers_km": [1.0, 2.0, 4.0],
+                "counts": [[2, 4, 8]],
                 "z_plus": {
                     "S_n": [[[1.0, 4.0, 16.0], [3.0, 48.0, 768.0]]],
                     "flatness": [[3.0, 3.0, 3.0]],

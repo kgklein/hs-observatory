@@ -145,7 +145,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     chunk_size = int(sampling.get("chunk_size", 1_000_000))
     n_pairs = sampling.get("n_pairs")
     n_pairs = None if n_pairs is None else int(n_pairs)
-    max_pairs = sampling.get("max_pairs")
+    max_pairs = sampling.get("max_pairs", sampling.get("max_pair_count"))
     max_pairs = None if max_pairs is None else int(max_pairs)
     random_seed = sampling.get("random_seed", 12345)
     random_seed = None if random_seed is None else int(random_seed)

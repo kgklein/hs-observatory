@@ -145,6 +145,36 @@ def test_chunked_statistics_match_naive_pair_calculation():
     assert result["n_pairs_processed"] == 6
 
 
+def test_pair_sampling_max_pair_count_alias_caps_total_pairs():
+    positions = np.array(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            [[0.0, 2.0, 0.0], [3.0, 2.0, 0.0]],
+        ]
+    )
+    z_plus = np.arange(12, dtype=float).reshape(2, 2, 3)
+    z_minus = 0.5 * z_plus
+    B = np.zeros_like(positions)
+    B[..., 2] = 5.0
+
+    all_settings = _pair_settings()
+    all_result = compute_increment_pdf_for_points(positions, z_plus, z_minus, B, all_settings)
+    assert all_result["n_pairs_processed"] == 6
+
+    capped_settings = _pair_settings(pair_sampling={"mode": "all", "chunk_size": 2, "max_pair_count": 3})
+    capped_result = compute_increment_pdf_for_points(
+        positions,
+        z_plus,
+        z_minus,
+        B,
+        capped_settings,
+    )
+
+    assert capped_settings["max_pairs"] == 3
+    assert capped_result["n_pairs_possible"] == 6
+    assert capped_result["n_pairs_processed"] == 3
+
+
 def test_alignment_angle_is_one_for_orthogonal_perpendicular_increments():
     positions = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]])
     z_plus = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]])
