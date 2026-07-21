@@ -545,7 +545,7 @@ def plot_figure2_timeseries(
     output_path: str | Path,
     *,
     member_index: int = 0,
-    malara_title: str = "Synthetic Intermittent Turbulence",
+    malara_title: str = "Prescribed Intermittent Turbulence",
     simulation_title: str = "Gkyell Five-Moment Simulation",
     input_units: str = "si",
     velocity_frame: str = "plasma",
