@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from pathlib import Path
+import math
 
 
 def _run(description: str, workflow: Callable[[str], Path], argv: list[str] | None) -> int:
@@ -188,4 +189,32 @@ def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
         dpi=args.dpi,
     )
     print(output)
+    return 0
+
+
+def plot_increment_pdf_wasserstein_main(argv: list[str] | None = None) -> int:
+    """Plot Gaussian-normalized W1 diagnostics from saved increment-PDF products."""
+
+    from hs_observatory.analysis.increment_pdf_wasserstein import (
+        plot_increment_pdf_wasserstein_from_config,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Plot PDF comparisons and Gaussian-normalized Wasserstein diagnostics"
+    )
+    parser.add_argument("config", help="lightweight publication plotting YAML")
+    args = parser.parse_args(argv)
+    output, diagnostics = plot_increment_pdf_wasserstein_from_config(args.config)
+    print(output)
+    print("case,label,lag_km,DW_G_p25,DW_G_p50,DW_G_p75,DW_G_median_pdf")
+    for case, entry in diagnostics["cases"].items():
+        values = [
+            case,
+            entry["label"],
+            f"{entry['selected_lag_km']:.8g}",
+            *("nan" if not math.isfinite(entry[key]) else f"{entry[key]:.8g}" for key in (
+                "DW_G_p25", "DW_G_p50", "DW_G_p75", "DW_G_median_pdf"
+            )),
+        ]
+        print(",".join(values))
     return 0
