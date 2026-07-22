@@ -914,6 +914,7 @@ def _load_publication_pdf_product(
         if f"pdf/{field}" not in reference:
             raise ValueError(f"{path} does not contain field {field!r}")
         lambda_centers = np.asarray(reference["lambda/bin_centers"], dtype=float)
+        x_edges = np.asarray(reference[f"pdf/{field}/bin_edges"], dtype=float)
         x_centers = np.asarray(reference[f"pdf/{field}/bin_centers"], dtype=float)
         valid = []
         density = []
@@ -921,6 +922,7 @@ def _load_publication_pdf_product(
             group = handle[f"results/{name}"]
             member_lambda = np.asarray(group["lambda/bin_centers"], dtype=float)
             member_x = np.asarray(group[f"pdf/{field}/bin_centers"], dtype=float)
+            member_edges = np.asarray(group[f"pdf/{field}/bin_edges"], dtype=float)
             if member_lambda.shape != lambda_centers.shape or not np.allclose(
                 member_lambda, lambda_centers, rtol=1.0e-10, atol=1.0e-12
             ):
@@ -929,10 +931,15 @@ def _load_publication_pdf_product(
                 member_x, x_centers, rtol=1.0e-10, atol=1.0e-12
             ):
                 raise ValueError(f"normalized-increment PDF grids are not aligned in {path}")
+            if member_edges.shape != x_edges.shape or not np.allclose(
+                member_edges, x_edges, rtol=1.0e-10, atol=1.0e-12
+            ):
+                raise ValueError(f"normalized-increment PDF edges are not aligned in {path}")
             valid.append(np.asarray(group["lambda/valid_bin"], dtype=bool))
             density.append(np.asarray(group[f"pdf/{field}/density"], dtype=float))
     return {
         "lambda_centers": lambda_centers,
+        "x_edges": x_edges,
         "x_centers": x_centers,
         "valid": np.stack(valid),
         "truth_density": density[0],

@@ -1,0 +1,47 @@
+input:
+  path: outputs/malara-prod-031.h5
+
+analysis:
+  method: elsasser_increment_pdf_static
+
+output:
+  path: outputs/malara-prod-031_elsasser_increment_pdf.h5
+
+elsasser_increment_pdf_static:
+  datasets:
+    - {name: truth, data_group: truth}
+    - {name: observed, data_group: observed, mc_index: all}
+  elsasser:
+    velocity: {frame: auto, spacecraft_correction: auto}
+    density_normalization: {method: global_per_spacecraft, species: proton}
+    mean_subtraction: {method: global_per_spacecraft}
+    timebase: {method: slower_of_n_and_v, interpolation: linear}
+  increments:
+    field: both
+    plotted_field: z_plus
+    component: perpendicular
+    statistic: magnitude
+  mean_field: {method: local_pairwise, fallback: global_mean_B, min_norm: 1.0e-12}
+  scale_bins:
+    separation: perpendicular
+    binning: log
+    n_bins: 15
+    lambda_min: 50.0
+    lambda_max: 30000.0
+    selected_lags_km: null  # e.g. [100.0, 1000.0, 10000.0]
+    min_samples_per_bin: 50
+  pdf_bins:
+    normalized_by: geometric_mean
+    binning: linear
+    n_bins: 100
+    x_min: 0.0
+    x_max: 3.0
+  pair_sampling:
+    mode: all
+    chunk_size: 1000000
+    max_pairs: null
+    random_seed: 12345
+  alignment: {compute: false}
+  output_samples: {save: false, max_samples: 100000}
+  plot: {enabled: false}
+

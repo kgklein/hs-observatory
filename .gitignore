@@ -26,3 +26,4 @@ data/helioswarm_cdf/
 
 #helper scripts
 *.sh
+!scripts/increment_pdf_wasserstein_publication.sh

@@ -1,0 +1,27 @@
+# Cheap publication stage: every path below is an existing analysis product
+# produced by elsasser_increment_pdf_static, never a raw observation HDF5 file.
+p_value: 0.7
+selected_lag_km: null  # null selects the second-largest usable lag from case 001
+denominator_tolerance: 1.0e-12
+case_order: supplied  # or: median
+all_errors_case: "001"
+show_individual_bands: false
+dpi: 300
+
+cases:
+  "001":
+    path: outputs/malara-prod-001_elsasser_increment_pdf.h5
+    label: all errors
+  # Labels for individual sources are deliberately editable rather than encoded in Python.
+  "011": {path: outputs/malara-prod-011_elsasser_increment_pdf.h5, label: case 011}
+  "021": {path: outputs/malara-prod-021_elsasser_increment_pdf.h5, label: case 021}
+  "031": {path: outputs/malara-prod-031_elsasser_increment_pdf.h5, label: case 031}
+  "041": {path: outputs/malara-prod-041_elsasser_increment_pdf.h5, label: case 041}
+  "051": {path: outputs/malara-prod-051_elsasser_increment_pdf.h5, label: case 051}
+  "061": {path: outputs/malara-prod-061_elsasser_increment_pdf.h5, label: case 061}
+  "071": {path: outputs/malara-prod-071_elsasser_increment_pdf.h5, label: case 071}
+
+output:
+  figure: outputs/malara-prod-p07_increment_pdf_wasserstein.png
+  json: outputs/malara-prod-p07_increment_pdf_wasserstein.json
+  csv: outputs/malara-prod-p07_increment_pdf_wasserstein.csv
