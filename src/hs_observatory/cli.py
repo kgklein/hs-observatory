@@ -218,3 +218,34 @@ def plot_increment_pdf_wasserstein_main(argv: list[str] | None = None) -> int:
         ]
         print(",".join(values))
     return 0
+
+
+def plot_magnetic_gradient_main(argv: list[str] | None = None) -> int:
+    """Plot a saved magnetic-gradient product without recalculation."""
+
+    from hs_observatory.analysis.magnetic_gradient import plot_magnetic_gradient_product
+
+    parser = argparse.ArgumentParser(
+        description="Plot a calculated HelioSwarm magnetic-gradient HDF5 product"
+    )
+    parser.add_argument("product", help="magnetic-gradient analysis HDF5 file")
+    parser.add_argument("--output", required=True, help="output figure path")
+    parser.add_argument(
+        "--row4",
+        choices=("affine_rms_residual", "condition_number", "chi", "d_ep"),
+        default="affine_rms_residual",
+    )
+    parser.add_argument(
+        "--ratio-scale", choices=("auto", "linear", "log"), default="auto"
+    )
+    parser.add_argument("--dpi", type=int, default=300)
+    args = parser.parse_args(argv)
+    output = plot_magnetic_gradient_product(
+        args.product,
+        args.output,
+        row4=args.row4,
+        ratio_scale=args.ratio_scale,
+        dpi=args.dpi,
+    )
+    print(output)
+    return 0

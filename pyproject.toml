@@ -28,6 +28,7 @@ hsobs-plot-figure2 = "hs_observatory.cli:plot_figure2_main"
 hsobs-plot-structure-function = "hs_observatory.cli:plot_structure_function_summary_main"
 hsobs-plot-increment-pdf = "hs_observatory.cli:plot_increment_pdf_publication_main"
 hsobs-plot-increment-pdf-wasserstein = "hs_observatory.cli:plot_increment_pdf_wasserstein_main"
+hsobs-plot-magnetic-gradient = "hs_observatory.cli:plot_magnetic_gradient_main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

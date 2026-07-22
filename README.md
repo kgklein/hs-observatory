@@ -2,6 +2,11 @@
 
 `hs-observatory` generates controlled HelioSwarm-like multi-spacecraft observations and analyzes the resulting products. It is deliberately a small foundation: scientific field, instrument-error, and analysis models can grow independently without changing the storage contract.
 
+The configuration-driven analysis suite includes a general four-to-nine-point
+magnetic-gradient calculation for numerical-simulation observations. See
+[`configs/example_magnetic_gradient.yaml`](configs/example_magnetic_gradient.yaml)
+and [`docs/analysis_methods.md`](docs/analysis_methods.md#magnetic_gradient).
+
 ## Install and run
 
 Python 3.10 or newer is required.

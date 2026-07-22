@@ -25,6 +25,7 @@ def _load_builtins() -> None:
         diagnostics,
         elsasser,
         elsasser_increment_pdf_static,
+        magnetic_gradient,
         rbf_reconstruction,
         static_decorrelation,
         structure_function,
@@ -38,7 +39,9 @@ def get_analysis(name: str) -> type[AnalysisMethod]:
     try:
         return _REGISTRY[name]
     except KeyError as exc:
-        raise ValueError(f"Unknown analysis method {name!r}; available: {', '.join(_REGISTRY)}") from exc
+        raise ValueError(
+            f"Unknown analysis method {name!r}; available: {', '.join(_REGISTRY)}"
+        ) from exc
 
 
 def list_analyses() -> tuple[str, ...]:

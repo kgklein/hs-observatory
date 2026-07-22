@@ -127,6 +127,58 @@ spacecraft time series.
 Examples: `configs/example_timeseries_fft.yaml`,
 `configs/malara_timeseries_fft.yaml`.
 
+## `magnetic_gradient`
+
+Computes full multi-spacecraft magnetic-field gradients from numerical-
+simulation observations and writes a calculation-only HDF5 product. It uses
+the general N-point least-squares method from Equation 2 of Broeren & Klein
+(2024), summing each of the N(N-1)/2 independent spacecraft pairs once. The
+same implementation handles four-spacecraft tetrahedra and all nine
+spacecraft.
+
+Gradient tensors use `gradient[field_component, spatial_derivative]`, so
+`gradient[0, 1]` is dBx/dy. Positions are in km, magnetic fields and affine
+residuals in nT, and gradients, curl, and divergence in nT/km. Geometry uses
+the volumetric tensor R, sorted semiaxes `a >= b >= c`, `L = 2a`,
+`E = 1 - b/a`, `P = 1 - c/b`, and `Q = chi = sqrt(E^2 + P^2)`.
+
+The product distinguishes four quantities:
+
+- `truth/coarse_*`: simulation-grid gradients averaged in a periodic sphere
+  of diameter L around the true barycenter; this is the primary reference.
+- `truth/point_*`: the simulation-grid gradient interpolated at the true
+  barycenter.
+- `true_estimate`: the least-squares result from nominal positions and true
+  sampled magnetic fields.
+- `measured`: realization-level results from stored observed fields, position
+  offsets, and timing offsets after linear synchronization.
+
+The primary solenoidal diagnostic is
+`abs(divergence) / curl_magnitude`. A configuration-specific denominator
+floor defaults to one percent of the median coarse-truth curl magnitude.
+Samples below it retain raw curl/divergence, receive a NaN ratio, and have a
+false ratio-validity mask.
+
+Calculation reads the complete simulation definition from the generation
+YAML embedded in the observation HDF5 file. `simulation_override` can update
+relocated source paths without duplicating the layout and unit mapping.
+Configuration selection defaults to the repository's established Q metric:
+the smallest tetrahedron with `Q <= 0.6`, the best-shaped tetrahedron in
+800--1200 km, the best-shaped tetrahedron at or above 1500 km, and all nine
+spacecraft. See `configs/example_magnetic_gradient.yaml` for all controls.
+
+```bash
+hsobs-analyze configs/example_magnetic_gradient.yaml
+hsobs-plot-magnetic-gradient outputs/magnetic_gradients.h5 \
+  --output outputs/magnetic_gradients.png
+```
+
+The plotting command opens only the saved gradient product; it never loads
+the observation file or simulation and therefore cannot repeat the gradient
+or coarse-volume calculations. Its fourth row can be selected with
+`--row4 affine_rms_residual`, `condition_number`, `chi`, or `d_ep` (`d_ep`
+is currently recorded as unavailable/NaN).
+
 ## `rbf_reconstruction`
 
 Performs component-wise magnetic-field RBF reconstruction over a cylindrical
