@@ -207,3 +207,32 @@ Binned same-time pairwise Elsasser vector-increment structure functions.
 - Returned products include `S_n[member, order, bin]`, `counts[member, bin]`,
   `flatness = S4 / S2^2` when orders 2 and 4 are available, and raw plus
   order-2-normalized scaling exponents for each named scale range.
+
+The publication summary plot reads this JSON result directly and keeps sampled
+truth separate from the observed Monte Carlo ensemble:
+
+```bash
+hsobs-plot-structure-function structure_function.json \
+  --p-value 0.9 --quantity z_plus --output sf_summary_p09.png
+```
+
+Python callers can use `plot_structure_function_summary_row(...)` with a
+supplied row of three axes when assembling multiple p-model rows, or
+`plot_structure_function_summary(...)` to save a standalone 1x3 figure. The
+default row colors are distinct for `p=0.5`, `0.7`, and `0.9`; `run_color` can
+override them.
+
+It can also be produced during analysis by adding a publication subsection:
+
+```yaml
+structure_function:
+  plot:
+    publication:
+      enabled: true
+      path: outputs/sf_summary_p09.png
+      p_value: 0.9
+      quantity: z_plus
+      max_order: 6
+      fit_range: total
+      dpi: 300
+```

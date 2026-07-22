@@ -11,6 +11,8 @@ from hs_observatory.analysis.structure_function import (
     compute_all_spacetime_structure_functions,
     compute_pairwise_structure_functions,
     plot_structure_function_diagnostic,
+    plot_structure_function_summary,
+    plot_structure_function_summary_row,
 )
 
 
@@ -225,7 +227,19 @@ def test_run_computes_observed_truth_and_uses_observed_position_offsets(tmp_path
             "min_fit_bins": 2,
             "scale_ranges_km": {"total": [0.1, 50.0]},
             "elsasser": {"velocity": {"frame": "auto"}},
-            "plot": {"enabled": True, "path": str(tmp_path / "sf.png")},
+            "plot": {
+                "enabled": True,
+                "path": str(tmp_path / "sf.png"),
+                "publication": {
+                    "enabled": True,
+                    "path": str(tmp_path / "sf_publication.png"),
+                    "p_value": 0.9,
+                    "quantity": "z_plus",
+                    "max_order": 4,
+                    "fit_range": "total",
+                    "dpi": 80,
+                },
+            },
         }
     )
 
@@ -235,6 +249,7 @@ def test_run_computes_observed_truth_and_uses_observed_position_offsets(tmp_path
     assert "structure_function" in list_analyses()
     assert output.is_file()
     assert (tmp_path / "sf.png").is_file()
+    assert (tmp_path / "sf_publication.png").is_file()
     assert set(result["products"]) == {"observed", "truth"}
     assert len(result["products"]["observed"]["counts"]) == 2
     truth_separations = np.asarray(result["products"]["truth"]["pair_separations_km"])
@@ -299,3 +314,87 @@ def test_plot_helper_accepts_serialized_result(tmp_path):
     output = plot_structure_function_diagnostic(result, tmp_path / "plot.png")
 
     assert output.is_file() and output.stat().st_size > 0
+
+
+def _summary_plot_result():
+    orders = list(range(1, 8))
+    centers = np.array([1.0, 2.0, 4.0])
+    truth_sf = np.array([[centers ** (order / 3.0) for order in orders]])
+    # Deliberately keep truth far outside the MC ensemble so a truth member
+    # accidentally included in the quartiles changes the expected medians.
+    truth_sf *= 100.0
+    mc_scales = np.array([1.0, 2.0, 3.0, 20.0])
+    mc_sf = np.stack(
+        [[scale * centers ** (order / 3.0) for order in orders] for scale in mc_scales]
+    )
+
+    def product(values):
+        second = values[:, orders.index(2)]
+        fourth = values[:, orders.index(4)]
+        flatness = fourth / second**2
+        member_offsets = np.arange(values.shape[0], dtype=float)[:, None]
+        xi = np.asarray(orders, dtype=float)[None, :] / 3.0 + member_offsets
+        return {
+            "orders": orders,
+            "lambda_bin_edges_km": [0.75, 1.5, 3.0, 6.0],
+            "lambda_bin_centers_km": centers.tolist(),
+            "counts": np.ones((values.shape[0], 3)).tolist(),
+            "z_plus": {
+                "S_n": values.tolist(),
+                "flatness": flatness.tolist(),
+                "scaling_exponents": {
+                    "raw": xi[:, None, :].tolist(),
+                    "normalized_by_order2": xi[:, None, :].tolist(),
+                    "range_names": ["total"],
+                    "scale_ranges_km": {"total": [1.0, 4.0]},
+                },
+            },
+        }
+
+    return {"products": {"truth": product(truth_sf), "observed": product(mc_sf)}}
+
+
+def test_summary_row_uses_sampled_truth_and_mc_only_quartiles():
+    import matplotlib.pyplot as plt
+
+    result = _summary_plot_result()
+    figure, axes = plot_structure_function_summary_row(result, p_value=0.9)
+
+    assert len(axes) == 3
+    # Six orders, with alternating sampled-truth and MC-median curves.
+    assert len(axes[0].lines) == 12
+    np.testing.assert_allclose(axes[0].lines[0].get_ydata(), [100.0, 100.0 * 2 ** (1 / 3),
+                                                             100.0 * 4 ** (1 / 3)])
+    np.testing.assert_allclose(
+        axes[0].lines[1].get_ydata(), 2.5 * np.array([1.0, 2 ** (1 / 3), 4 ** (1 / 3)])
+    )
+    # The exponent panel uses all seven fitted orders, independent of max_order=6.
+    np.testing.assert_array_equal(axes[1].lines[0].get_xdata(), np.arange(1, 8))
+    np.testing.assert_allclose(axes[1].lines[-1].get_ydata(), 1.0 - np.log2(
+        0.9 ** (np.arange(1, 8) / 3.0) + 0.1 ** (np.arange(1, 8) / 3.0)
+    ))
+    gaussian = axes[2].lines[-1]
+    assert gaussian.get_linestyle() == "--"
+    np.testing.assert_allclose(gaussian.get_ydata(), [5.0 / 3.0, 5.0 / 3.0])
+    plt.close(figure)
+
+
+def test_summary_plot_accepts_json_and_supplied_axes(tmp_path):
+    import json
+    import matplotlib.pyplot as plt
+
+    result_path = tmp_path / "sf.json"
+    result_path.write_text(json.dumps(_summary_plot_result()), encoding="utf-8")
+    output = plot_structure_function_summary(
+        result_path, p_value=0.9, output_path=tmp_path / "summary.png", dpi=80
+    )
+    assert output.is_file() and output.stat().st_size > 0
+
+    figure, axes = plt.subplots(1, 3)
+    returned_figure, returned_axes = plot_structure_function_summary_row(
+        result_path, p_value=0.7, axes=axes, run_color="#123456"
+    )
+    assert returned_figure is figure
+    np.testing.assert_array_equal(returned_axes, axes)
+    assert axes[0].lines[0].get_color() == "#123456"
+    plt.close(figure)

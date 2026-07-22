@@ -109,3 +109,36 @@ def plot_figure2_main(argv: list[str] | None = None) -> int:
     )
     print(output)
     return 0
+
+
+def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
+    """Plot a publication-style structure-function summary from analysis JSON."""
+
+    from hs_observatory.analysis.structure_function import plot_structure_function_summary
+
+    parser = argparse.ArgumentParser(
+        description="Plot sampled truth and MC structure-function ensemble statistics"
+    )
+    parser.add_argument("result", help="structure-function analysis JSON")
+    parser.add_argument("--output", required=True, help="output figure path")
+    parser.add_argument("--p-value", type=float, default=0.9, help="Malara p-model value")
+    parser.add_argument(
+        "--quantity", choices=("z_plus", "z_minus"), default="z_plus"
+    )
+    parser.add_argument("--run-color", default=None, help="Matplotlib color for this run")
+    parser.add_argument("--max-order", type=int, default=6)
+    parser.add_argument("--fit-range", default=None, help="named exponent fit range")
+    parser.add_argument("--dpi", type=int, default=300)
+    args = parser.parse_args(argv)
+    output = plot_structure_function_summary(
+        args.result,
+        p_value=args.p_value,
+        output_path=args.output,
+        quantity=args.quantity,
+        run_color=args.run_color,
+        max_order=args.max_order,
+        fit_range=args.fit_range,
+        dpi=args.dpi,
+    )
+    print(output)
+    return 0

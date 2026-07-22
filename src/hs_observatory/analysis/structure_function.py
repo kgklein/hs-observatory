@@ -7,6 +7,7 @@ from itertools import combinations
 import json
 from pathlib import Path
 from typing import Any
+import warnings
 
 import h5py
 import numpy as np
@@ -27,6 +28,12 @@ from hs_observatory.io.hdf5 import read_observations
 
 FIELDS = ("z_plus", "z_minus")
 POSITION_VARIABLES = ("v", "n", "B")
+P_MODEL_RUN_COLORS = {
+    0.5: "#0072B2",
+    0.7: "#009E73",
+    0.9: "#D55E00",
+}
+_ORDER_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "<", ">")
 
 
 def _mapping(config: dict[str, Any], name: str) -> dict[str, Any]:
@@ -71,6 +78,9 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     timebase = dict(elsasser.get("timebase", {}))
     velocity = dict(elsasser.get("velocity", {}))
     plot = _mapping(config, "plot")
+    publication = plot.get("publication", {})
+    if not isinstance(publication, dict):
+        raise ValueError("structure_function.plot.publication must be a mapping")
     fit = _mapping(config, "fit")
     min_fit_bins = int(config.get("min_fit_bins", fit.get("min_bins", 3)))
     if min_fit_bins < 2:
@@ -135,6 +145,24 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             "data_group": str(plot.get("data_group", "observed")),
             "normalized_exponents": bool(plot.get("normalized_exponents", False)),
             "dpi": int(plot.get("dpi", 150)),
+            "publication": {
+                "enabled": bool(publication.get("enabled", False)),
+                "path": publication.get("path", "sf_summary_p09.png"),
+                "p_value": float(publication.get("p_value", 0.9)),
+                "quantity": str(publication.get("quantity", "z_plus")),
+                "run_color": publication.get("run_color"),
+                "max_order": (
+                    None
+                    if publication.get("max_order", 6) is None
+                    else int(publication.get("max_order", 6))
+                ),
+                "run_label": publication.get("run_label"),
+                "fit_range": publication.get("fit_range"),
+                "gaussian_reference": float(
+                    publication.get("gaussian_reference", 5.0 / 3.0)
+                ),
+                "dpi": int(publication.get("dpi", 300)),
+            },
         },
     }
 
@@ -804,7 +832,329 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 normalized_exponents=settings["plot"]["normalized_exponents"],
                 dpi=settings["plot"]["dpi"],
             )
+        publication = settings["plot"]["publication"]
+        if publication["enabled"]:
+            plot_structure_function_summary(
+                result,
+                p_value=publication["p_value"],
+                output_path=publication["path"],
+                quantity=publication["quantity"],
+                run_color=publication["run_color"],
+                max_order=publication["max_order"],
+                run_label=publication["run_label"],
+                fit_range=publication["fit_range"],
+                gaussian_reference=publication["gaussian_reference"],
+                dpi=publication["dpi"],
+            )
         return output
+
+
+def _summary_result(result: dict[str, Any] | str | Path) -> dict[str, Any]:
+    """Return an in-memory structure-function result from a mapping or JSON path."""
+
+    if isinstance(result, (str, Path)):
+        with Path(result).open(encoding="utf-8") as stream:
+            loaded = json.load(stream)
+        if not isinstance(loaded, dict):
+            raise ValueError("structure-function JSON must contain a mapping")
+        return loaded
+    return result
+
+
+def _quartiles(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute member-axis quartiles while allowing entirely empty bins."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        lower, median, upper = np.nanpercentile(values, [25.0, 50.0, 75.0], axis=0)
+    return lower, median, upper
+
+
+def _flatness_from_product(product: dict[str, Any], quantity: str) -> np.ndarray:
+    """Read stored flatness, with an S2/S4 fallback for older products."""
+
+    stored = product[quantity].get("flatness")
+    if stored is not None:
+        return np.asarray(stored, dtype=float)
+    orders = np.asarray(product["orders"], dtype=int)
+    if 2 not in orders or 4 not in orders:
+        raise ValueError("orders 2 and 4 are required to plot flatness")
+    values = np.asarray(product[quantity]["S_n"], dtype=float)
+    second = values[:, int(np.flatnonzero(orders == 2)[0])]
+    fourth = values[:, int(np.flatnonzero(orders == 4)[0])]
+    return np.divide(
+        fourth,
+        second**2,
+        out=np.full(second.shape, np.nan),
+        where=np.isfinite(second) & (second != 0.0) & np.isfinite(fourth),
+    )
+
+
+def _fit_range_index(exponents: dict[str, Any], fit_range: str | None) -> tuple[int, str]:
+    names = [str(name) for name in exponents["range_names"]]
+    if not names:
+        raise ValueError("scaling-exponent product has no fitted scale ranges")
+    selected = fit_range
+    if selected is None:
+        selected = "total" if "total" in names else names[0]
+    if selected not in names:
+        raise ValueError(f"fit range {selected!r} is not available; choose from {names}")
+    return names.index(selected), selected
+
+
+def plot_structure_function_summary_row(
+    sf_result: dict[str, Any] | str | Path,
+    *,
+    p_value: float = 0.9,
+    axes: Any = None,
+    run_color: str | None = None,
+    max_order: int | None = 6,
+    quantity: str = "z_plus",
+    run_label: str | None = None,
+    fit_range: str | None = None,
+    gaussian_reference: float = 5.0 / 3.0,
+):
+    """Plot one publication-style truth/MC structure-function summary row.
+
+    ``products['truth']`` is treated as the unperturbed sampled observation and
+    ``products['observed']`` as the Monte Carlo ensemble. Quartiles are always
+    calculated from observed members only. When *axes* is supplied, it must be
+    a row of three Matplotlib axes, which makes this helper suitable for a
+    future multi-row figure.
+    """
+
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    result = _summary_result(sf_result)
+    if quantity not in FIELDS:
+        raise ValueError("quantity must be 'z_plus' or 'z_minus'")
+    if not np.isfinite(p_value) or not 0.0 <= p_value <= 1.0:
+        raise ValueError("p_value must be between 0 and 1")
+    if max_order is not None and max_order < 1:
+        raise ValueError("max_order must be positive or None")
+    products = result.get("products", {})
+    if "truth" not in products or "observed" not in products:
+        raise ValueError("summary plot requires separate 'truth' and 'observed' products")
+    truth = products["truth"]
+    observed = products["observed"]
+
+    if axes is None:
+        figure, axes_array = plt.subplots(
+            1, 3, figsize=(14.2, 4.25), constrained_layout=True, squeeze=False
+        )
+        axes_array = axes_array[0]
+    else:
+        axes_array = np.asarray(axes, dtype=object).reshape(-1)
+        if axes_array.size != 3:
+            raise ValueError("axes must contain exactly three Matplotlib axes")
+        figure = axes_array[0].figure
+        if any(axis.figure is not figure for axis in axes_array):
+            raise ValueError("all supplied axes must belong to the same figure")
+
+    color = run_color or P_MODEL_RUN_COLORS.get(float(p_value), "#D55E00")
+    label = run_label or f"$p={p_value:g}$"
+    truth_orders = np.asarray(truth["orders"], dtype=int)
+    mc_orders = np.asarray(observed["orders"], dtype=int)
+    common_orders = np.asarray(
+        [order for order in truth_orders if order in set(mc_orders.tolist())], dtype=int
+    )
+    plotted_orders = (
+        common_orders if max_order is None else common_orders[common_orders <= max_order]
+    )
+    if plotted_orders.size == 0:
+        raise ValueError("truth and observed products have no requested orders in common")
+
+    truth_lambda = np.asarray(truth["lambda_bin_centers_km"], dtype=float)
+    mc_lambda = np.asarray(observed["lambda_bin_centers_km"], dtype=float)
+    truth_sf = np.asarray(truth[quantity]["S_n"], dtype=float)
+    mc_sf = np.asarray(observed[quantity]["S_n"], dtype=float)
+    if truth_sf.ndim != 3 or truth_sf.shape[0] != 1:
+        raise ValueError("truth S_n must have shape (1, order, lambda_bin)")
+    if mc_sf.ndim != 3 or mc_sf.shape[0] < 1:
+        raise ValueError("observed S_n must contain at least one MC member")
+
+    structure_axis, exponent_axis, flatness_axis = axes_array
+    order_handles = []
+    for plot_index, order in enumerate(plotted_orders):
+        marker = _ORDER_MARKERS[plot_index % len(_ORDER_MARKERS)]
+        truth_index = int(np.flatnonzero(truth_orders == order)[0])
+        mc_index = int(np.flatnonzero(mc_orders == order)[0])
+        lower, median, upper = _quartiles(mc_sf[:, mc_index])
+        structure_axis.fill_between(
+            mc_lambda, lower, upper, color=color, alpha=0.10, linewidth=0, zorder=1
+        )
+        structure_axis.plot(
+            truth_lambda,
+            truth_sf[0, truth_index],
+            color=color,
+            linestyle="-",
+            linewidth=1.45,
+            marker=marker,
+            markersize=4.0,
+            markerfacecolor="white",
+            markeredgewidth=0.9,
+            alpha=0.9,
+            zorder=2,
+        )
+        structure_axis.plot(
+            mc_lambda,
+            median,
+            color=color,
+            linestyle="--",
+            linewidth=1.25,
+            marker=marker,
+            markersize=4.0,
+            zorder=3,
+        )
+        order_handles.append(
+            Line2D(
+                [0], [0], color=color, linestyle="none", marker=marker,
+                markersize=5.0, label=fr"$n={order}$"
+            )
+        )
+
+    structure_axis.set_xscale("log")
+    structure_axis.set_yscale("log")
+    structure_axis.set_xlabel(r"$\lambda$ [km]")
+    structure_axis.set_ylabel(r"$S_n(\lambda)$")
+    structure_axis.set_title("structure functions")
+    structure_axis.grid(True, which="both", alpha=0.18)
+    order_legend = structure_axis.legend(
+        handles=order_handles, fontsize=7.5, ncols=2, loc="upper left", title="order"
+    )
+    structure_axis.add_artist(order_legend)
+    provenance_handles = [
+        Line2D([0], [0], color=color, linestyle="-", marker="o", markerfacecolor="white",
+               linewidth=1.45, label="sampled truth"),
+        Line2D([0], [0], color=color, linestyle="--", marker="o", linewidth=1.25,
+               label="MC median"),
+        Line2D([0], [0], color=color, linewidth=7, alpha=0.15, label="MC 25th–75th"),
+    ]
+    structure_axis.legend(handles=provenance_handles, fontsize=7.5, loc="lower right")
+    structure_axis.text(
+        0.97,
+        0.97,
+        label,
+        color=color,
+        transform=structure_axis.transAxes,
+        ha="right",
+        va="top",
+        fontsize=10,
+        fontweight="bold",
+        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.5},
+    )
+
+    truth_exponents = truth[quantity]["scaling_exponents"]
+    mc_exponents = observed[quantity]["scaling_exponents"]
+    truth_range_index, selected_range = _fit_range_index(truth_exponents, fit_range)
+    mc_range_index, mc_selected_range = _fit_range_index(mc_exponents, selected_range)
+    if mc_selected_range != selected_range:  # pragma: no cover - defensive
+        raise ValueError("truth and observed exponent fit ranges do not match")
+    truth_xi = np.asarray(truth_exponents["raw"], dtype=float)[0, truth_range_index]
+    mc_xi = np.asarray(mc_exponents["raw"], dtype=float)[:, mc_range_index]
+    exponent_orders = np.asarray(truth["orders"], dtype=int)
+    mc_exponent_orders = np.asarray(observed["orders"], dtype=int)
+    fitted_orders = np.asarray(
+        [order for order in exponent_orders if order in set(mc_exponent_orders.tolist())], dtype=int
+    )
+    truth_indices = [int(np.flatnonzero(exponent_orders == order)[0]) for order in fitted_orders]
+    mc_indices = [int(np.flatnonzero(mc_exponent_orders == order)[0]) for order in fitted_orders]
+    truth_xi_selected = truth_xi[truth_indices]
+    mc_lower, mc_median, mc_upper = _quartiles(mc_xi[:, mc_indices])
+    exponent_axis.plot(
+        fitted_orders, truth_xi_selected, color=color, marker="o", markerfacecolor="white",
+        linewidth=1.5, label="sampled truth", zorder=3
+    )
+    exponent_axis.errorbar(
+        fitted_orders,
+        mc_median,
+        yerr=np.vstack((mc_median - mc_lower, mc_upper - mc_median)),
+        color=color,
+        marker="s",
+        linestyle="none",
+        markersize=5.0,
+        capsize=3.0,
+        elinewidth=1.2,
+        label="MC median and IQR",
+        zorder=4,
+    )
+    prediction = 1.0 - np.log2(
+        float(p_value) ** (fitted_orders / 3.0)
+        + (1.0 - float(p_value)) ** (fitted_orders / 3.0)
+    )
+    exponent_axis.plot(
+        fitted_orders, prediction, color="black", linestyle="--", linewidth=1.25,
+        label=fr"$p$-model ($p={p_value:g}$)", zorder=2
+    )
+    exponent_axis.set_xlabel(r"order $n$")
+    exponent_axis.set_ylabel(r"$\xi_n$")
+    exponent_axis.set_title("scaling exponents")
+    exponent_axis.set_xticks(fitted_orders)
+    exponent_axis.grid(True, alpha=0.18)
+    exponent_axis.legend(fontsize=7.5, loc="best")
+
+    truth_flatness = _flatness_from_product(truth, quantity)
+    mc_flatness = _flatness_from_product(observed, quantity)
+    flat_lower, flat_median, flat_upper = _quartiles(mc_flatness)
+    flatness_axis.fill_between(
+        mc_lambda, flat_lower, flat_upper, color=color, alpha=0.15, linewidth=0,
+        label="MC 25th–75th", zorder=1
+    )
+    flatness_axis.plot(
+        truth_lambda, truth_flatness[0], color=color, linestyle="-", linewidth=1.6,
+        marker="o", markersize=4.0, markerfacecolor="white", label="sampled truth", zorder=3
+    )
+    flatness_axis.plot(
+        mc_lambda, flat_median, color=color, linestyle="--", linewidth=1.4,
+        marker="o", markersize=4.0, label="MC median", zorder=4
+    )
+    flatness_axis.axhline(
+        gaussian_reference, color="black", linestyle="--", linewidth=1.2,
+        label="3D Gaussian", zorder=2
+    )
+    flatness_axis.set_xscale("log")
+    flatness_axis.set_yscale("log")
+    flatness_axis.set_xlabel(r"$\lambda$ [km]")
+    flatness_axis.set_ylabel(r"$S_4(\lambda)/[S_2(\lambda)]^2$")
+    flatness_axis.set_title("kurtosis")
+    flatness_axis.grid(True, which="both", alpha=0.18)
+    flatness_axis.legend(fontsize=7.5, loc="best")
+    return figure, axes_array
+
+
+def plot_structure_function_summary(
+    sf_result: dict[str, Any] | str | Path,
+    p_value: float = 0.9,
+    output_path: str | Path = "sf_summary_p09.png",
+    *,
+    quantity: str = "z_plus",
+    run_color: str | None = None,
+    max_order: int | None = 6,
+    run_label: str | None = None,
+    fit_range: str | None = None,
+    gaussian_reference: float = 5.0 / 3.0,
+    dpi: int = 300,
+) -> Path:
+    """Create and save a standalone 1x3 structure-function summary figure."""
+
+    import matplotlib.pyplot as plt
+
+    figure, _axes = plot_structure_function_summary_row(
+        sf_result,
+        p_value=p_value,
+        run_color=run_color,
+        max_order=max_order,
+        quantity=quantity,
+        run_label=run_label,
+        fit_range=fit_range,
+        gaussian_reference=gaussian_reference,
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=dpi, bbox_inches="tight")
+    plt.close(figure)
+    return output
 
 
 def plot_structure_function_diagnostic(
