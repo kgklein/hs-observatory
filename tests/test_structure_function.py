@@ -4,9 +4,11 @@ import h5py
 import numpy as np
 import pytest
 
+from hs_observatory.analysis.derived.pairs import adaptive_stratified_pairs
 from hs_observatory.analysis.registry import list_analyses
 from hs_observatory.analysis.structure_function import (
     StructureFunctionAnalysis,
+    _ensemble_interval,
     _fit_scaling_exponents,
     compute_all_spacetime_structure_functions,
     compute_pairwise_structure_functions,
@@ -155,6 +157,95 @@ def test_all_spacetime_structure_function_matches_direct_pairs_and_sampling():
     np.testing.assert_allclose(limited["z_plus"]["S_n"][0, 0, :2], [4.0, 16.0])
     assert np.isnan(limited["z_plus"]["S_n"][0, 0, 2])
     assert limited["spacetime_pair_counts"]["skipped_above_max_lambda"][0] == 2
+
+    lower_limited = compute_all_spacetime_structure_functions(
+        positions[:1],
+        z_plus[:1],
+        z_minus[:1],
+        [2],
+        np.array([0.5, 1.5, 3.0, 5.0]),
+        pair_sampling={
+            "mode": "all",
+            "chunk_size": 2,
+            "n_pairs": None,
+            "max_pairs": None,
+            "random_seed": 7,
+        },
+        min_fit_bins=2,
+        min_pair_lambda_km=1.5,
+    )
+
+    np.testing.assert_array_equal(lower_limited["counts"], [[0, 2, 2]])
+    assert lower_limited["spacetime_pair_counts"]["skipped_below_min_lambda"][0] == 2
+
+
+def test_same_time_structure_function_respects_minimum_pair_lambda():
+    positions = np.array([[[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]]]])
+    result = compute_pairwise_structure_functions(
+        positions,
+        positions,
+        positions,
+        [1],
+        np.array([0.5, 1.5, 2.5, 3.5]),
+        min_fit_bins=2,
+        min_pair_lambda_km=1.5,
+    )
+
+    np.testing.assert_array_equal(result["counts"], [[0, 1, 1]])
+
+
+def test_adaptive_stratified_pairs_fill_each_available_bin_reproducibly():
+    positions = np.column_stack((np.arange(6.0), np.zeros((6, 2))))
+    edges = np.array([0.5, 1.5, 2.5, 6.0])
+    kwargs = {
+        "target_pairs_per_bin": 2,
+        "max_candidates": 1000,
+        "candidate_chunk_size": 7,
+        "random_seed": 42,
+    }
+
+    left, right, diagnostics = adaptive_stratified_pairs(positions, edges, **kwargs)
+    repeated_left, repeated_right, repeated_diagnostics = adaptive_stratified_pairs(
+        positions, edges, **kwargs
+    )
+
+    separations = np.linalg.norm(positions[right] - positions[left], axis=1)
+    counts, _ = np.histogram(separations, bins=edges)
+    np.testing.assert_array_equal(counts, [2, 2, 2])
+    np.testing.assert_array_equal(left, repeated_left)
+    np.testing.assert_array_equal(right, repeated_right)
+    assert diagnostics["target_reached"] is True
+    assert diagnostics["candidates_examined"] < kwargs["max_candidates"]
+    np.testing.assert_array_equal(
+        diagnostics["retained_per_bin"], repeated_diagnostics["retained_per_bin"]
+    )
+
+
+def test_adaptive_stratified_structure_function_reports_shortfall():
+    positions = np.array([[[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]]])
+    result = compute_all_spacetime_structure_functions(
+        positions,
+        positions,
+        positions,
+        [1],
+        np.array([0.5, 1.5, 2.5, 3.5]),
+        pair_sampling={
+            "mode": "adaptive_stratified",
+            "chunk_size": 4,
+            "n_pairs": None,
+            "max_pairs": None,
+            "random_seed": 9,
+            "target_pairs_per_bin": 2,
+            "max_candidates": 40,
+            "binning_n_pairs": 10,
+        },
+        min_fit_bins=2,
+    )
+
+    # Only one unique length-2 pair exists, and no pair has length 3.
+    np.testing.assert_array_equal(result["counts"], [[2, 1, 0]])
+    assert not result["spacetime_pair_counts"]["sampling_target_reached"][0]
+    assert result["spacetime_pair_counts"]["candidates_examined"][0] == 40
 
 
 def test_scaling_exponents_match_synthetic_power_laws():
@@ -321,7 +412,7 @@ def _summary_plot_result():
     centers = np.array([1.0, 2.0, 4.0])
     truth_sf = np.array([[centers ** (order / 3.0) for order in orders]])
     # Deliberately keep truth far outside the MC ensemble so a truth member
-    # accidentally included in the quartiles changes the expected medians.
+    # accidentally included in the percentiles changes the expected medians.
     truth_sf *= 100.0
     mc_scales = np.array([1.0, 2.0, 3.0, 20.0])
     mc_sf = np.stack(
@@ -354,7 +445,15 @@ def _summary_plot_result():
     return {"products": {"truth": product(truth_sf), "observed": product(mc_sf)}}
 
 
-def test_summary_row_uses_sampled_truth_and_mc_only_quartiles():
+def test_ensemble_interval_uses_5th_and_95th_percentiles():
+    lower, median, upper = _ensemble_interval(np.arange(101.0)[:, None])
+
+    np.testing.assert_allclose(lower, [5.0])
+    np.testing.assert_allclose(median, [50.0])
+    np.testing.assert_allclose(upper, [95.0])
+
+
+def test_summary_row_uses_sampled_truth_and_mc_only_percentiles():
     import matplotlib.pyplot as plt
 
     result = _summary_plot_result()
@@ -397,4 +496,21 @@ def test_summary_plot_accepts_json_and_supplied_axes(tmp_path):
     assert returned_figure is figure
     np.testing.assert_array_equal(returned_axes, axes)
     assert axes[0].lines[0].get_color() == "#123456"
+    plt.close(figure)
+
+
+def test_summary_row_optionally_adds_pair_count_panel():
+    import matplotlib.pyplot as plt
+
+    figure, axes = plot_structure_function_summary_row(
+        _summary_plot_result(), p_value=0.9, show_pair_counts=True
+    )
+
+    assert len(axes) == 4
+    assert axes[3].get_title() == "pairs per bin"
+    assert axes[3].get_ylabel() == "number of baseline pairs"
+    # Sampled truth and MC median are both plotted against the lambda bins.
+    assert len(axes[3].lines) == 2
+    np.testing.assert_allclose(axes[3].lines[0].get_ydata(), [1.0, 1.0, 1.0])
+    np.testing.assert_allclose(axes[3].lines[1].get_ydata(), [1.0, 1.0, 1.0])
     plt.close(figure)

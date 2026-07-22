@@ -23,3 +23,6 @@ outputs/
 
 # Local HelioSwarm mission data
 data/helioswarm_cdf/
+
+#helper scripts
+*.sh

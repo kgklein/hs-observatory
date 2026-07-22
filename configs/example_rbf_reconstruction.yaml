@@ -1,0 +1,77 @@
+analysis:
+  method: rbf_reconstruction
+
+input:
+  path: outputs/synthetic_observations_simulation_sampled_observatory.h5
+
+output:
+  path: outputs/rbf_reconstruction_simulation_sampled_observatory.h5
+
+rbf_reconstruction:
+  data_group: observed
+  mc_index: 0
+  t0_index: 10
+  delta_t: 20.0
+  sample_time_stride: 10
+
+  kernel: multiquadric
+  sigma: 100.0
+  auto_sigma_rippa: true
+  sigma_selection: explicit_loocv
+  sigma_initial: 100.0
+  sigma_subsample_max: 500
+  sigma_random_seed: 0
+  sigma_min: 5.0
+  sigma_max: 50000.0
+  sigma_num: 40
+  sigma_grid: log
+  rippa_mode: field
+  rippa_components: all
+  sigma_cache: outputs/rbf_sigma_cache.h5
+  use_sigma_cache: true
+  save_sigma_cache: true
+  force_recompute_sigma: false
+  sigma_cache_hash_tolerance: 1.0e-9
+  coordinate_units: km
+  smoothing: 0.0
+
+  grid:
+    radius: 1000.0
+    radius_padding: 200.0
+    n_axial: 50
+    n_transverse: 41
+    axial_padding: 0.0
+    require_all_spacecraft_coverage: true
+
+  plot:
+    enabled: true
+    path: outputs/rbf_reconstruction_simulation_sampled_observatory.png
+    component_mode: delta
+    background_mode: metadata
+    magnitude_cmap: batlow
+    error_cmap: imola
+    dpi: 150
+
+  rippa_plot:
+    enabled: true
+    path: outputs/rbf_reconstruction_simulation_sampled_observatory_sigma.png
+    dpi: 150
+
+  broeren_error_plot:
+    enabled: true
+    path: outputs/rbf_reconstruction_simulation_sampled_observatory_uv_error.png
+    error_cmap: imola
+    dpi: 150
+    capped: true
+
+  reference:
+    enabled: true
+    generation_config: configs/example_generate_simulation_sampled_observatory.yaml
+    plot:
+      enabled: true
+      path: outputs/rbf_reconstruction_simulation_sampled_observatory_reference.png
+      component_mode: delta
+      background_mode: metadata
+      magnitude_cmap: batlow
+      error_cmap: imola
+      dpi: 150

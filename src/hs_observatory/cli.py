@@ -128,6 +128,10 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-color", default=None, help="Matplotlib color for this run")
     parser.add_argument("--max-order", type=int, default=6)
     parser.add_argument("--fit-range", default=None, help="named exponent fit range")
+    parser.add_argument(
+        "--pair-counts", action="store_true",
+        help="add a fourth panel showing the number of baseline pairs per bin",
+    )
     parser.add_argument("--dpi", type=int, default=300)
     args = parser.parse_args(argv)
     output = plot_structure_function_summary(
@@ -138,6 +142,7 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
         run_color=args.run_color,
         max_order=args.max_order,
         fit_range=args.fit_range,
+        show_pair_counts=args.pair_counts,
         dpi=args.dpi,
     )
     print(output)

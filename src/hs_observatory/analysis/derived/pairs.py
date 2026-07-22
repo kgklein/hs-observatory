@@ -102,6 +102,84 @@ def pair_chunks(
         yield np.concatenate(left_parts), np.concatenate(right_parts)
 
 
+def adaptive_stratified_pairs(
+    positions_km: np.ndarray,
+    lambda_edges_km: np.ndarray,
+    *,
+    target_pairs_per_bin: int,
+    max_candidates: int,
+    candidate_chunk_size: int,
+    random_seed: int | None,
+) -> tuple[np.ndarray, np.ndarray, dict[str, object]]:
+    """Retain random unique pairs until every separation bin reaches its target.
+
+    Candidate ordinals are drawn uniformly in bounded batches. Draws may repeat,
+    but a pair can be retained only once. This avoids storing every examined
+    ordinal while keeping the retained sample uniform within each lambda bin.
+    """
+
+    positions = np.asarray(positions_km, dtype=float)
+    edges = np.asarray(lambda_edges_km, dtype=float)
+    if positions.ndim != 2 or positions.shape[1] != 3:
+        raise ValueError("positions_km must have shape (point, 3)")
+    if edges.ndim != 1 or edges.size < 2 or np.any(np.diff(edges) <= 0.0):
+        raise ValueError("lambda_edges_km must be increasing one-dimensional edges")
+    if target_pairs_per_bin < 1:
+        raise ValueError("target_pairs_per_bin must be positive")
+    if max_candidates < 1:
+        raise ValueError("max_candidates must be positive")
+    if candidate_chunk_size < 1:
+        raise ValueError("candidate_chunk_size must be positive")
+
+    total = possible_pair_count(positions.shape[0])
+    if total == 0:
+        raise ValueError("at least two positions are required")
+    n_bins = edges.size - 1
+    retained_by_bin: list[list[int]] = [[] for _ in range(n_bins)]
+    retained_ordinals: set[int] = set()
+    rng = np.random.default_rng(random_seed)
+    candidates_examined = 0
+
+    while candidates_examined < max_candidates and any(
+        len(values) < target_pairs_per_bin for values in retained_by_bin
+    ):
+        draw_count = min(candidate_chunk_size, max_candidates - candidates_examined)
+        ordinals = rng.integers(0, total, size=draw_count, dtype=np.int64)
+        candidates_examined += draw_count
+        ordinals = np.unique(ordinals)
+        rng.shuffle(ordinals)
+        left, right = _ordinal_pairs(ordinals, positions.shape[0])
+        separations = np.linalg.norm(positions[right] - positions[left], axis=1)
+        bin_indices = np.searchsorted(edges, separations, side="right") - 1
+        bin_indices[separations == edges[-1]] = n_bins - 1
+
+        for ordinal, bin_index in zip(ordinals.tolist(), bin_indices.tolist()):
+            if bin_index < 0 or bin_index >= n_bins or ordinal in retained_ordinals:
+                continue
+            retained = retained_by_bin[bin_index]
+            if len(retained) < target_pairs_per_bin:
+                retained.append(ordinal)
+                retained_ordinals.add(ordinal)
+
+    retained_counts = np.asarray([len(values) for values in retained_by_bin], dtype=np.int64)
+    selected = np.asarray(
+        [ordinal for values in retained_by_bin for ordinal in values], dtype=np.int64
+    )
+    if selected.size:
+        rng.shuffle(selected)
+        left, right = _ordinal_pairs(selected, positions.shape[0])
+    else:
+        left = np.empty(0, dtype=np.int64)
+        right = np.empty(0, dtype=np.int64)
+    diagnostics: dict[str, object] = {
+        "candidates_examined": candidates_examined,
+        "retained_per_bin": retained_counts,
+        "target_pairs_per_bin": target_pairs_per_bin,
+        "target_reached": bool(np.all(retained_counts >= target_pairs_per_bin)),
+    }
+    return left, right, diagnostics
+
+
 def perpendicular_projection(vectors: np.ndarray, directions: np.ndarray) -> np.ndarray:
     """Remove each vector's component along its corresponding unit direction."""
 

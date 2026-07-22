@@ -14,6 +14,7 @@ import numpy as np
 
 from hs_observatory.analysis.base import AnalysisMethod
 from hs_observatory.analysis.derived.pairs import (
+    adaptive_stratified_pairs,
     pair_chunks,
     possible_pair_count,
     selected_pair_count,
@@ -90,6 +91,19 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         max_pair_lambda_km = float(max_pair_lambda_km)
         if max_pair_lambda_km <= 0.0:
             raise ValueError("structure_function.max_pair_lambda_km must be positive or null")
+    min_pair_lambda_km = config.get("min_pair_lambda_km")
+    if min_pair_lambda_km is not None:
+        min_pair_lambda_km = float(min_pair_lambda_km)
+        if min_pair_lambda_km <= 0.0:
+            raise ValueError("structure_function.min_pair_lambda_km must be positive or null")
+    if (
+        min_pair_lambda_km is not None
+        and max_pair_lambda_km is not None
+        and min_pair_lambda_km >= max_pair_lambda_km
+    ):
+        raise ValueError(
+            "structure_function.min_pair_lambda_km must be less than max_pair_lambda_km"
+        )
     increment_mode = str(config.get("increment_mode", "same_time_pairs"))
     if increment_mode not in {"same_time_pairs", "all_spacetime_pairs"}:
         raise ValueError(
@@ -98,8 +112,11 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         )
     pair_sampling = _mapping(config, "pair_sampling")
     pair_mode = str(pair_sampling.get("mode", "all"))
-    if pair_mode not in {"all", "random"}:
-        raise ValueError("structure_function.pair_sampling.mode must be 'all' or 'random'")
+    if pair_mode not in {"all", "random", "adaptive_stratified"}:
+        raise ValueError(
+            "structure_function.pair_sampling.mode must be 'all', 'random', "
+            "or 'adaptive_stratified'"
+        )
     chunk_size = int(pair_sampling.get("chunk_size", 1_000_000))
     if chunk_size < 1:
         raise ValueError("structure_function.pair_sampling.chunk_size must be positive")
@@ -109,10 +126,39 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     max_pairs = None if max_pairs is None else int(max_pairs)
     random_seed = pair_sampling.get("random_seed", 12345)
     random_seed = None if random_seed is None else int(random_seed)
+    target_pairs_per_bin = pair_sampling.get("target_pairs_per_bin")
+    target_pairs_per_bin = (
+        None if target_pairs_per_bin is None else int(target_pairs_per_bin)
+    )
+    max_candidates = pair_sampling.get("max_candidates")
+    max_candidates = None if max_candidates is None else int(max_candidates)
+    binning_n_pairs = int(pair_sampling.get("binning_n_pairs", 5_000_000))
+    if binning_n_pairs < 1:
+        raise ValueError("structure_function.pair_sampling.binning_n_pairs must be positive")
     if pair_mode == "random" and (n_pairs is None or n_pairs < 1):
         raise ValueError("random structure-function pair sampling requires pair_sampling.n_pairs")
     if pair_mode == "random" and random_seed is None:
         raise ValueError("random structure-function pair sampling requires pair_sampling.random_seed")
+    if pair_mode == "adaptive_stratified":
+        if increment_mode != "all_spacetime_pairs":
+            raise ValueError(
+                "adaptive_stratified pair sampling requires "
+                "increment_mode='all_spacetime_pairs'"
+            )
+        if target_pairs_per_bin is None or target_pairs_per_bin < 1:
+            raise ValueError(
+                "adaptive_stratified pair sampling requires a positive "
+                "pair_sampling.target_pairs_per_bin"
+            )
+        if max_candidates is None or max_candidates < 1:
+            raise ValueError(
+                "adaptive_stratified pair sampling requires a positive "
+                "pair_sampling.max_candidates"
+            )
+        if random_seed is None:
+            raise ValueError(
+                "adaptive_stratified pair sampling requires pair_sampling.random_seed"
+            )
     if max_pairs is not None and max_pairs < 1:
         raise ValueError("structure_function.pair_sampling.max_pairs must be positive or null")
     return {
@@ -122,6 +168,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         "scale_ranges_km": parsed_ranges,
         "min_fit_bins": min_fit_bins,
         "max_pair_lambda_km": max_pair_lambda_km,
+        "min_pair_lambda_km": min_pair_lambda_km,
         "increment_mode": increment_mode,
         "pair_sampling": {
             "mode": pair_mode,
@@ -129,6 +176,9 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             "n_pairs": n_pairs,
             "max_pairs": max_pairs,
             "random_seed": random_seed,
+            "target_pairs_per_bin": target_pairs_per_bin,
+            "max_candidates": max_candidates,
+            "binning_n_pairs": binning_n_pairs,
         },
         "elsasser": {
             "velocity": velocity,
@@ -161,6 +211,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
                 "gaussian_reference": float(
                     publication.get("gaussian_reference", 5.0 / 3.0)
                 ),
+                "show_pair_counts": bool(publication.get("show_pair_counts", False)),
                 "dpi": int(publication.get("dpi", 300)),
             },
         },
@@ -191,6 +242,9 @@ def _lambda_edges_km(separations_km: np.ndarray, settings: dict[str, Any]) -> np
     if configured is not None:
         return np.asarray(configured, dtype=float)
     positive = separations_km[np.isfinite(separations_km) & (separations_km > 0.0)]
+    min_pair_lambda_km = settings["min_pair_lambda_km"]
+    if min_pair_lambda_km is not None:
+        positive = positive[positive >= min_pair_lambda_km]
     max_pair_lambda_km = settings["max_pair_lambda_km"]
     if max_pair_lambda_km is not None:
         positive = positive[positive <= max_pair_lambda_km]
@@ -215,10 +269,15 @@ def _lambda_edges_from_bounds_km(
     if not np.isfinite(lower) or not np.isfinite(upper) or lower <= 0.0:
         raise ValueError("No positive pair separations are available for structure functions")
     max_pair_lambda_km = settings["max_pair_lambda_km"]
+    min_pair_lambda_km = settings["min_pair_lambda_km"]
+    if min_pair_lambda_km is not None:
+        lower = max(lower, min_pair_lambda_km)
     if max_pair_lambda_km is not None:
         upper = min(upper, max_pair_lambda_km)
         if upper < lower:
             raise ValueError("No positive pair separations remain below max_pair_lambda_km")
+    if upper < lower:
+        raise ValueError("No pair separations remain within the configured lambda limits")
     if upper == lower:
         lower *= 0.9
         upper *= 1.1
@@ -321,6 +380,7 @@ def compute_pairwise_structure_functions(
     *,
     scale_ranges_km: dict[str, list[float]] | None = None,
     min_fit_bins: int = 3,
+    min_pair_lambda_km: float | None = None,
     max_pair_lambda_km: float | None = None,
 ) -> dict[str, Any]:
     """Compute same-time pairwise vector-increment structure functions.
@@ -357,6 +417,8 @@ def compute_pairwise_structure_functions(
             pair_separations[member, pair_index] = separation
             bin_index, valid = _bin_indices(separation, edges)
             valid &= separation > 0.0
+            if min_pair_lambda_km is not None:
+                valid &= separation >= min_pair_lambda_km
             if max_pair_lambda_km is not None:
                 valid &= separation <= max_pair_lambda_km
             for index in range(n_bins):
@@ -424,18 +486,29 @@ def _selection_count_kwargs(pair_sampling: dict[str, Any]) -> dict[str, Any]:
 def _spacetime_lambda_bounds_km(
     positions_km: np.ndarray,
     pair_sampling: dict[str, Any],
+    min_pair_lambda_km: float | None,
     max_pair_lambda_km: float | None,
 ) -> tuple[float, float]:
     lower = np.inf
     upper = -np.inf
     flat_position = np.asarray(positions_km, dtype=float).reshape(-1, 3)
+    sampling_kwargs = _sampling_kwargs(pair_sampling)
+    if pair_sampling["mode"] == "adaptive_stratified":
+        sampling_kwargs = {
+            "mode": "random",
+            "n_pairs": pair_sampling["binning_n_pairs"],
+            "random_seed": pair_sampling["random_seed"],
+            "max_pairs": None,
+        }
     for left, right in pair_chunks(
         flat_position.shape[0],
         pair_sampling["chunk_size"],
-        **_sampling_kwargs(pair_sampling),
+        **sampling_kwargs,
     ):
         separation = np.linalg.norm(flat_position[right] - flat_position[left], axis=1)
         positive = separation[np.isfinite(separation) & (separation > 0.0)]
+        if min_pair_lambda_km is not None:
+            positive = positive[positive >= min_pair_lambda_km]
         if max_pair_lambda_km is not None:
             positive = positive[positive <= max_pair_lambda_km]
         if positive.size:
@@ -454,6 +527,7 @@ def compute_all_spacetime_structure_functions(
     pair_sampling: dict[str, Any],
     scale_ranges_km: dict[str, list[float]] | None = None,
     min_fit_bins: int = 3,
+    min_pair_lambda_km: float | None = None,
     max_pair_lambda_km: float | None = None,
 ) -> dict[str, Any]:
     """Compute all-spacetime vector-increment structure functions.
@@ -484,9 +558,19 @@ def compute_all_spacetime_structure_functions(
     counts = np.zeros((n_members, n_bins), dtype=np.int64)
     sums = {field: np.zeros((n_members, len(orders), n_bins)) for field in FIELDS}
     possible_pairs = possible_pair_count(n_points)
-    selected_pairs = selected_pair_count(n_points, **_selection_count_kwargs(pair_sampling))
-    pair_count_by_member = np.full(n_members, selected_pairs, dtype=np.int64)
+    adaptive = pair_sampling["mode"] == "adaptive_stratified"
+    selected_pairs = (
+        None
+        if adaptive
+        else selected_pair_count(n_points, **_selection_count_kwargs(pair_sampling))
+    )
+    pair_count_by_member = np.zeros(n_members, dtype=np.int64)
+    if selected_pairs is not None:
+        pair_count_by_member.fill(selected_pairs)
+    candidates_examined = np.zeros(n_members, dtype=np.int64)
+    sampling_target_reached = np.ones(n_members, dtype=bool)
     skipped_nonpositive = np.zeros(n_members, dtype=np.int64)
+    skipped_below_min_lambda = np.zeros(n_members, dtype=np.int64)
     skipped_above_max_lambda = np.zeros(n_members, dtype=np.int64)
     outside_lambda_bins = np.zeros(n_members, dtype=np.int64)
 
@@ -496,23 +580,53 @@ def compute_all_spacetime_structure_functions(
             "z_plus": arrays[1][member].reshape(-1, 3),
             "z_minus": arrays[2][member].reshape(-1, 3),
         }
-        for left, right in pair_chunks(
-            n_points,
-            pair_sampling["chunk_size"],
-            **_sampling_kwargs(pair_sampling),
-        ):
+        if adaptive:
+            selected_left, selected_right, sampling_diagnostics = adaptive_stratified_pairs(
+                flat_position,
+                edges,
+                target_pairs_per_bin=pair_sampling["target_pairs_per_bin"],
+                max_candidates=pair_sampling["max_candidates"],
+                candidate_chunk_size=pair_sampling["chunk_size"],
+                random_seed=pair_sampling["random_seed"],
+            )
+            pair_count_by_member[member] = selected_left.size
+            candidates_examined[member] = sampling_diagnostics["candidates_examined"]
+            sampling_target_reached[member] = sampling_diagnostics["target_reached"]
+            pair_iterator = (
+                (selected_left[start : start + pair_sampling["chunk_size"]],
+                 selected_right[start : start + pair_sampling["chunk_size"]])
+                for start in range(0, selected_left.size, pair_sampling["chunk_size"])
+            )
+        else:
+            pair_iterator = pair_chunks(
+                n_points,
+                pair_sampling["chunk_size"],
+                **_sampling_kwargs(pair_sampling),
+            )
+        for left, right in pair_iterator:
             separation = np.linalg.norm(flat_position[right] - flat_position[left], axis=1)
             bin_index, valid = _bin_indices(separation, edges)
             nonpositive = np.isfinite(separation) & (separation <= 0.0)
             skipped_nonpositive[member] += int(np.sum(nonpositive))
             valid &= separation > 0.0
+            below_min = np.zeros(separation.shape, dtype=bool)
+            if min_pair_lambda_km is not None:
+                below_min = np.isfinite(separation) & (separation < min_pair_lambda_km)
+                skipped_below_min_lambda[member] += int(np.sum(below_min))
+                valid &= ~below_min
             above_max = np.zeros(separation.shape, dtype=bool)
             if max_pair_lambda_km is not None:
                 above_max = np.isfinite(separation) & (separation > max_pair_lambda_km)
                 skipped_above_max_lambda[member] += int(np.sum(above_max))
                 valid &= ~above_max
             outside_lambda_bins[member] += int(
-                np.sum(np.isfinite(separation) & (separation > 0.0) & ~above_max & ~valid)
+                np.sum(
+                    np.isfinite(separation)
+                    & (separation > 0.0)
+                    & ~below_min
+                    & ~above_max
+                    & ~valid
+                )
             )
             for index in range(n_bins):
                 selected = valid & (bin_index == index)
@@ -525,6 +639,23 @@ def compute_all_spacetime_structure_functions(
                     for order_index, order in enumerate(orders):
                         sums[field][member, order_index, index] += float(np.sum(magnitude**order))
 
+    pair_diagnostics: dict[str, Any] = {
+        "possible_per_member": possible_pairs,
+        "selected_per_member": pair_count_by_member,
+        "skipped_nonpositive_separation": skipped_nonpositive,
+        "skipped_below_min_lambda": skipped_below_min_lambda,
+        "skipped_above_max_lambda": skipped_above_max_lambda,
+        "outside_lambda_bins": outside_lambda_bins,
+    }
+    if adaptive:
+        pair_diagnostics.update(
+            {
+                "candidates_examined": candidates_examined,
+                "sampling_target_reached": sampling_target_reached,
+                "target_pairs_per_bin": pair_sampling["target_pairs_per_bin"],
+                "max_candidates_per_member": pair_sampling["max_candidates"],
+            }
+        )
     products: dict[str, Any] = {
         "orders": orders,
         "lambda_bin_edges_km": edges,
@@ -532,13 +663,7 @@ def compute_all_spacetime_structure_functions(
         "spacecraft_pairs": [],
         "pair_separations_km": None,
         "counts": counts,
-        "spacetime_pair_counts": {
-            "possible_per_member": possible_pairs,
-            "selected_per_member": pair_count_by_member,
-            "skipped_nonpositive_separation": skipped_nonpositive,
-            "skipped_above_max_lambda": skipped_above_max_lambda,
-            "outside_lambda_bins": outside_lambda_bins,
-        },
+        "spacetime_pair_counts": pair_diagnostics,
     }
     if scale_ranges_km is None:
         finite = np.isfinite(centers) & (np.sum(counts, axis=0) > 0)
@@ -729,6 +854,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     lower, upper = _spacetime_lambda_bounds_km(
                         positions_km,
                         settings["pair_sampling"],
+                        settings["min_pair_lambda_km"],
                         settings["max_pair_lambda_km"],
                     )
                     lambda_lower_km = min(lambda_lower_km, lower)
@@ -756,6 +882,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     lambda_edges_km,
                     scale_ranges_km=settings["scale_ranges_km"] or None,
                     min_fit_bins=settings["min_fit_bins"],
+                    min_pair_lambda_km=settings["min_pair_lambda_km"],
                     max_pair_lambda_km=settings["max_pair_lambda_km"],
                 )
             else:
@@ -768,6 +895,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     pair_sampling=settings["pair_sampling"],
                     scale_ranges_km=settings["scale_ranges_km"] or None,
                     min_fit_bins=settings["min_fit_bins"],
+                    min_pair_lambda_km=settings["min_pair_lambda_km"],
                     max_pair_lambda_km=settings["max_pair_lambda_km"],
                 )
             group_result["n_members"] = positions.shape[0]
@@ -788,6 +916,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 "scale_ranges_km": settings["scale_ranges_km"],
                 "min_fit_bins": settings["min_fit_bins"],
                 "max_pair_lambda_km": settings["max_pair_lambda_km"],
+                "min_pair_lambda_km": settings["min_pair_lambda_km"],
                 "increment_mode": settings["increment_mode"],
                 "pair_sampling": settings["pair_sampling"],
             },
@@ -812,6 +941,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 "increment_mode": settings["increment_mode"],
                 "pair_sampling": settings["pair_sampling"],
                 "max_pair_lambda_km": settings["max_pair_lambda_km"],
+                "min_pair_lambda_km": settings["min_pair_lambda_km"],
                 "ensemble_policy": "members are processed independently and not averaged",
             },
         }
@@ -844,6 +974,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 run_label=publication["run_label"],
                 fit_range=publication["fit_range"],
                 gaussian_reference=publication["gaussian_reference"],
+                show_pair_counts=publication["show_pair_counts"],
                 dpi=publication["dpi"],
             )
         return output
@@ -861,12 +992,12 @@ def _summary_result(result: dict[str, Any] | str | Path) -> dict[str, Any]:
     return result
 
 
-def _quartiles(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute member-axis quartiles while allowing entirely empty bins."""
+def _ensemble_interval(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the member-axis 5th, 50th, and 95th percentiles."""
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        lower, median, upper = np.nanpercentile(values, [25.0, 50.0, 75.0], axis=0)
+        lower, median, upper = np.nanpercentile(values, [5.0, 50.0, 95.0], axis=0)
     return lower, median, upper
 
 
@@ -913,14 +1044,14 @@ def plot_structure_function_summary_row(
     run_label: str | None = None,
     fit_range: str | None = None,
     gaussian_reference: float = 5.0 / 3.0,
+    show_pair_counts: bool = False,
 ):
     """Plot one publication-style truth/MC structure-function summary row.
 
     ``products['truth']`` is treated as the unperturbed sampled observation and
-    ``products['observed']`` as the Monte Carlo ensemble. Quartiles are always
+    ``products['observed']`` as the Monte Carlo ensemble. Percentiles are always
     calculated from observed members only. When *axes* is supplied, it must be
-    a row of three Matplotlib axes, which makes this helper suitable for a
-    future multi-row figure.
+    a row of three axes (or four when *show_pair_counts* is true).
     """
 
     import matplotlib.pyplot as plt
@@ -940,14 +1071,19 @@ def plot_structure_function_summary_row(
     observed = products["observed"]
 
     if axes is None:
+        panel_count = 4 if show_pair_counts else 3
         figure, axes_array = plt.subplots(
-            1, 3, figsize=(14.2, 4.25), constrained_layout=True, squeeze=False
+            1, panel_count,
+            figsize=(18.4 if show_pair_counts else 14.2, 4.25),
+            constrained_layout=True,
+            squeeze=False,
         )
         axes_array = axes_array[0]
     else:
         axes_array = np.asarray(axes, dtype=object).reshape(-1)
-        if axes_array.size != 3:
-            raise ValueError("axes must contain exactly three Matplotlib axes")
+        expected_axes = 4 if show_pair_counts else 3
+        if axes_array.size != expected_axes:
+            raise ValueError(f"axes must contain exactly {expected_axes} Matplotlib axes")
         figure = axes_array[0].figure
         if any(axis.figure is not figure for axis in axes_array):
             raise ValueError("all supplied axes must belong to the same figure")
@@ -974,13 +1110,13 @@ def plot_structure_function_summary_row(
     if mc_sf.ndim != 3 or mc_sf.shape[0] < 1:
         raise ValueError("observed S_n must contain at least one MC member")
 
-    structure_axis, exponent_axis, flatness_axis = axes_array
+    structure_axis, exponent_axis, flatness_axis = axes_array[:3]
     order_handles = []
     for plot_index, order in enumerate(plotted_orders):
         marker = _ORDER_MARKERS[plot_index % len(_ORDER_MARKERS)]
         truth_index = int(np.flatnonzero(truth_orders == order)[0])
         mc_index = int(np.flatnonzero(mc_orders == order)[0])
-        lower, median, upper = _quartiles(mc_sf[:, mc_index])
+        lower, median, upper = _ensemble_interval(mc_sf[:, mc_index])
         structure_axis.fill_between(
             mc_lambda, lower, upper, color=color, alpha=0.10, linewidth=0, zorder=1
         )
@@ -1029,7 +1165,7 @@ def plot_structure_function_summary_row(
                linewidth=1.45, label="sampled truth"),
         Line2D([0], [0], color=color, linestyle="--", marker="o", linewidth=1.25,
                label="MC median"),
-        Line2D([0], [0], color=color, linewidth=7, alpha=0.15, label="MC 25th–75th"),
+        Line2D([0], [0], color=color, linewidth=7, alpha=0.15, label="MC 5th–95th"),
     ]
     structure_axis.legend(handles=provenance_handles, fontsize=7.5, loc="lower right")
     structure_axis.text(
@@ -1061,7 +1197,7 @@ def plot_structure_function_summary_row(
     truth_indices = [int(np.flatnonzero(exponent_orders == order)[0]) for order in fitted_orders]
     mc_indices = [int(np.flatnonzero(mc_exponent_orders == order)[0]) for order in fitted_orders]
     truth_xi_selected = truth_xi[truth_indices]
-    mc_lower, mc_median, mc_upper = _quartiles(mc_xi[:, mc_indices])
+    mc_lower, mc_median, mc_upper = _ensemble_interval(mc_xi[:, mc_indices])
     exponent_axis.plot(
         fitted_orders, truth_xi_selected, color=color, marker="o", markerfacecolor="white",
         linewidth=1.5, label="sampled truth", zorder=3
@@ -1076,7 +1212,7 @@ def plot_structure_function_summary_row(
         markersize=5.0,
         capsize=3.0,
         elinewidth=1.2,
-        label="MC median and IQR",
+        label="MC median and 5th–95th",
         zorder=4,
     )
     prediction = 1.0 - np.log2(
@@ -1096,10 +1232,10 @@ def plot_structure_function_summary_row(
 
     truth_flatness = _flatness_from_product(truth, quantity)
     mc_flatness = _flatness_from_product(observed, quantity)
-    flat_lower, flat_median, flat_upper = _quartiles(mc_flatness)
+    flat_lower, flat_median, flat_upper = _ensemble_interval(mc_flatness)
     flatness_axis.fill_between(
         mc_lambda, flat_lower, flat_upper, color=color, alpha=0.15, linewidth=0,
-        label="MC 25th–75th", zorder=1
+        label="MC 5th–95th", zorder=1
     )
     flatness_axis.plot(
         truth_lambda, truth_flatness[0], color=color, linestyle="-", linewidth=1.6,
@@ -1120,6 +1256,36 @@ def plot_structure_function_summary_row(
     flatness_axis.set_title("kurtosis")
     flatness_axis.grid(True, which="both", alpha=0.18)
     flatness_axis.legend(fontsize=7.5, loc="best")
+
+    if show_pair_counts:
+        count_axis = axes_array[3]
+        truth_counts = np.asarray(truth["counts"], dtype=float)
+        mc_counts = np.asarray(observed["counts"], dtype=float)
+        if truth_counts.ndim != 2 or truth_counts.shape[0] != 1:
+            raise ValueError("truth counts must have shape (1, lambda_bin)")
+        if mc_counts.ndim != 2 or mc_counts.shape[0] < 1:
+            raise ValueError("observed counts must contain at least one MC member")
+        count_lower, count_median, count_upper = _ensemble_interval(mc_counts)
+        count_axis.fill_between(
+            mc_lambda, count_lower, count_upper, color=color, alpha=0.15,
+            linewidth=0, label="MC 5th–95th", zorder=1,
+        )
+        count_axis.plot(
+            truth_lambda, truth_counts[0], color=color, linestyle="-", linewidth=1.6,
+            marker="o", markersize=4.0, markerfacecolor="white",
+            label="sampled truth", zorder=3,
+        )
+        count_axis.plot(
+            mc_lambda, count_median, color=color, linestyle="--", linewidth=1.4,
+            marker="o", markersize=4.0, label="MC median", zorder=4,
+        )
+        count_axis.set_xscale("log")
+        count_axis.set_yscale("log")
+        count_axis.set_xlabel(r"$\lambda$ [km]")
+        count_axis.set_ylabel("number of baseline pairs")
+        count_axis.set_title("pairs per bin")
+        count_axis.grid(True, which="both", alpha=0.18)
+        count_axis.legend(fontsize=7.5, loc="best")
     return figure, axes_array
 
 
@@ -1134,6 +1300,7 @@ def plot_structure_function_summary(
     run_label: str | None = None,
     fit_range: str | None = None,
     gaussian_reference: float = 5.0 / 3.0,
+    show_pair_counts: bool = False,
     dpi: int = 300,
 ) -> Path:
     """Create and save a standalone 1x3 structure-function summary figure."""
@@ -1149,6 +1316,7 @@ def plot_structure_function_summary(
         run_label=run_label,
         fit_range=fit_range,
         gaussian_reference=gaussian_reference,
+        show_pair_counts=show_pair_counts,
     )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
