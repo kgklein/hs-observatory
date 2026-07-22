@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Mapping, Sequence
 import warnings
 
 import h5py
@@ -82,10 +82,12 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("Dataset data_group must be 'truth' or 'observed'")
         mc_index = dataset.get("mc_index", 0)
         if mc_index == "all":
-            raise NotImplementedError("MC ensemble aggregation is not implemented")
-        mc_index = int(mc_index)
-        if mc_index < 0:
-            raise ValueError("Dataset mc_index must be non-negative")
+            if data_group != "observed":
+                raise ValueError("mc_index: all is only valid for observed datasets")
+        else:
+            mc_index = int(mc_index)
+            if mc_index < 0:
+                raise ValueError("Dataset mc_index must be non-negative")
         parsed_datasets.append({"name": name, "data_group": data_group, "mc_index": mc_index})
 
     elsasser = _mapping(config, "elsasser")
@@ -121,6 +123,15 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     min_samples = int(scale.get("min_samples_per_bin", 50))
     if n_scale_bins < 1 or min_samples < 1:
         raise ValueError("Scale bin counts and minimum samples must be positive")
+    selected_lags_km = scale.get("selected_lags_km")
+    if selected_lags_km is not None:
+        if not isinstance(selected_lags_km, (list, tuple)) or not selected_lags_km:
+            raise ValueError("scale_bins.selected_lags_km must be a nonempty list or null")
+        selected_lags_km = [float(value) for value in selected_lags_km]
+        if not np.all(np.isfinite(selected_lags_km)) or any(
+            value <= 0.0 for value in selected_lags_km
+        ):
+            raise ValueError("scale_bins.selected_lags_km values must be finite and positive")
 
     pdf = _mapping(config, "pdf_bins")
     if str(pdf.get("normalized_by", "geometric_mean")) != "geometric_mean":
@@ -185,6 +196,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         "n_scale_bins": n_scale_bins,
         "lambda_min": scale.get("lambda_min", "auto"),
         "lambda_max": scale.get("lambda_max", "auto"),
+        "selected_lags_km": selected_lags_km,
         "min_samples_per_bin": min_samples,
         "n_pdf_bins": n_pdf_bins,
         "x_min": x_min,
@@ -315,31 +327,52 @@ def _pair_values(
     B: np.ndarray,
     global_B: np.ndarray,
     settings: dict[str, Any],
+    *,
+    lambda_edges: np.ndarray | None = None,
+    calculated_bin: np.ndarray | None = None,
+    calculate_increments: bool = True,
 ) -> dict[str, np.ndarray]:
     directions, valid_direction = local_pairwise_directions(
         B[left], B[right], global_B, min_norm=settings["min_norm"]
     )
     displacement = positions[right] - positions[left]
     separation = separation_magnitude(displacement, directions, settings["separation"])
-    deltas = {
-        "z_plus": z_plus[right] - z_plus[left],
-        "z_minus": z_minus[right] - z_minus[left],
-    }
-    perpendicular = {
-        name: perpendicular_projection(values, directions) for name, values in deltas.items()
-    }
-    selected = perpendicular if settings["increment_component"] == "perpendicular" else deltas
-    increments = {name: np.linalg.norm(selected[name], axis=1) for name in FIELDS}
-    cross = np.linalg.norm(np.cross(perpendicular["z_plus"], perpendicular["z_minus"]), axis=1)
-    denominator = np.linalg.norm(perpendicular["z_plus"], axis=1) * np.linalg.norm(
-        perpendicular["z_minus"], axis=1
-    )
-    sin_theta = np.divide(
-        cross,
-        denominator,
-        out=np.full(cross.shape, np.nan),
-        where=denominator > 0.0,
-    )
+    active = valid_direction.copy()
+    if lambda_edges is not None:
+        indices, valid_bin = _bin_indices(separation, lambda_edges)
+        active &= valid_bin
+        if calculated_bin is not None:
+            active &= calculated_bin[np.clip(indices, 0, calculated_bin.size - 1)]
+    increments = {name: np.full(separation.shape, np.nan) for name in FIELDS}
+    sin_theta = np.full(separation.shape, np.nan)
+    if calculate_increments and np.any(active):
+        active_left = left[active]
+        active_right = right[active]
+        active_directions = directions[active]
+        deltas = {
+            "z_plus": z_plus[active_right] - z_plus[active_left],
+            "z_minus": z_minus[active_right] - z_minus[active_left],
+        }
+        perpendicular = {
+            name: perpendicular_projection(values, active_directions)
+            for name, values in deltas.items()
+        }
+        selected = perpendicular if settings["increment_component"] == "perpendicular" else deltas
+        for name in FIELDS:
+            increments[name][active] = np.linalg.norm(selected[name], axis=1)
+        if settings["alignment_compute"]:
+            cross = np.linalg.norm(
+                np.cross(perpendicular["z_plus"], perpendicular["z_minus"]), axis=1
+            )
+            denominator = np.linalg.norm(perpendicular["z_plus"], axis=1) * np.linalg.norm(
+                perpendicular["z_minus"], axis=1
+            )
+            sin_theta[active] = np.divide(
+                cross,
+                denominator,
+                out=np.full(cross.shape, np.nan),
+                where=denominator > 0.0,
+            )
     return {
         "lambda": separation,
         "z_plus": increments["z_plus"],
@@ -408,30 +441,35 @@ def compute_increment_pdf_for_points(
         max_pairs=settings["max_pairs"],
     )
 
+    configured_min = settings["lambda_min"]
+    configured_max = settings["lambda_max"]
+    infer_bounds = configured_min in {"auto", None} or configured_max in {"auto", None}
     inferred_min = np.inf
     inferred_max = -np.inf
     skipped_direction = 0
     skipped_nonpositive = 0
-    for left, right in _chunks(n_points, settings):
-        values = _pair_values(
-            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings
-        )
-        valid = values["valid_direction"] & np.isfinite(values["lambda"])
-        skipped_direction += int(np.sum(~values["valid_direction"]))
-        if settings["scale_binning"] == "log":
-            skipped_nonpositive += int(np.sum(valid & (values["lambda"] <= 0.0)))
-            valid &= values["lambda"] > 0.0
-        selected_lambda = values["lambda"][valid]
-        if selected_lambda.size:
-            inferred_min = min(inferred_min, float(np.min(selected_lambda)))
-            inferred_max = max(inferred_max, float(np.max(selected_lambda)))
-    if not np.isfinite(inferred_min) or not np.isfinite(inferred_max):
-        raise ValueError("No valid pair separations are available for scale binning")
+    if infer_bounds:
+        for left, right in _chunks(n_points, settings):
+            values = _pair_values(
+                left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+                calculate_increments=False,
+            )
+            valid = values["valid_direction"] & np.isfinite(values["lambda"])
+            skipped_direction += int(np.sum(~values["valid_direction"]))
+            if settings["scale_binning"] == "log":
+                skipped_nonpositive += int(np.sum(valid & (values["lambda"] <= 0.0)))
+                valid &= values["lambda"] > 0.0
+            selected_lambda = values["lambda"][valid]
+            if selected_lambda.size:
+                inferred_min = min(inferred_min, float(np.min(selected_lambda)))
+                inferred_max = max(inferred_max, float(np.max(selected_lambda)))
+        if not np.isfinite(inferred_min) or not np.isfinite(inferred_max):
+            raise ValueError("No valid pair separations are available for scale binning")
     lambda_min = (
-        inferred_min if settings["lambda_min"] in {"auto", None} else float(settings["lambda_min"])
+        inferred_min if configured_min in {"auto", None} else float(configured_min)
     )
     lambda_max = (
-        inferred_max if settings["lambda_max"] in {"auto", None} else float(settings["lambda_max"])
+        inferred_max if configured_max in {"auto", None} else float(configured_max)
     )
     if settings["scale_binning"] == "log" and lambda_min <= 0.0:
         raise ValueError("lambda_min must be positive for logarithmic bins")
@@ -453,6 +491,18 @@ def compute_increment_pdf_for_points(
         lambda_centers = 0.5 * (lambda_edges[:-1] + lambda_edges[1:])
 
     n_bins = settings["n_scale_bins"]
+    calculated_bin = np.ones(n_bins, dtype=bool)
+    if settings["selected_lags_km"] is not None:
+        selected_indices = np.asarray(
+            [int(np.argmin(np.abs(lambda_centers - lag))) for lag in settings["selected_lags_km"]]
+        )
+        if np.unique(selected_indices).size != selected_indices.size:
+            raise ValueError(
+                "scale_bins.selected_lags_km must match distinct configured lag bins"
+            )
+        calculated_bin[:] = False
+        calculated_bin[selected_indices] = True
+    calculated_indices = np.flatnonzero(calculated_bin)
     lambda_counts = np.zeros(n_bins, dtype=np.int64)
     positive_counts = {name: np.zeros(n_bins, dtype=np.int64) for name in FIELDS}
     zero_counts = {name: np.zeros(n_bins, dtype=np.int64) for name in FIELDS}
@@ -464,12 +514,21 @@ def compute_increment_pdf_for_points(
     outside_scale_bins = 0
     for left, right in _chunks(n_points, settings):
         values = _pair_values(
-            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings
+            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+            lambda_edges=lambda_edges,
+            calculated_bin=calculated_bin,
         )
+        if not infer_bounds:
+            finite_lambda = np.isfinite(values["lambda"])
+            skipped_direction += int(np.sum(~values["valid_direction"]))
+            if settings["scale_binning"] == "log":
+                skipped_nonpositive += int(
+                    np.sum(values["valid_direction"] & finite_lambda & (values["lambda"] <= 0.0))
+                )
         indices, valid_bin = _bin_indices(values["lambda"], lambda_edges)
         valid_bin &= values["valid_direction"]
         outside_scale_bins += int(np.sum(values["valid_direction"] & ~valid_bin))
-        for index in range(n_bins):
+        for index in calculated_indices:
             selected = valid_bin & (indices == index)
             count = int(np.sum(selected))
             lambda_counts[index] += count
@@ -533,10 +592,13 @@ def compute_increment_pdf_for_points(
         reservoir_limit = min(settings["max_samples"], 100_000)
         for left, right in _chunks(n_points, settings):
             values = _pair_values(
-                left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings
+                left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+                lambda_edges=lambda_edges,
+                calculated_bin=calculated_bin,
             )
             indices, valid_bin = _bin_indices(values["lambda"], lambda_edges)
             valid_bin &= values["valid_direction"]
+            valid_bin &= calculated_bin[np.clip(indices, 0, n_bins - 1)]
             for name in FIELDS:
                 valid = (
                     valid_bin
@@ -584,10 +646,13 @@ def compute_increment_pdf_for_points(
     saved_count = 0
     for left, right in _chunks(n_points, settings):
         values = _pair_values(
-            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings
+            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+            lambda_edges=lambda_edges,
+            calculated_bin=calculated_bin,
         )
         indices, valid_bin = _bin_indices(values["lambda"], lambda_edges)
         valid_bin &= values["valid_direction"]
+        valid_bin &= calculated_bin[np.clip(indices, 0, n_bins - 1)]
         normalized_by_field = {}
         for name in FIELDS:
             normalized = np.full(values[name].shape, np.nan)
@@ -596,7 +661,7 @@ def compute_increment_pdf_for_points(
                 values[name][normalizable] / typical[name][indices[normalizable]]
             )
             normalized_by_field[name] = normalized
-            for index in range(n_bins):
+            for index in calculated_indices:
                 selected = normalized[valid_bin & (indices == index)]
                 histogram_counts[name][index] += np.histogram(
                     selected[np.isfinite(selected)], bins=pdf_edges[name]
@@ -648,7 +713,7 @@ def compute_increment_pdf_for_points(
         out=np.full(n_bins, np.nan),
         where=alignment_counts > 0,
     )
-    valid_bin = lambda_counts >= settings["min_samples_per_bin"]
+    valid_bin = calculated_bin & (lambda_counts >= settings["min_samples_per_bin"])
     return {
         "n_time": n_time,
         "n_spacecraft": n_spacecraft,
@@ -664,6 +729,7 @@ def compute_increment_pdf_for_points(
             "bin_centers": lambda_centers,
             "counts": lambda_counts,
             "valid_bin": valid_bin,
+            "calculated_bin": calculated_bin,
         },
         "pdf": pdf_results,
         "alignment": {
@@ -682,7 +748,29 @@ def compute_elsasser_increment_pdf_static(
 
     settings = _settings(config)
     results = {}
-    for dataset in settings["datasets"]:
+    datasets = []
+    with h5py.File(input_path, "r") as handle:
+        for dataset in settings["datasets"]:
+            if dataset["mc_index"] != "all":
+                datasets.append(dataset)
+                continue
+            if "observed/n" not in handle:
+                raise KeyError("Input file is missing /observed/n")
+            observed = handle["observed/n"]
+            truth_ndim = handle["truth/n"].ndim if "truth/n" in handle else observed.ndim - 1
+            n_members = int(observed.shape[0]) if observed.ndim == truth_ndim + 1 else 1
+            datasets.extend(
+                {
+                    "name": f"{dataset['name']}_mc{index:03d}",
+                    "data_group": "observed",
+                    "mc_index": index,
+                }
+                for index in range(n_members)
+            )
+    if len({dataset["name"] for dataset in datasets}) != len(datasets):
+        raise ValueError("Expanded dataset names are not unique")
+
+    for dataset in datasets:
         elsasser_config = dict(settings["elsasser"])
         elsasser_config.update(
             {"data_group": dataset["data_group"], "mc_index": dataset["mc_index"]}
@@ -719,7 +807,10 @@ def compute_elsasser_increment_pdf_static(
             "pair_sampling_mode": settings["pair_mode"],
             "chunk_size": settings["chunk_size"],
             "lambda_binning": settings["scale_binning"],
+            "selected_lags_km_requested": settings["selected_lags_km"],
             "pdf_binning": "linear",
+            "pdf_normalized_by": "geometric_mean",
+            "ensemble_policy": "truth and observed MC members are processed separately",
             "created_utc": datetime.now(timezone.utc).isoformat(),
         },
         "settings": settings,
@@ -789,6 +880,254 @@ def plot_increment_pdf(
     return output
 
 
+def _load_publication_pdf_product(
+    result_path: str | Path,
+    field: str,
+) -> dict[str, np.ndarray]:
+    """Load separate truth and observed PDFs from one saved analysis HDF5 product.
+
+    Publication ensemble statistics require identical lambda and PDF-bin grids
+    for all datasets in a product. The loader checks that assumption explicitly;
+    publication analysis YAML should therefore configure fixed ``lambda_min``,
+    ``lambda_max``, and ``pdf_bins.x_max`` values.
+    """
+
+    path = Path(result_path)
+    with h5py.File(path, "r") as handle:
+        if "results" not in handle:
+            raise ValueError(f"{path} is not an Elsasser increment-PDF product")
+        truth_names = []
+        observed_names = []
+        for name, group in handle["results"].items():
+            data_group = str(group.attrs.get("data_group", ""))
+            if data_group == "truth":
+                truth_names.append(name)
+            elif data_group == "observed":
+                observed_names.append(name)
+        if len(truth_names) != 1 or not observed_names:
+            raise ValueError(
+                f"{path} must contain one truth dataset and at least one observed MC dataset"
+            )
+        observed_names.sort(key=lambda name: int(handle[f"results/{name}"].attrs["mc_index"]))
+        names = truth_names + observed_names
+        reference = handle[f"results/{truth_names[0]}"]
+        if f"pdf/{field}" not in reference:
+            raise ValueError(f"{path} does not contain field {field!r}")
+        lambda_centers = np.asarray(reference["lambda/bin_centers"], dtype=float)
+        x_centers = np.asarray(reference[f"pdf/{field}/bin_centers"], dtype=float)
+        valid = []
+        density = []
+        for name in names:
+            group = handle[f"results/{name}"]
+            member_lambda = np.asarray(group["lambda/bin_centers"], dtype=float)
+            member_x = np.asarray(group[f"pdf/{field}/bin_centers"], dtype=float)
+            if member_lambda.shape != lambda_centers.shape or not np.allclose(
+                member_lambda, lambda_centers, rtol=1.0e-10, atol=1.0e-12
+            ):
+                raise ValueError(f"lambda-bin grids are not aligned in {path}")
+            if member_x.shape != x_centers.shape or not np.allclose(
+                member_x, x_centers, rtol=1.0e-10, atol=1.0e-12
+            ):
+                raise ValueError(f"normalized-increment PDF grids are not aligned in {path}")
+            valid.append(np.asarray(group["lambda/valid_bin"], dtype=bool))
+            density.append(np.asarray(group[f"pdf/{field}/density"], dtype=float))
+    return {
+        "lambda_centers": lambda_centers,
+        "x_centers": x_centers,
+        "valid": np.stack(valid),
+        "truth_density": density[0],
+        "mc_density": np.stack(density[1:]),
+    }
+
+
+def _ordered_pdf_cases(
+    results_by_p: Mapping[float, str | Path],
+    field: str,
+) -> list[tuple[float, dict[str, np.ndarray]]]:
+    required = (0.9, 0.7, 0.5)
+    normalized = {float(p_value): path for p_value, path in results_by_p.items()}
+    missing = [p_value for p_value in required if p_value not in normalized]
+    if missing:
+        raise ValueError(f"results_by_p is missing Malara cases: {missing}")
+    cases = [(p_value, _load_publication_pdf_product(normalized[p_value], field)) for p_value in required]
+    reference_lambda = cases[0][1]["lambda_centers"]
+    for p_value, product in cases[1:]:
+        centers = product["lambda_centers"]
+        if centers.shape != reference_lambda.shape or not np.allclose(
+            centers, reference_lambda, rtol=1.0e-10, atol=1.0e-12
+        ):
+            raise ValueError(
+                f"lambda-bin grids for p=0.9 and p={p_value:g} are not aligned"
+            )
+    return cases
+
+
+def _publication_lag_indices(
+    cases: list[tuple[float, dict[str, np.ndarray]]],
+    selected_lags: Sequence[float] | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    centers = cases[0][1]["lambda_centers"]
+    common_valid = np.ones(centers.shape, dtype=bool)
+    for _p_value, product in cases:
+        common_valid &= np.all(product["valid"], axis=0)
+    available_indices = np.flatnonzero(common_valid & np.isfinite(centers))
+    available_lags = centers[available_indices]
+    if selected_lags is None:
+        if available_indices.size == 3:
+            indices = available_indices
+        elif available_indices.size < 5:
+            raise ValueError(
+                "default selection requires exactly three preselected bins or at least five "
+                "commonly valid lag bins"
+            )
+        else:
+            locations = (1, available_indices.size // 2, available_indices.size - 2)
+            indices = available_indices[np.asarray(locations)]
+    else:
+        requested = np.asarray(selected_lags, dtype=float)
+        if requested.shape != (3,) or not np.all(np.isfinite(requested)):
+            raise ValueError("selected_lags must contain exactly three finite lag values in km")
+        if available_indices.size < 3:
+            raise ValueError("at least three commonly valid calculated lag bins are required")
+        indices = np.asarray(
+            [available_indices[int(np.argmin(np.abs(available_lags - lag)))] for lag in requested]
+        )
+        if np.unique(indices).size != 3:
+            raise ValueError("selected lag values must match three distinct available lag bins")
+    return indices, centers[indices]
+
+
+def plot_increment_pdf_publication_row(
+    results_by_p: Mapping[float, str | Path],
+    *,
+    selected_lags: Sequence[float] | None = None,
+    quantity: str = "z_plus",
+    axes: Any = None,
+):
+    """Build the three-panel normalized Elsasser increment-PDF publication figure.
+
+    Each mapping value is an HDF5 product written once by
+    ``elsasser_increment_pdf_static`` and containing one truth dataset plus an
+    observed MC ensemble. Defaults select the second-smallest, middle, and
+    second-largest commonly valid lags. If analysis saved exactly three valid
+    lag bins, those are used directly. Pass three lag values in km to select the
+    nearest saved bins instead. Histogram grids must be aligned within and across
+    the three products; fixed publication-analysis bin bounds ensure it.
+
+    The return value is ``(figure, axes, matched_lags_km)`` so callers and tests
+    can inspect the inexpensive plotting result without rerunning analysis.
+    """
+
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    from hs_observatory.analysis.structure_function import P_MODEL_RUN_COLORS
+
+    if quantity != "z_plus":
+        raise ValueError("this publication figure supports quantity='z_plus' only")
+    cases = _ordered_pdf_cases(results_by_p, quantity)
+    lag_indices, matched_lags = _publication_lag_indices(cases, selected_lags)
+    if axes is None:
+        figure, axes_array = plt.subplots(
+            1, 3, figsize=(13.6, 4.35), sharey=True, squeeze=False
+        )
+        axes_array = axes_array[0]
+        figure.subplots_adjust(left=0.065, right=0.995, bottom=0.17, top=0.80, wspace=0.16)
+    else:
+        axes_array = np.asarray(axes, dtype=object).reshape(-1)
+        if axes_array.size != 3:
+            raise ValueError("axes must contain exactly three Matplotlib axes")
+        figure = axes_array[0].figure
+        if any(axis.figure is not figure for axis in axes_array):
+            raise ValueError("all supplied axes must belong to the same figure")
+
+    for axis, lag_index, lag_km in zip(axes_array, lag_indices, matched_lags):
+        all_x = np.concatenate([product["x_centers"] for _p, product in cases])
+        finite_x = all_x[np.isfinite(all_x)]
+        gaussian_x = np.linspace(float(np.min(finite_x)), float(np.max(finite_x)), 500)
+        gaussian = np.exp(-0.5 * gaussian_x**2) / np.sqrt(2.0 * np.pi)
+        visible_gaussian = gaussian >= 1.0e-6
+        axis.plot(
+            gaussian_x[visible_gaussian], gaussian[visible_gaussian], color="0.25",
+            linestyle=":", linewidth=1.15,
+            alpha=0.8, zorder=0,
+        )
+        for p_value, product in cases:
+            color = P_MODEL_RUN_COLORS[p_value]
+            x = product["x_centers"]
+            truth = product["truth_density"][lag_index]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                lower, median, upper = np.nanpercentile(
+                    product["mc_density"][:, lag_index], [25.0, 50.0, 75.0], axis=0
+                )
+            band = np.isfinite(lower) & np.isfinite(upper) & (lower > 0.0) & (upper > 0.0)
+            axis.fill_between(
+                x, lower, upper, where=band, color=color, alpha=0.14,
+                linewidth=0, interpolate=True, zorder=1,
+            )
+            truth_selected = np.isfinite(truth) & (truth > 0.0)
+            median_selected = np.isfinite(median) & (median > 0.0)
+            axis.plot(
+                x[truth_selected], truth[truth_selected], color=color, linestyle="-",
+                linewidth=1.65, zorder=3,
+            )
+            axis.plot(
+                x[median_selected], median[median_selected], color=color, linestyle="--",
+                linewidth=1.55, zorder=4,
+            )
+        axis.set_xscale("linear")
+        axis.set_yscale("log")
+        lag_label = f"{lag_km:,.0f}" if lag_km >= 1_000.0 else f"{lag_km:.3g}"
+        axis.set_title(rf"$\lambda_\perp = {lag_label}\,\mathrm{{km}}$")
+        axis.set_xlabel(
+            r"$\delta z^+_\perp / \exp[\langle\ln(\delta z^+_\perp)\mid"
+            r"\lambda_\perp\rangle]$"
+        )
+        axis.grid(True, which="both", alpha=0.17)
+    axes_array[0].set_ylabel(r"PDF of normalized $\delta z^+_\perp$")
+
+    case_handles = [
+        Line2D([0], [0], color=P_MODEL_RUN_COLORS[p], linewidth=2.0, label=rf"$p={p:g}$")
+        for p in (0.9, 0.7, 0.5)
+    ]
+    meaning_handles = [
+        Line2D([0], [0], color="0.2", linestyle="-", linewidth=1.65, label="sampled truth"),
+        Line2D([0], [0], color="0.2", linestyle="--", linewidth=1.55, label="MC median"),
+        Patch(facecolor="0.35", alpha=0.18, edgecolor="none", label="MC 25th–75th"),
+        Line2D([0], [0], color="0.25", linestyle=":", linewidth=1.15, label="standard normal"),
+    ]
+    figure.legend(
+        handles=case_handles + meaning_handles, loc="upper center", bbox_to_anchor=(0.5, 0.985),
+        ncols=7,
+        frameon=False, fontsize=8.5, handlelength=2.4, columnspacing=1.2,
+    )
+    return figure, axes_array, matched_lags
+
+
+def plot_increment_pdf_publication(
+    results_by_p: Mapping[float, str | Path],
+    selected_lags: Sequence[float] | None = None,
+    quantity: str = "z_plus",
+    output_path: str | Path = "elsasser_increment_pdf_publication.png",
+    *,
+    dpi: int = 300,
+) -> Path:
+    """Save a publication PDF figure using only existing analysis products."""
+
+    import matplotlib.pyplot as plt
+
+    figure, _axes, _lags = plot_increment_pdf_publication_row(
+        results_by_p, selected_lags=selected_lags, quantity=quantity
+    )
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=dpi, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
 def _write_metadata(group: h5py.Group, metadata: dict[str, Any]) -> None:
     for key, value in metadata.items():
         group.attrs[key] = (
@@ -849,7 +1188,12 @@ class ElsasserIncrementPDFStaticAnalysis(AnalysisMethod):
                     "scale_separation": settings["separation"],
                     "mean_field_method": settings["mean_field_method"],
                     "lambda_binning": settings["scale_binning"],
+                    "selected_lags_km_requested": settings["selected_lags_km"],
+                    "selected_lags_km_matched": dataset["lambda"]["bin_centers"][
+                        dataset["lambda"]["calculated_bin"]
+                    ].tolist(),
                     "pdf_binning": "linear",
+                    "pdf_normalized_by": "geometric_mean",
                     "position_source": dataset["position_metadata"]["position_source"],
                     "position_offset_source": dataset["position_metadata"][
                         "position_offset_source"

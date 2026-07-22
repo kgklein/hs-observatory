@@ -18,8 +18,11 @@ from hs_observatory.analysis.elsasser_increment_pdf_static import (
     compute_increment_pdf_for_points,
     geometric_mean_positive,
     pdf_density,
+    plot_increment_pdf_publication,
+    plot_increment_pdf_publication_row,
 )
 from hs_observatory.analysis.registry import list_analyses
+from hs_observatory.analysis.structure_function import P_MODEL_RUN_COLORS
 from hs_observatory.cli import analyze_main
 
 
@@ -143,6 +146,39 @@ def test_chunked_statistics_match_naive_pair_calculation():
     np.testing.assert_array_equal(result["lambda"]["counts"], expected_counts)
     np.testing.assert_allclose(result["pdf"]["z_plus"]["typical_increment"], expected_typical)
     assert result["n_pairs_processed"] == 6
+
+
+def test_selected_lags_only_accumulate_nearest_configured_bins():
+    positions = np.array(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            [[0.0, 2.0, 0.0], [3.0, 2.0, 0.0]],
+        ]
+    )
+    z_plus = np.arange(12, dtype=float).reshape(2, 2, 3)
+    z_minus = 0.5 * z_plus
+    magnetic = np.zeros_like(positions)
+    magnetic[..., 2] = 5.0
+    settings = _pair_settings(
+        scale_bins={
+            "separation": "perpendicular",
+            "binning": "linear",
+            "n_bins": 5,
+            "lambda_min": 0.5,
+            "lambda_max": 5.0,
+            "selected_lags_km": [1.0, 3.0],
+            "min_samples_per_bin": 1,
+        }
+    )
+
+    result = compute_increment_pdf_for_points(
+        positions, z_plus, z_minus, magnetic, settings
+    )
+
+    np.testing.assert_array_equal(result["lambda"]["calculated_bin"], [True, False, True, False, False])
+    np.testing.assert_array_equal(result["lambda"]["counts"][[1, 3, 4]], 0)
+    assert np.all(np.isnan(result["pdf"]["z_plus"]["density"][[1, 3, 4]]))
+    assert np.all(result["pdf"]["z_plus"]["counts"][[1, 3, 4]] == 0)
 
 
 def test_pair_sampling_max_pair_count_alias_caps_total_pairs():
@@ -292,7 +328,7 @@ output:
 elsasser_increment_pdf_static:
   datasets:
     - {{name: truth, data_group: truth}}
-    - {{name: observed_mc0, data_group: observed, mc_index: 1}}
+    - {{name: observed, data_group: observed, mc_index: all}}
   elsasser:
     velocity: {{frame: auto, spacecraft_correction: auto}}
     density_normalization: {{method: global_per_spacecraft, species: proton}}
@@ -325,26 +361,110 @@ elsasser_increment_pdf_static:
     assert "elsasser_increment_pdf_static" in list_analyses()
     assert analyze_from_config(config_path) == output_path
     with h5py.File(output_path) as handle:
-        for dataset in ("truth", "observed_mc0"):
+        for dataset in ("truth", "observed_mc000", "observed_mc001"):
             assert f"results/{dataset}/pdf/z_plus/density" in handle
             assert f"results/{dataset}/pdf/z_minus/density" in handle
             assert f"results/{dataset}/alignment/mean_sin_theta" in handle
             assert handle[f"results/{dataset}/samples/lambda"].shape[0] <= 5
         assert handle["results/truth"].attrs["mc_index"] == 0
-        assert handle["results/observed_mc0"].attrs["mc_index"] == 1
+        assert handle["results/observed_mc000"].attrs["mc_index"] == 0
+        assert handle["results/observed_mc001"].attrs["mc_index"] == 1
         assert handle["results/truth"].attrs["coordinate_policy"] == "nominal_spacecraft_positions"
         assert (
-            handle["results/observed_mc0"].attrs["coordinate_policy"]
+            handle["results/observed_mc001"].attrs["coordinate_policy"]
             == "nominal_spacecraft_positions"
         )
         assert handle["metadata"].attrs["sampling_assumption"] == "static_all_point_pairs"
         truth_typical = handle["results/truth/pdf/z_plus/typical_increment"][...]
-        observed_typical = handle["results/observed_mc0/pdf/z_plus/typical_increment"][...]
+        observed_typical = handle["results/observed_mc001/pdf/z_plus/typical_increment"][...]
         assert not np.allclose(truth_typical, observed_typical, equal_nan=True)
 
     truth_plot = plot_directory / f"{output_path.stem}_truth_zplus.png"
-    observed_plot = plot_directory / f"{output_path.stem}_observed_mc0_zplus.png"
+    observed_plots = [
+        plot_directory / f"{output_path.stem}_observed_mc{index:03d}_zplus.png"
+        for index in range(2)
+    ]
     assert truth_plot.is_file() and truth_plot.stat().st_size > 0
-    assert observed_plot.is_file() and observed_plot.stat().st_size > 0
+    assert all(path.is_file() and path.stat().st_size > 0 for path in observed_plots)
     assert analyze_main([str(config_path)]) == 0
     assert str(output_path) in capsys.readouterr().out
+
+
+def _write_publication_product(path: Path, scale: float) -> Path:
+    lag_centers = np.arange(1.0, 8.0) * 100.0
+    lag_edges = np.arange(0.5, 8.5) * 100.0
+    x_edges = np.linspace(0.0, 5.0, 31)
+    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+    base = np.exp(-0.5 * x_centers**2) / np.sqrt(2.0 * np.pi)
+    with h5py.File(path, "w") as handle:
+        handle.create_group("metadata").attrs["pdf_normalized_by"] = "geometric_mean"
+        root = handle.create_group("results")
+        for name, data_group, mc_index, factor in (
+            ("truth", "truth", 0, 1.0),
+            ("observed_mc000", "observed", 0, 0.9),
+            ("observed_mc001", "observed", 1, 1.1),
+            ("observed_mc002", "observed", 2, 1.2),
+        ):
+            group = root.create_group(name)
+            group.attrs["data_group"] = data_group
+            group.attrs["mc_index"] = mc_index
+            lag = group.create_group("lambda")
+            lag.create_dataset("bin_edges", data=lag_edges)
+            lag.create_dataset("bin_centers", data=lag_centers)
+            lag.create_dataset("valid_bin", data=np.ones(7, dtype=bool))
+            field = group.create_group("pdf").create_group("z_plus")
+            field.create_dataset("bin_edges", data=x_edges)
+            field.create_dataset("bin_centers", data=x_centers)
+            density = np.stack(
+                [base * scale * factor * (1.0 + 0.02 * index) for index in range(7)]
+            )
+            field.create_dataset("density", data=density)
+    return path
+
+
+def test_increment_pdf_publication_uses_saved_products_and_selects_lags(tmp_path):
+    import matplotlib.pyplot as plt
+
+    products = {
+        p_value: _write_publication_product(tmp_path / f"p{index}.h5", 1.0 + index * 0.1)
+        for index, p_value in enumerate((0.9, 0.7, 0.5))
+    }
+
+    figure, axes, matched = plot_increment_pdf_publication_row(products)
+    np.testing.assert_allclose(matched, [200.0, 400.0, 600.0])
+    assert len(axes) == 3
+    for axis in axes:
+        assert axis.get_xscale() == "linear"
+        assert axis.get_yscale() == "log"
+        assert len(axis.lines) == 7  # Gaussian plus truth/median for all three p cases.
+        assert len(axis.collections) == 3
+        assert [axis.lines[index].get_color() for index in (1, 3, 5)] == [
+            P_MODEL_RUN_COLORS[p_value] for p_value in (0.9, 0.7, 0.5)
+        ]
+    expected_p09_median = (
+        np.exp(-0.5 * axes[0].lines[2].get_xdata() ** 2)
+        / np.sqrt(2.0 * np.pi)
+        * 1.1
+        * 1.02
+    )
+    np.testing.assert_allclose(axes[0].lines[2].get_ydata(), expected_p09_median)
+    plt.close(figure)
+
+    selected_only = np.zeros(7, dtype=bool)
+    selected_only[[1, 3, 5]] = True
+    for path in products.values():
+        with h5py.File(path, "r+") as handle:
+            for group in handle["results"].values():
+                group["lambda/valid_bin"][...] = selected_only
+    selected_figure, _selected_axes, selected_matched = plot_increment_pdf_publication_row(
+        products
+    )
+    np.testing.assert_allclose(selected_matched, [200.0, 400.0, 600.0])
+    plt.close(selected_figure)
+    output = plot_increment_pdf_publication(
+        products,
+        selected_lags=[90.0, 330.0, 690.0],
+        output_path=tmp_path / "publication.png",
+        dpi=80,
+    )
+    assert output.is_file() and output.stat().st_size > 0

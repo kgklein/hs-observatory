@@ -27,16 +27,17 @@ field:
       field: ../gkeyll/data/ot3D_field_75.bp
       moments: ../gkeyll/data/ot3D_ion_75.bp
 
-    # Packed Gkeyll CartGridField conventions for this dataset. The ion
-    # components are already bulk velocity; set momentum_density only for files
-    # that truly store n*u.
+    # Packed Gkeyll CartGridField conventions. The ion file stores Euler
+    # variables: mass density rho_i and momentum density rho_i*u.
     layout:
       field_variable: CartGridField
       moments_variable: CartGridField
       B_components: [3, 4, 5]
       density_component: 0
+      density_representation: mass_density
+      density_mass: 100.0
       momentum_components: [1, 2, 3]
-      velocity_representation: velocity
+      velocity_representation: momentum_density
 
     coordinates:
       units: rho_p
@@ -55,12 +56,27 @@ field:
       v: total
       B: total
 
-    # Convert provider values to cm^-3, km/s, and nT. The reference BP density
-    # has mean 100 in code units, so 0.05 maps it to 5 cm^-3.
+    # Convert provider values to cm^-3, km/s, and nT.
+    #
+    # Density: the BP ion component 0 is mass density rho_i, not number density.
+    # With density_representation: mass_density and density_mass: 100, the loader
+    # first converts rho_i -> n_i = rho_i / 100. The resulting code number
+    # density has mean about 1, so n: 5 maps the reference state to 5 cm^-3.
+    #
+    # Magnetic field: the code guide field is Bz ~= 0.2. B: 25 maps that guide
+    # field to 5 nT.
+    #
+    # Velocity: the BP ion components 1,2,3 are momentum density rho_i*u, so the
+    # loader first computes code velocity u = (rho_i*u) / rho_i. To preserve the
+    # Alfvenic relation after choosing physical n and B scales, map one code
+    # Alfven speed B_code/sqrt(rho_code) to B_phys/sqrt(mu0*m_p*n_phys):
+    #
+    #   v_scale = (B_scale nT) / sqrt(mu0*m_p*(n_scale cm^-3)) / 1000
+    #           ~= 2438 km/s for B_scale=25 and n_scale=5.
     scale_factors:
-      n: 0.05
-      v: 1.0
-      B: 1.0
+      n: 5.0
+      v: 2438.0
+      B: 25.0
 
 measurement:
   velocity_frame: spacecraft

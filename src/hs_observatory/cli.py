@@ -147,3 +147,45 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
     )
     print(output)
     return 0
+
+
+def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
+    """Plot three Malara cases from saved increment-PDF analysis HDF5 files."""
+
+    from hs_observatory.analysis.elsasser_increment_pdf_static import (
+        plot_increment_pdf_publication,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Plot sampled truth and MC normalized Elsasser increment PDFs"
+    )
+    parser.add_argument(
+        "--result", action="append", required=True, metavar="P=HDF5",
+        help="saved result for one p case; repeat for p=0.9, 0.7, and 0.5",
+    )
+    parser.add_argument("--output", required=True, help="output publication figure path")
+    parser.add_argument(
+        "--lags", type=float, nargs=3, default=None, metavar=("SMALL", "MEDIUM", "LARGE"),
+        help="three requested perpendicular lags in km; nearest saved bins are used",
+    )
+    parser.add_argument("--dpi", type=int, default=300)
+    args = parser.parse_args(argv)
+    results_by_p = {}
+    for specification in args.result:
+        try:
+            p_text, result_path = specification.split("=", 1)
+            p_value = float(p_text)
+        except (TypeError, ValueError) as error:
+            parser.error(f"invalid --result {specification!r}; expected P=HDF5 ({error})")
+        if p_value in results_by_p:
+            parser.error(f"duplicate --result for p={p_value:g}")
+        results_by_p[p_value] = result_path
+    output = plot_increment_pdf_publication(
+        results_by_p,
+        selected_lags=args.lags,
+        quantity="z_plus",
+        output_path=args.output,
+        dpi=args.dpi,
+    )
+    print(output)
+    return 0
