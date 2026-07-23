@@ -84,7 +84,7 @@ measurement:
 errors:
   model: observatory
   random_seed: 12345
-  n_mc: 10
+  n_mc: 50
 
   timing:
     enabled: false

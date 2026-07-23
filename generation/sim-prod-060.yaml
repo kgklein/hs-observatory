@@ -11,7 +11,7 @@ time:
   cadence_s:
     n: 0.125
     v: 0.125
-    B: 0.03125
+    B: 0.125
 
 field:
   model: simulation_sampled
