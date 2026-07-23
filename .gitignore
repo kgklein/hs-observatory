@@ -27,3 +27,4 @@ data/helioswarm_cdf/
 #helper scripts
 *.sh
 !scripts/increment_pdf_wasserstein_publication.sh
+!scripts/run_malara_prod_generation_batch.sh
