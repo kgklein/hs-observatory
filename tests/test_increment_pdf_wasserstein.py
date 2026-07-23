@@ -9,11 +9,12 @@ import pytest
 
 from hs_observatory.analysis.increment_pdf_wasserstein import (
     compute_increment_pdf_wasserstein_diagnostics,
-    gaussian_normalized_wasserstein,
+    geometric_mean_normalized_rayleigh_pdf_on_bins,
     normalize_pdf,
     pdf_to_cdf,
     plot_increment_pdf_wasserstein_publication,
-    standard_normal_pdf_on_bins,
+    rayleigh_normalized_wasserstein,
+    symmetric_pdf_difference,
     wasserstein_from_binned_pdfs,
 )
 
@@ -68,17 +69,48 @@ def test_binned_pdf_utilities_use_nonuniform_widths_and_normalize():
     assert wasserstein_from_binned_pdfs(density * 17.0, density, edges) == pytest.approx(0.0)
 
 
-def test_gaussian_reference_is_finite_range_normalized_and_tolerance_warns():
+def test_symmetric_pdf_difference_normalizes_inputs_and_omits_zero_denominator():
+    edges = np.array([0.0, 1.0, 2.0])
+    np.testing.assert_allclose(
+        symmetric_pdf_difference(np.array([1.0, 3.0]), np.array([1.0, 1.0]), edges),
+        [1.0 / 3.0, 0.2],
+    )
+    three_edges = np.array([0.0, 1.0, 2.0, 3.0])
+    difference = symmetric_pdf_difference(
+        np.array([0.0, 1.0, 1.0]),
+        np.array([0.0, 1.0, 1.0]),
+        three_edges,
+    )
+    assert np.isnan(difference[0])
+    np.testing.assert_allclose(difference[1:], 0.0)
+
+
+def test_rayleigh_reference_is_geometric_mean_and_finite_range_normalized():
     edges = np.array([0.0, 0.2, 1.0, 2.5])
-    gaussian = standard_normal_pdf_on_bins(edges)
-    assert np.sum(gaussian * np.diff(edges)) == pytest.approx(1.0)
+    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(edges)
+    assert np.sum(rayleigh * np.diff(edges)) == pytest.approx(1.0)
     centers = 0.5 * (edges[:-1] + edges[1:])
-    gaussian_on_centers = standard_normal_pdf_on_bins(centers, bins_are_edges=False)
+    rayleigh_on_centers = geometric_mean_normalized_rayleigh_pdf_on_bins(
+        centers, bins_are_edges=False
+    )
     inferred_widths = np.array([0.5, 0.825, 1.15])
-    assert np.sum(gaussian_on_centers * inferred_widths) == pytest.approx(1.0)
+    assert np.sum(rayleigh_on_centers * inferred_widths) == pytest.approx(1.0)
+
+    fine_edges = np.linspace(0.0, 8.0, 40_001)
+    fine_centers = 0.5 * (fine_edges[:-1] + fine_edges[1:])
+    fine_density = geometric_mean_normalized_rayleigh_pdf_on_bins(fine_edges)
+    log_mean = np.sum(
+        np.log(fine_centers) * fine_density * np.diff(fine_edges)
+    )
+    assert np.exp(log_mean) == pytest.approx(1.0, rel=1.0e-4)
+
+
+def test_rayleigh_normalized_wasserstein_tolerance_warns():
+    edges = np.array([0.0, 0.2, 1.0, 2.5])
+    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(edges)
     with pytest.warns(RuntimeWarning, match="at or below"):
-        value = gaussian_normalized_wasserstein(
-            gaussian, gaussian, edges, denominator_tolerance=1.0e-10
+        value = rayleigh_normalized_wasserstein(
+            rayleigh, rayleigh, edges, denominator_tolerance=1.0e-10
         )
     assert np.isnan(value)
 
@@ -99,10 +131,10 @@ def test_diagnostics_select_second_largest_per_case_and_compute_each_mc(tmp_path
     assert result["cases"]["001"]["selected_lag_index"] == 2
     assert result["cases"]["011"]["selected_lag_km"] == 401.0
     assert "021" not in result["cases"]
-    distances = result["cases"]["001"]["DW_G_by_mc"]
+    distances = result["cases"]["001"]["DW_R_by_mc"]
     assert len(distances) == 3 and all(value is not None for value in distances)
     np.testing.assert_allclose(
-        [result["cases"]["001"][key] for key in ("DW_G_p25", "DW_G_p50", "DW_G_p75")],
+        [result["cases"]["001"][key] for key in ("DW_R_p25", "DW_R_p50", "DW_R_p75")],
         np.percentile(distances, [25.0, 50.0, 75.0]),
     )
 
@@ -123,7 +155,29 @@ def test_publication_plot_and_diagnostic_files_use_saved_products(tmp_path):
     assert json.loads(json_path.read_text())["cases"]["001"]["selected_lag_km"] == 400.0
     header = csv_path.read_text().splitlines()[0]
     assert header == (
-        "case,label,lag_km,DW_G_p25,DW_G_p50,DW_G_p75,DW_G_median_pdf,"
-        "gaussian_truth_w1,n_mc_valid,n_mc_total"
+        "case,label,lag_km,DW_R_p25,DW_R_p50,DW_R_p75,DW_R_median_pdf,"
+        "rayleigh_truth_w1,n_mc_valid,n_mc_total"
     )
     assert diagnostics["cases"]["001"]["n_mc_valid"] == 3
+
+    with pytest.raises(ValueError, match="wasserstein_x_max"):
+        plot_increment_pdf_wasserstein_publication(
+            {"001": {"path": product, "label": "all errors"}},
+            output_path=tmp_path / "invalid.png",
+            wasserstein_x_max=0.0,
+            dpi=60,
+        )
+    with pytest.raises(ValueError, match="wasserstein_x_min"):
+        plot_increment_pdf_wasserstein_publication(
+            {"001": {"path": product, "label": "all errors"}},
+            output_path=tmp_path / "invalid.png",
+            wasserstein_x_min=0.0,
+            dpi=60,
+        )
+    with pytest.raises(ValueError, match="difference_y_min"):
+        plot_increment_pdf_wasserstein_publication(
+            {"001": {"path": product, "label": "all errors"}},
+            output_path=tmp_path / "invalid.png",
+            difference_y_min=0.0,
+            dpi=60,
+        )

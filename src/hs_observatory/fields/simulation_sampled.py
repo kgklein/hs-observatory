@@ -59,6 +59,7 @@ def hub_centered_coordinates(
     position_km: np.ndarray,
     box_size_km: np.ndarray,
     hub_spacecraft: int = 0,
+    reference_position_km: np.ndarray | None = None,
 ) -> np.ndarray:
     """Center the Hub initially, then preserve the formation's absolute motion.
 
@@ -77,7 +78,13 @@ def hub_centered_coordinates(
         )
     if box.shape != (3,) or np.any(box <= 0.0):
         raise ValueError("box_size_km must contain three positive lengths")
-    initial_hub = position[hub_spacecraft, 0]
+    initial_hub = (
+        position[hub_spacecraft, 0]
+        if reference_position_km is None
+        else np.asarray(reference_position_km, dtype=float)
+    )
+    if initial_hub.shape != (3,) or not np.all(np.isfinite(initial_hub)):
+        raise ValueError("reference_position_km must contain three finite coordinates")
     relative = position - initial_hub[None, None, :]
     # TODO: Add an explicit simulation-to-spacecraft coordinate rotation here.
     return np.mod(relative + 0.5 * box, box)
@@ -142,6 +149,7 @@ class SimulationSampledField(FieldModel):
         self.hub_spacecraft = int(mapping.get("hub_spacecraft", 0))
         if self.hub_spacecraft < 0:
             raise ValueError("coordinate_mapping.hub_spacecraft must be non-negative")
+        self.coordinate_mapping_reference_km: np.ndarray | None = None
 
         background = config.get("background", {})
         if not isinstance(background, dict):
@@ -186,7 +194,7 @@ class SimulationSampledField(FieldModel):
             "box_size_km": self.box_size_km.tolist(),
             "coordinate_units": coordinate_metadata,
             "coordinate_mapping_method": "hub_centered",
-            "coordinate_mapping_reference": "hub_position_at_first_sample",
+            "coordinate_mapping_reference": "nominal_hub_position_at_first_sample",
             "hub_spacecraft": self.hub_spacecraft,
             "boundary": "periodic",
             "grid_coordinates": "uniform_endpoint_excluded_[0,L)",
@@ -195,6 +203,14 @@ class SimulationSampledField(FieldModel):
             "scale_factors": self.scale_factors,
             "output_units": {"n": "cm^-3", "v": "km/s", "B": "nT"},
         }
+
+    def set_coordinate_mapping_reference(self, position_km: np.ndarray) -> None:
+        """Fix the simulation-box origin to the nominal initial Hub position."""
+
+        reference = np.asarray(position_km, dtype=float)
+        if reference.shape != (3,) or not np.all(np.isfinite(reference)):
+            raise ValueError("Simulation mapping reference must contain three finite coordinates")
+        self.coordinate_mapping_reference_km = reference.copy()
 
     def evaluate_quantity(
         self, quantity: str, time: np.ndarray, position: np.ndarray
@@ -208,7 +224,12 @@ class SimulationSampledField(FieldModel):
         time_array = np.asarray(time, dtype=float)
         if time_array.shape not in {(n_time,), (n_time, n_spacecraft)}:
             raise ValueError("time must have shape (time,) or (time, spacecraft)")
-        mapped = hub_centered_coordinates(position, self.box_size_km, self.hub_spacecraft)
+        mapped = hub_centered_coordinates(
+            position,
+            self.box_size_km,
+            self.hub_spacecraft,
+            reference_position_km=self.coordinate_mapping_reference_km,
+        )
         points_time_first = np.swapaxes(mapped, 0, 1)
         grid = getattr(self.snapshot, quantity)
         sampled = self.interpolator.sample(grid, points_time_first)

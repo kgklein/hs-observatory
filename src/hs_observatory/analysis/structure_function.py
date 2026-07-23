@@ -770,9 +770,10 @@ def _positions_for_group_member(
         # Current schema stores hidden realized spatial offsets under /errors
         # while nominal /spacecraft/r remains unchanged. For observed products,
         # reconstruct the measured spatial coordinates from position offsets
-        # when no group-specific measured-position dataset is available. Timing
-        # offsets affect field sampling time, but the generator does not advect
-        # spacecraft positions by those clock offsets.
+        # when no group-specific measured-position dataset is available. The
+        # generator also evaluates the trajectory at clock-shifted sample times,
+        # but those hidden timing displacements are not stored in nominal
+        # /spacecraft/r.
         if group_name == "observed" and not group_specific:
             if "errors/position_offset" in handle:
                 offsets = np.asarray(handle["errors/position_offset"], dtype=float)

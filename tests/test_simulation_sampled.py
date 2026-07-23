@@ -310,3 +310,71 @@ visualization:
         field_metadata = handle["metadata"].attrs["field_metadata"]
         assert "simulation_sampled" in field_metadata
         assert str(snapshot_path.resolve()) in field_metadata
+
+
+def test_timing_error_shifts_trajectory_in_fixed_simulation_box(tmp_path):
+    snapshot_path, box = _write_snapshot(tmp_path / "timing-snapshot.npy")
+    output_path = tmp_path / "timing-observations.h5"
+    config_path = tmp_path / "timing-generate.yaml"
+    config_path.write_text(
+        f"""
+spacecraft:
+  source: synthetic
+  velocity_km_s: [0.5, 0.0, 0.0]
+time:
+  t_start_s: 0.0
+  t_stop_s: 1.0
+  cadence_s: 0.5
+field:
+  model: simulation_sampled
+  background:
+    n: 0.0
+    v: [0.0, 0.0, 0.0]
+    B: [0.0, 0.0, 0.0]
+  simulation:
+    path: {snapshot_path}
+    format: npy
+    coordinates:
+      units: km
+      box_size_km: {box.tolist()}
+    coordinate_mapping: {{method: hub_centered, hub_spacecraft: 0}}
+    boundary: periodic
+    fields_are: {{n: total, v: total, B: total}}
+measurement:
+  velocity_frame: plasma
+errors:
+  random_seed: 29
+  n_mc: 1
+  time:
+    model: gaussian_constant
+    sigma_s: 0.2
+  variables:
+    n: {{model: none}}
+    v: {{model: none}}
+    B: {{model: none}}
+output:
+  path: {output_path}
+visualization:
+  enabled: false
+""",
+        encoding="utf-8",
+    )
+
+    generate_from_config(config_path)
+
+    with h5py.File(output_path) as handle:
+        time_offset = handle["errors/time_offset"][0]
+        truth = handle["truth/n"][...]
+        observed = handle["observed/n"][0]
+
+    assert np.any(time_offset != 0.0)
+    # The Hub remains inside a linear interpolation cell. Density has unit
+    # gradient along x there, so its 0.5 km/s trajectory turns the Hub clock
+    # offset directly into a 0.5 * delta_t density change. Other formation
+    # members can straddle this synthetic field's periodic discontinuity.
+    hub = 0
+    expected_hub = truth[:, hub] + 0.5 * time_offset[hub]
+    np.testing.assert_allclose(
+        observed[:, hub], expected_hub, rtol=0.0, atol=1.0e-12
+    )
+    assert not np.allclose(observed[:, hub], truth[:, hub])

@@ -27,8 +27,12 @@ For each Monte Carlo realization, clock and position offsets are drawn once per
 spacecraft and held fixed over the interval. The timing requirement is treated
 as a 12.5 ms 3-sigma value by default. The position requirement is treated as a
 2.5 km 99.73% radial 3D Gaussian contour, giving a default per-component sigma
-of about 0.665 km. Fields are sampled at the perturbed time and spacecraft
-position; nominal coordinates remain in the HDF5 coordinate datasets.
+of about 0.665 km. For each spacecraft, its trajectory is evaluated at the
+nominal sample time plus its clock offset; the position offset is then added.
+Fields are sampled at that perturbed time and position. Linear interpolation is
+used within the stored trajectory, with endpoint-velocity extrapolation for
+clock shifts beyond its first or last sample. Nominal coordinates remain in the
+HDF5 coordinate datasets.
 
 Density and velocity speed use lognormal multiplicative errors with a constant
 spacecraft bias plus a stationary exact-discrete Ornstein-Uhlenbeck component.

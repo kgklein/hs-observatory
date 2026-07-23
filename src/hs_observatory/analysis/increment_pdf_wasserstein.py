@@ -56,6 +56,29 @@ def normalize_pdf(pdf: np.ndarray, bins: np.ndarray) -> np.ndarray:
     return clean / integral
 
 
+def symmetric_pdf_difference(
+    pdf_mc: np.ndarray,
+    pdf_true: np.ndarray,
+    bins: np.ndarray,
+) -> np.ndarray:
+    """Return ``|PDF_MC - PDF_true| / |PDF_MC + PDF_true|`` bin by bin.
+
+    Both inputs are first normalized over the common finite histogram range.
+    Bins where both normalized densities are zero are returned as NaN.
+    """
+
+    mc_density = normalize_pdf(pdf_mc, bins)
+    truth_density = normalize_pdf(pdf_true, bins)
+    numerator = np.abs(mc_density - truth_density)
+    denominator = np.abs(mc_density + truth_density)
+    return np.divide(
+        numerator,
+        denominator,
+        out=np.full(numerator.shape, np.nan),
+        where=denominator > 0.0,
+    )
+
+
 def pdf_to_cdf(pdf: np.ndarray, bins: np.ndarray) -> np.ndarray:
     """Convert a binned density to its normalized right-edge CDF values."""
 
@@ -365,12 +388,25 @@ def plot_increment_pdf_wasserstein_publication(
     denominator_tolerance: float = 1.0e-12,
     case_order: str = "supplied",
     all_errors_case: str = "001",
+    difference_y_min: float = 1.0e-4,
+    wasserstein_x_min: float = 1.0e-3,
+    wasserstein_x_max: float | None = 0.2,
     dpi: int = 300,
 ) -> tuple[Path, dict[str, Any]]:
-    """Create the two-panel figure entirely from saved increment-PDF products."""
+    """Create the three-panel figure entirely from saved increment-PDF products."""
 
     import matplotlib.pyplot as plt
 
+    if wasserstein_x_max is not None and (
+        not np.isfinite(wasserstein_x_max) or wasserstein_x_max <= 0.0
+    ):
+        raise ValueError("wasserstein_x_max must be a finite positive value or null")
+    if not np.isfinite(wasserstein_x_min) or wasserstein_x_min <= 0.0:
+        raise ValueError("wasserstein_x_min must be a finite positive value")
+    if wasserstein_x_max is not None and wasserstein_x_min >= wasserstein_x_max:
+        raise ValueError("wasserstein_x_min must be less than wasserstein_x_max")
+    if not np.isfinite(difference_y_min) or difference_y_min <= 0.0:
+        raise ValueError("difference_y_min must be a finite positive value")
     configured: dict[str, Any] = {}
     for raw_case, value in results_by_case.items():
         case = str(raw_case)
@@ -394,10 +430,13 @@ def plot_increment_pdf_wasserstein_publication(
         if isinstance(configured[case]["path"], Mapping):
             loaded[case] = dict(configured[case]["path"])
 
-    figure, (pdf_axis, distance_axis) = plt.subplots(
-        1, 2, figsize=(11.5, 5.2), gridspec_kw={"width_ratios": [1.45, 1.0]}
+    figure, (pdf_axis, difference_axis, distance_axis) = plt.subplots(
+        1,
+        3,
+        figsize=(16.3, 5.2),
+        gridspec_kw={"width_ratios": [1.45, 1.2, 1.0]},
     )
-    figure.subplots_adjust(left=0.08, right=0.98, bottom=0.16, top=0.88, wspace=0.38)
+    figure.subplots_adjust(left=0.055, right=0.985, bottom=0.16, top=0.88, wspace=0.32)
     colors = plt.cm.tab10(np.linspace(0.0, 0.9, max(1, len(loaded))))
     color_by_case = {case: colors[index] for index, case in enumerate(loaded)}
 
@@ -442,6 +481,18 @@ def plot_increment_pdf_wasserstein_publication(
             linestyle="--" if emphasized else "-", linewidth=2.2 if emphasized else 1.15,
             alpha=1.0 if emphasized else 0.82, label=entry["label"], zorder=4 if emphasized else 2,
         )
+        case_truth = product["truth_density"][index]
+        difference = symmetric_pdf_difference(median, case_truth, product["x_edges"])
+        difference_selected = np.isfinite(difference) & (difference > 0.0)
+        difference_axis.plot(
+            product["x_centers"][difference_selected],
+            difference[difference_selected],
+            color=color,
+            linestyle="--" if emphasized else "-",
+            linewidth=2.2 if emphasized else 1.15,
+            alpha=1.0 if emphasized else 0.82,
+            zorder=4 if emphasized else 2,
+        )
 
     lag_km = reference_entry["selected_lag_km"]
     lag_label = f"{lag_km:,.0f}" if lag_km >= 1_000 else f"{lag_km:.3g}"
@@ -456,6 +507,20 @@ def plot_increment_pdf_wasserstein_publication(
     pdf_axis.grid(True, which="both", alpha=0.17)
     pdf_axis.legend(frameon=False, fontsize=8)
 
+    difference_axis.set_title("(b) Symmetric PDF difference")
+    difference_axis.set_xlabel(
+        r"$\delta z^+_\perp / \exp[\langle\ln(\delta z^+_\perp)\mid"
+        r"\lambda_\perp\rangle]$"
+    )
+    difference_axis.set_ylabel(
+        r"$|\mathrm{PDF}_{MC}-\mathrm{PDF}_{true}|/"
+        r"|\mathrm{PDF}_{MC}+\mathrm{PDF}_{true}|$"
+    )
+    difference_axis.set_xscale("linear")
+    difference_axis.set_yscale("log")
+    difference_axis.set_ylim(bottom=difference_y_min)
+    difference_axis.grid(True, which="both", alpha=0.17)
+
     ordered = _case_order(diagnostics, case_order)
     for position, case in enumerate(ordered):
         entry = diagnostics["cases"][case]
@@ -464,18 +529,39 @@ def plot_increment_pdf_wasserstein_publication(
             continue
         lower, median, upper = (float(value) for value in values)
         emphasized = case == all_errors_case
+        if median <= 0.0:
+            distance_axis.plot(
+                wasserstein_x_min,
+                position,
+                marker="<",
+                linestyle="none",
+                color=color_by_case[case],
+                markersize=7 if emphasized else 6,
+                clip_on=False,
+                zorder=3,
+            )
+            continue
         distance_axis.errorbar(
             median, position, xerr=[[median - lower], [upper - median]], fmt="o",
             color=color_by_case[case], markersize=7 if emphasized else 5,
             elinewidth=2.2 if emphasized else 1.4, capsize=3, zorder=3,
         )
-    distance_axis.axvline(1.0, color="0.35", linestyle="--", linewidth=1.2, zorder=0)
+    if wasserstein_x_max is None or wasserstein_x_max >= 1.0:
+        distance_axis.axvline(1.0, color="0.35", linestyle="--", linewidth=1.2, zorder=0)
     distance_axis.set_yticks(range(len(ordered)))
     distance_axis.set_yticklabels([diagnostics["cases"][case]["label"] for case in ordered])
     distance_axis.invert_yaxis()
     distance_axis.set_xlabel(r"$D_W^R$")
-    distance_axis.set_title("(b) PDF mismatch by error case")
-    distance_axis.grid(True, axis="x", alpha=0.2)
+    distance_axis.set_title(
+        "(c) PDF mismatch by error case\n"
+        rf"$\lambda_\perp={lag_label}\,\mathrm{{km}}$"
+    )
+    distance_axis.set_xscale("log")
+    if wasserstein_x_max is not None:
+        distance_axis.set_xlim(wasserstein_x_min, wasserstein_x_max)
+    else:
+        distance_axis.set_xlim(left=wasserstein_x_min)
+    distance_axis.grid(True, axis="x", which="both", alpha=0.2)
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -581,5 +667,12 @@ def plot_increment_pdf_wasserstein_from_config(config_path: str | Path) -> tuple
         denominator_tolerance=float(config.get("denominator_tolerance", 1.0e-12)),
         case_order=str(config.get("case_order", "supplied")),
         all_errors_case=str(config.get("all_errors_case", "001")),
+        difference_y_min=float(config.get("difference_y_min", 1.0e-4)),
+        wasserstein_x_min=float(config.get("wasserstein_x_min", 1.0e-3)),
+        wasserstein_x_max=(
+            None
+            if config.get("wasserstein_x_max", 0.2) is None
+            else float(config.get("wasserstein_x_max", 0.2))
+        ),
         dpi=int(config.get("dpi", 300)),
     )

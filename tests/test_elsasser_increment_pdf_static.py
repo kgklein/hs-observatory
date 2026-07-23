@@ -21,6 +21,9 @@ from hs_observatory.analysis.elsasser_increment_pdf_static import (
     plot_increment_pdf_publication,
     plot_increment_pdf_publication_row,
 )
+from hs_observatory.analysis.increment_pdf_wasserstein import (
+    geometric_mean_normalized_rayleigh_pdf_on_bins,
+)
 from hs_observatory.analysis.registry import list_analyses
 from hs_observatory.analysis.structure_function import P_MODEL_RUN_COLORS
 from hs_observatory.cli import analyze_main
@@ -436,8 +439,14 @@ def test_increment_pdf_publication_uses_saved_products_and_selects_lags(tmp_path
     for axis in axes:
         assert axis.get_xscale() == "linear"
         assert axis.get_yscale() == "log"
-        assert len(axis.lines) == 7  # Gaussian plus truth/median for all three p cases.
+        assert len(axis.lines) == 7  # Rayleigh plus truth/median for all three p cases.
         assert len(axis.collections) == 3
+        np.testing.assert_allclose(
+            axis.lines[0].get_ydata(),
+            geometric_mean_normalized_rayleigh_pdf_on_bins(
+                np.linspace(0.0, 5.0, 31)
+            ),
+        )
         assert [axis.lines[index].get_color() for index in (1, 3, 5)] == [
             P_MODEL_RUN_COLORS[p_value] for p_value in (0.9, 0.7, 0.5)
         ]

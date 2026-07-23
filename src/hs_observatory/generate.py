@@ -83,6 +83,100 @@ def _spacecraft_on_time_axes(
     return result
 
 
+def _trajectory_positions_at_times(
+    configuration: SpacecraftConfiguration,
+    target_time: np.ndarray,
+) -> np.ndarray:
+    """Interpolate a spacecraft trajectory at spacecraft-specific times.
+
+    ``target_time`` has shape ``(time, spacecraft)`` and the returned positions
+    retain the trajectory convention ``(spacecraft, time, xyz)``. Values just
+    outside the nominal interval are linearly extrapolated using stored endpoint
+    velocities when available, or endpoint secants otherwise. This is required
+    for clock offsets at the first and last measurement samples.
+    """
+
+    target = np.asarray(target_time, dtype=float)
+    nominal_time = np.asarray(configuration.time, dtype=float)
+    position = np.asarray(configuration.position, dtype=float)
+    n_spacecraft, n_time, _ = position.shape
+    if target.shape != (n_time, n_spacecraft):
+        raise ValueError(
+            f"target_time must have shape {(n_time, n_spacecraft)}; got {target.shape}"
+        )
+    if not np.all(np.isfinite(target)):
+        raise ValueError("target_time contains non-finite values")
+    if nominal_time.size > 1 and np.any(np.diff(nominal_time) <= 0.0):
+        raise ValueError("Spacecraft trajectory time must be strictly increasing")
+
+    shifted = np.empty_like(position)
+    velocity = configuration.velocity
+    for spacecraft_index in range(n_spacecraft):
+        sample_time = target[:, spacecraft_index]
+        for component in range(3):
+            values = position[spacecraft_index, :, component]
+            if nominal_time.size == 1:
+                shifted_values = np.full(n_time, values[0], dtype=float)
+                if velocity is not None:
+                    shifted_values += (
+                        sample_time - nominal_time[0]
+                    ) * velocity[spacecraft_index, 0, component]
+                elif np.any(sample_time != nominal_time[0]):
+                    raise ValueError(
+                        "Cannot shift a one-sample trajectory without spacecraft velocity"
+                    )
+            else:
+                shifted_values = np.interp(sample_time, nominal_time, values)
+                left_slope = (
+                    velocity[spacecraft_index, 0, component]
+                    if velocity is not None
+                    else (values[1] - values[0]) / (nominal_time[1] - nominal_time[0])
+                )
+                right_slope = (
+                    velocity[spacecraft_index, -1, component]
+                    if velocity is not None
+                    else (values[-1] - values[-2])
+                    / (nominal_time[-1] - nominal_time[-2])
+                )
+                before = sample_time < nominal_time[0]
+                after = sample_time > nominal_time[-1]
+                shifted_values[before] = values[0] + left_slope * (
+                    sample_time[before] - nominal_time[0]
+                )
+                shifted_values[after] = values[-1] + right_slope * (
+                    sample_time[after] - nominal_time[-1]
+                )
+            shifted[spacecraft_index, :, component] = shifted_values
+    return shifted
+
+
+def _trajectory_velocities_at_times(
+    configuration: SpacecraftConfiguration,
+    target_time: np.ndarray,
+) -> np.ndarray | None:
+    """Interpolate stored spacecraft velocity at spacecraft-specific times."""
+
+    if configuration.velocity is None:
+        return None
+    target = np.asarray(target_time, dtype=float)
+    nominal_time = np.asarray(configuration.time, dtype=float)
+    velocity = np.asarray(configuration.velocity, dtype=float)
+    n_spacecraft, n_time, _ = velocity.shape
+    if target.shape != (n_time, n_spacecraft):
+        raise ValueError(
+            f"target_time must have shape {(n_time, n_spacecraft)}; got {target.shape}"
+        )
+    shifted = np.empty_like(velocity)
+    for spacecraft_index in range(n_spacecraft):
+        for component in range(3):
+            shifted[spacecraft_index, :, component] = np.interp(
+                target[:, spacecraft_index],
+                nominal_time,
+                velocity[spacecraft_index, :, component],
+            )
+    return shifted
+
+
 def _has_configured_errors(config: dict) -> bool:
     if observatory_errors_enabled(config):
         return True
@@ -179,6 +273,10 @@ def generate_from_config(
     time = _time_axes(config["time"])
     spacecraft = _spacecraft_on_time_axes(config["spacecraft"], time)
     field = field_from_config(config["field"])
+    set_mapping_reference = getattr(field, "set_coordinate_mapping_reference", None)
+    if callable(set_mapping_reference):
+        hub_spacecraft = int(getattr(field, "hub_spacecraft", 0))
+        set_mapping_reference(spacecraft["n"].position[hub_spacecraft, 0])
     velocity_frame = str(
         config.get("measurement", {}).get("velocity_frame", "spacecraft")
     ).lower()
@@ -245,10 +343,11 @@ def generate_from_config(
         sampled = np.empty((n_mc, *truth[quantity].shape), dtype=float)
         for mc_index in range(n_mc):
             # The coordinate offsets are constant over this spacecraft's whole
-            # time series. Nominal time/position remain unchanged in the file.
+            # time series. Nominal time/position remain unchanged in the file,
+            # while field sampling follows the trajectory to the shifted clock time.
             sampled_time = time[quantity][:, None] + time_offset[mc_index][None, :]
             sampled_position = (
-                spacecraft[quantity].position
+                _trajectory_positions_at_times(spacecraft[quantity], sampled_time)
                 + position_offset[mc_index][:, None, :]
             )
             sampled[mc_index] = _evaluate_quantity_with_progress(
@@ -260,8 +359,11 @@ def generate_from_config(
                 label=f"sampled {quantity} MC {mc_index + 1}/{n_mc}",
             )
             if quantity == "v" and velocity_frame == "spacecraft":
-                assert spacecraft_velocity_time_first is not None
-                sampled[mc_index] -= spacecraft_velocity_time_first
+                shifted_spacecraft_velocity = _trajectory_velocities_at_times(
+                    spacecraft[quantity], sampled_time
+                )
+                assert shifted_spacecraft_velocity is not None
+                sampled[mc_index] -= np.swapaxes(shifted_spacecraft_velocity, 0, 1)
         sampled_by_quantity[quantity] = sampled
 
     if use_observatory_errors:
@@ -362,6 +464,9 @@ def generate_from_config(
         "velocity_truth_frame": "plasma",
         "velocity_observed_frame": velocity_frame,
         "velocity_error_applied_frame": velocity_frame,
+        "timing_sampling_policy": (
+            "trajectory_evaluated_at_nominal_time_plus_spacecraft_clock_offset"
+        ),
         "truth_visualization_velocity_frame": truth_visualization_velocity_frame,
         "visualization_enabled": visualization_enabled,
         "truth_plot_path": str(truth_plot_path) if visualization_enabled else "null",

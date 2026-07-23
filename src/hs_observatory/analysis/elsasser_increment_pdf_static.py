@@ -233,9 +233,10 @@ def _read_positions(
     Observed fields are sampled at nominal spacecraft positions plus the
     selected MC ``/errors/position_offset``.  When requested and available, use
     that same perturbed spatial coordinate for observed lambda binning so
-    knowledge error propagates into the scale-conditioned PDFs.  Timing offsets
-    affect field sampling time in the generator, but the current generator does
-    not advect spacecraft positions by those clock offsets.
+    knowledge error propagates into the scale-conditioned PDFs. The generator
+    also evaluates the trajectory at each clock-shifted sample time, although
+    those hidden timing displacements are not stored in nominal
+    ``/spacecraft/r``.
     """
 
     with h5py.File(input_path, "r") as handle:
