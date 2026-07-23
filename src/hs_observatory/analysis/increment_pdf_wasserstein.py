@@ -77,34 +77,53 @@ def wasserstein_from_binned_pdfs(
     return float(np.sum(np.abs(pdf_to_cdf(first, bins) - pdf_to_cdf(second, bins)) * widths))
 
 
-def standard_normal_pdf_on_bins(
+def geometric_mean_normalized_rayleigh_pdf_on_bins(
     bins: np.ndarray, *, bins_are_edges: bool = True
 ) -> np.ndarray:
-    """Evaluate and finite-range normalize the standard normal on edges or centers."""
+    """Return the finite-range-normalized Rayleigh density on histogram bins.
+
+    The saved perpendicular-increment PDFs use the magnitude of a two-component
+    vector divided by its geometric mean.  For isotropic zero-mean Gaussian
+    components, that normalized magnitude has density
+
+    ``2 exp(-gamma) x exp[-exp(-gamma) x**2]`` for ``x >= 0``,
+
+    where ``gamma`` is the Euler-Mascheroni constant.  Bin-average densities are
+    computed from the analytic CDF before normalization over the saved finite
+    histogram range.
+    """
 
     values = np.asarray(bins, dtype=float)
     n_pdf = values.size - 1 if bins_are_edges else values.size
-    centers, _widths = _bin_geometry(values, n_pdf)
-    density = np.exp(-0.5 * centers**2) / np.sqrt(2.0 * np.pi)
+    centers, widths = _bin_geometry(values, n_pdf)
+    edges = np.concatenate(
+        ([centers[0] - 0.5 * widths[0]], centers + 0.5 * widths)
+    )
+    positive_edges = np.maximum(edges, 0.0)
+    rate = np.exp(-np.euler_gamma)
+    cdf = 1.0 - np.exp(-rate * positive_edges**2)
+    density = np.diff(cdf) / widths
     return normalize_pdf(density, values)
 
 
-def gaussian_normalized_wasserstein(
+def rayleigh_normalized_wasserstein(
     pdf_case: np.ndarray,
     pdf_true: np.ndarray,
     bins: np.ndarray,
     *,
     denominator_tolerance: float = 1.0e-12,
 ) -> float:
-    """Return W1(case, truth) / W1(standard normal, truth)."""
+    """Return W1(case, truth) / W1(normalized Rayleigh, truth)."""
 
     if denominator_tolerance < 0.0:
         raise ValueError("denominator_tolerance must be non-negative")
-    gaussian = standard_normal_pdf_on_bins(np.asarray(bins, dtype=float))
-    denominator = wasserstein_from_binned_pdfs(gaussian, pdf_true, bins)
+    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(
+        np.asarray(bins, dtype=float)
+    )
+    denominator = wasserstein_from_binned_pdfs(rayleigh, pdf_true, bins)
     if denominator <= denominator_tolerance:
         warnings.warn(
-            "Gaussian-to-truth Wasserstein distance is at or below the configured "
+            "Rayleigh-to-truth Wasserstein distance is at or below the configured "
             "tolerance; returning NaN",
             RuntimeWarning,
             stacklevel=2,
@@ -144,7 +163,7 @@ def compute_increment_pdf_wasserstein_diagnostics(
     denominator_tolerance: float = 1.0e-12,
     reference_case: str = "001",
 ) -> dict[str, Any]:
-    """Compute per-MC Gaussian-normalized W1 diagnostics from saved products.
+    """Compute per-MC Rayleigh-normalized W1 diagnostics from saved products.
 
     Missing products and unusable cases are warned about and skipped. The target
     lag comes from ``reference_case`` (or the first available case), while each
@@ -216,9 +235,9 @@ def compute_increment_pdf_wasserstein_diagnostics(
                 f"Case {case}: non-finite truth PDF bins at {lag_km:g} km are treated as zero",
                 messages,
             )
-        gaussian = standard_normal_pdf_on_bins(bins)
+        rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(bins)
         try:
-            denominator = wasserstein_from_binned_pdfs(gaussian, truth, bins)
+            denominator = wasserstein_from_binned_pdfs(rayleigh, truth, bins)
         except ValueError as error:
             _warn(f"Skipping case {case}: invalid truth PDF at {lag_km:g} km ({error})", messages)
             continue
@@ -227,7 +246,7 @@ def compute_increment_pdf_wasserstein_diagnostics(
         member_warnings: list[str] = []
         if denominator <= denominator_tolerance:
             message = (
-                f"Case {case}: Gaussian-to-truth Wasserstein distance {denominator:.3g} "
+                f"Case {case}: Rayleigh-to-truth Wasserstein distance {denominator:.3g} "
                 f"is at or below tolerance {denominator_tolerance:.3g}; normalized "
                 "distances are NaN"
             )
@@ -273,12 +292,12 @@ def compute_increment_pdf_wasserstein_diagnostics(
             "label": labels[case],
             "selected_lag_km": lag_km,
             "selected_lag_index": lag_index,
-            "gaussian_truth_w1": float(denominator),
-            "DW_G_by_mc": [_diagnostic_number(value) for value in distances],
-            "DW_G_p25": _diagnostic_number(p25),
-            "DW_G_p50": _diagnostic_number(p50),
-            "DW_G_p75": _diagnostic_number(p75),
-            "DW_G_median_pdf": _diagnostic_number(median_pdf_distance),
+            "rayleigh_truth_w1": float(denominator),
+            "DW_R_by_mc": [_diagnostic_number(value) for value in distances],
+            "DW_R_p25": _diagnostic_number(p25),
+            "DW_R_p50": _diagnostic_number(p50),
+            "DW_R_p75": _diagnostic_number(p75),
+            "DW_R_median_pdf": _diagnostic_number(median_pdf_distance),
             "n_mc_total": len(distances),
             "n_mc_valid": int(finite.size),
             "warnings": member_warnings,
@@ -321,11 +340,11 @@ def _case_order(diagnostics: Mapping[str, Any], order: str) -> list[str]:
         return sorted(
             cases,
             key=lambda case: (
-                not np.isfinite(diagnostics["cases"][case]["DW_G_p50"]),
+                not np.isfinite(diagnostics["cases"][case]["DW_R_p50"]),
                 (
                     np.inf
-                    if not np.isfinite(diagnostics["cases"][case]["DW_G_p50"])
-                    else diagnostics["cases"][case]["DW_G_p50"]
+                    if not np.isfinite(diagnostics["cases"][case]["DW_R_p50"])
+                    else diagnostics["cases"][case]["DW_R_p50"]
                 ),
             ),
         )
@@ -389,8 +408,16 @@ def plot_increment_pdf_wasserstein_publication(
     x_edges = reference_product["x_edges"]
     x = reference_product["x_centers"]
     truth = normalize_pdf(reference_product["truth_density"][reference_index], x_edges)
-    gaussian = standard_normal_pdf_on_bins(x_edges)
-    pdf_axis.plot(x, gaussian, color="0.45", linestyle="--", linewidth=1.2, label="standard normal", zorder=0)
+    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(x_edges)
+    pdf_axis.plot(
+        x,
+        rayleigh,
+        color="0.45",
+        linestyle="--",
+        linewidth=1.2,
+        label="normalized Rayleigh",
+        zorder=0,
+    )
     pdf_axis.plot(x, truth, color="black", linestyle="-", linewidth=2.3, label="sampled truth", zorder=5)
 
     for case, product in loaded.items():
@@ -432,7 +459,7 @@ def plot_increment_pdf_wasserstein_publication(
     ordered = _case_order(diagnostics, case_order)
     for position, case in enumerate(ordered):
         entry = diagnostics["cases"][case]
-        values = [entry["DW_G_p25"], entry["DW_G_p50"], entry["DW_G_p75"]]
+        values = [entry["DW_R_p25"], entry["DW_R_p50"], entry["DW_R_p75"]]
         if not np.all(np.isfinite(values)):
             continue
         lower, median, upper = (float(value) for value in values)
@@ -446,7 +473,7 @@ def plot_increment_pdf_wasserstein_publication(
     distance_axis.set_yticks(range(len(ordered)))
     distance_axis.set_yticklabels([diagnostics["cases"][case]["label"] for case in ordered])
     distance_axis.invert_yaxis()
-    distance_axis.set_xlabel(r"$D_W^G$")
+    distance_axis.set_xlabel(r"$D_W^R$")
     distance_axis.set_title("(b) PDF mismatch by error case")
     distance_axis.grid(True, axis="x", alpha=0.2)
 
@@ -488,8 +515,8 @@ def write_increment_pdf_wasserstein_csv(
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     columns = [
-        "case", "label", "lag_km", "DW_G_p25", "DW_G_p50", "DW_G_p75",
-        "DW_G_median_pdf", "gaussian_truth_w1", "n_mc_valid", "n_mc_total",
+        "case", "label", "lag_km", "DW_R_p25", "DW_R_p50", "DW_R_p75",
+        "DW_R_median_pdf", "rayleigh_truth_w1", "n_mc_valid", "n_mc_total",
     ]
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns)
@@ -499,11 +526,11 @@ def write_increment_pdf_wasserstein_csv(
                 "case": case,
                 "label": entry["label"],
                 "lag_km": entry["selected_lag_km"],
-                "DW_G_p25": entry["DW_G_p25"],
-                "DW_G_p50": entry["DW_G_p50"],
-                "DW_G_p75": entry["DW_G_p75"],
-                "DW_G_median_pdf": entry["DW_G_median_pdf"],
-                "gaussian_truth_w1": entry["gaussian_truth_w1"],
+                "DW_R_p25": entry["DW_R_p25"],
+                "DW_R_p50": entry["DW_R_p50"],
+                "DW_R_p75": entry["DW_R_p75"],
+                "DW_R_median_pdf": entry["DW_R_median_pdf"],
+                "rayleigh_truth_w1": entry["rayleigh_truth_w1"],
                 "n_mc_valid": entry["n_mc_valid"],
                 "n_mc_total": entry["n_mc_total"],
             })

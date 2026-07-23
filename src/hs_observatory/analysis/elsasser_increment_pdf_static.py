@@ -1029,6 +1029,9 @@ def plot_increment_pdf_publication_row(
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
 
+    from hs_observatory.analysis.increment_pdf_wasserstein import (
+        geometric_mean_normalized_rayleigh_pdf_on_bins,
+    )
     from hs_observatory.analysis.structure_function import P_MODEL_RUN_COLORS
 
     if quantity != "z_plus":
@@ -1050,15 +1053,18 @@ def plot_increment_pdf_publication_row(
             raise ValueError("all supplied axes must belong to the same figure")
 
     for axis, lag_index, lag_km in zip(axes_array, lag_indices, matched_lags):
-        all_x = np.concatenate([product["x_centers"] for _p, product in cases])
-        finite_x = all_x[np.isfinite(all_x)]
-        gaussian_x = np.linspace(float(np.min(finite_x)), float(np.max(finite_x)), 500)
-        gaussian = np.exp(-0.5 * gaussian_x**2) / np.sqrt(2.0 * np.pi)
-        visible_gaussian = gaussian >= 1.0e-6
+        rayleigh_x = cases[0][1]["x_centers"]
+        rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(
+            cases[0][1]["x_edges"]
+        )
         axis.plot(
-            gaussian_x[visible_gaussian], gaussian[visible_gaussian], color="0.25",
-            linestyle=":", linewidth=1.15,
-            alpha=0.8, zorder=0,
+            rayleigh_x,
+            rayleigh,
+            color="0.25",
+            linestyle=":",
+            linewidth=1.15,
+            alpha=0.8,
+            zorder=0,
         )
         for p_value, product in cases:
             color = P_MODEL_RUN_COLORS[p_value]
@@ -1067,7 +1073,7 @@ def plot_increment_pdf_publication_row(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 lower, median, upper = np.nanpercentile(
-                    product["mc_density"][:, lag_index], [25.0, 50.0, 75.0], axis=0
+                    product["mc_density"][:, lag_index], [5.0, 50.0, 95.0], axis=0
                 )
             band = np.isfinite(lower) & np.isfinite(upper) & (lower > 0.0) & (upper > 0.0)
             axis.fill_between(
@@ -1102,8 +1108,15 @@ def plot_increment_pdf_publication_row(
     meaning_handles = [
         Line2D([0], [0], color="0.2", linestyle="-", linewidth=1.65, label="sampled truth"),
         Line2D([0], [0], color="0.2", linestyle="--", linewidth=1.55, label="MC median"),
-        Patch(facecolor="0.35", alpha=0.18, edgecolor="none", label="MC 25th–75th"),
-        Line2D([0], [0], color="0.25", linestyle=":", linewidth=1.15, label="standard normal"),
+        Patch(facecolor="0.35", alpha=0.18, edgecolor="none", label="MC 5th–95th"),
+        Line2D(
+            [0],
+            [0],
+            color="0.25",
+            linestyle=":",
+            linewidth=1.15,
+            label="normalized Rayleigh",
+        ),
     ]
     figure.legend(
         handles=case_handles + meaning_handles, loc="upper center", bbox_to_anchor=(0.5, 0.985),
