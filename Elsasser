@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JOBS="${1:-6}"
+
+exec systemd-inhibit \
+  --what=sleep:idle \
+  --mode=block \
+  --who="hs-observatory" \
+  --why="Running Elsasser increment analyses" \
+  "${ROOT}/scripts/run_elsasser_increment_publication_batch.sh" "${JOBS}"
