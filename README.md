@@ -245,6 +245,11 @@ density/speed bias plus OU noise, transverse velocity angular precision,
 magnetic DC offsets, merged-product colored magnetic AC noise, and independent
 constant B/V alignment rotations. The updated plume example uses this model:
 
+Each observatory error section accepts `sigma_level: 2` or `sigma_level: 3`
+(the default) alongside a neutral, unit-specific `requirement_*` value. Levels
+may be mixed between sections. Existing `requirement_3sigma_*` configuration
+keys remain supported as 3-sigma compatibility aliases.
+
 ```bash
 hsobs-generate configs/example_generate_plume_single_mode.yaml
 ```

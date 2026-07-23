@@ -8,8 +8,8 @@ if [[ ! -x "${PLOTTER}" ]]; then
 fi
 
 "${PLOTTER}" \
-  --malara "${ROOT}/outputs/synthetic_observations_malara_observatory.h5" \
-  --simulation "${ROOT}/outputs/synthetic_observations_simulation_sampled_observatory.h5" \
+  --malara "${ROOT}/outputs/malara-prod-101.h5" \
+  --simulation "${ROOT}/outputs/sim-prod-100.h5" \
   --output "${ROOT}/figs/figure2_timeseries.png" \
   --input-units repo \
   --velocity-frame plasma \

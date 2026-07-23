@@ -2,8 +2,8 @@
 
 The functions in this module operate in the package's native units:
 time in seconds, position in km, density in cm^-3, velocity in km/s, and
-magnetic field in nT.  Requirement values are interpreted as 3-sigma values
-unless a function docstring states otherwise.
+magnetic field in nT. Requirement values carry a section-local ``sigma_level``
+of either 2 or 3.
 """
 
 from __future__ import annotations
@@ -18,17 +18,20 @@ import numpy as np
 DEFAULT_OBSERVATORY_ERROR_CONFIG: dict[str, Any] = {
     "timing": {
         "enabled": True,
-        "requirement_3sigma_ms": 12.5,
+        "requirement_ms": 12.5,
+        "sigma_level": 3,
         "model": "constant_per_spacecraft",
     },
     "position": {
         "enabled": True,
-        "requirement_3sigma_magnitude_km": 2.5,
+        "requirement_magnitude_km": 2.5,
+        "sigma_level": 3,
         "model": "isotropic_3d_gaussian_position_error",
     },
     "density": {
         "enabled": True,
-        "requirement_3sigma_fraction": 0.06,
+        "requirement_fraction": 0.06,
+        "sigma_level": 3,
         "model": "multiplicative_bias_plus_ou",
         "bias_variance_fraction": 0.5,
         "ou_variance_fraction": 0.5,
@@ -36,7 +39,8 @@ DEFAULT_OBSERVATORY_ERROR_CONFIG: dict[str, Any] = {
     },
     "velocity_speed": {
         "enabled": True,
-        "requirement_3sigma_fraction": 0.03,
+        "requirement_fraction": 0.03,
+        "sigma_level": 3,
         "model": "multiplicative_bias_plus_ou",
         "bias_variance_fraction": 0.5,
         "ou_variance_fraction": 0.5,
@@ -44,19 +48,22 @@ DEFAULT_OBSERVATORY_ERROR_CONFIG: dict[str, Any] = {
     },
     "velocity_angle": {
         "enabled": True,
-        "requirement_3sigma_deg": 0.25,
+        "requirement_deg": 0.25,
+        "sigma_level": 3,
         "model": "transverse_ou_rotation",
         "ou_correlation_time_s": 1.0,
     },
     "magnetic_dc": {
         "enabled": True,
-        "requirement_3sigma_nT_per_axis": 0.15,
+        "requirement_nT_per_axis": 0.15,
+        "sigma_level": 3,
         "model": "constant_per_axis_offset",
     },
     "magnetic_ac": {
         "enabled": True,
         "model": "colored_gaussian_noise_merged_product",
-        "requirement_interpretation": "3sigma_total_vector_asd",
+        "requirement_interpretation": "total_vector_asd",
+        "sigma_level": 3,
         "component_distribution": "uniform",
         "anchors": [
             {"frequency_Hz": 0.001, "asd_pT_per_sqrtHz": 1500.0},
@@ -67,9 +74,20 @@ DEFAULT_OBSERVATORY_ERROR_CONFIG: dict[str, Any] = {
     },
     "alignment": {
         "enabled": True,
-        "requirement_3sigma_deg_per_axis": 3.0,
+        "requirement_deg_per_axis": 3.0,
+        "sigma_level": 3,
         "model": "independent_constant_rotation_B_and_V",
     },
+}
+
+_LEGACY_REQUIREMENT_KEYS = {
+    "timing": ("requirement_3sigma_ms", "requirement_ms"),
+    "position": ("requirement_3sigma_magnitude_km", "requirement_magnitude_km"),
+    "density": ("requirement_3sigma_fraction", "requirement_fraction"),
+    "velocity_speed": ("requirement_3sigma_fraction", "requirement_fraction"),
+    "velocity_angle": ("requirement_3sigma_deg", "requirement_deg"),
+    "magnetic_dc": ("requirement_3sigma_nT_per_axis", "requirement_nT_per_axis"),
+    "alignment": ("requirement_3sigma_deg_per_axis", "requirement_deg_per_axis"),
 }
 
 
@@ -117,13 +135,75 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
         for key, value in user.items()
         if key in DEFAULT_OBSERVATORY_ERROR_CONFIG
     }
-    return _deep_merge(DEFAULT_OBSERVATORY_ERROR_CONFIG, relevant)
+    canonical: dict[str, Any] = {}
+    for section_name, section_value in relevant.items():
+        if not isinstance(section_value, Mapping):
+            canonical[section_name] = section_value
+            continue
+        section = dict(section_value)
+        if section_name in _LEGACY_REQUIREMENT_KEYS:
+            legacy_key, canonical_key = _LEGACY_REQUIREMENT_KEYS[section_name]
+            if legacy_key in section:
+                if canonical_key in section:
+                    raise ValueError(
+                        f"{section_name} cannot specify both {legacy_key} and "
+                        f"{canonical_key}"
+                    )
+                if "sigma_level" in section and int(section["sigma_level"]) != 3:
+                    raise ValueError(
+                        f"{section_name}.{legacy_key} implies sigma_level 3"
+                    )
+                section[canonical_key] = section.pop(legacy_key)
+                section["sigma_level"] = 3
+        if section_name == "magnetic_ac":
+            interpretation = section.get("requirement_interpretation")
+            if interpretation == "3sigma_total_vector_asd":
+                if "sigma_level" in section and int(section["sigma_level"]) != 3:
+                    raise ValueError(
+                        "magnetic_ac.3sigma_total_vector_asd implies sigma_level 3"
+                    )
+                section["requirement_interpretation"] = "total_vector_asd"
+                section["sigma_level"] = 3
+            elif interpretation not in {None, "total_vector_asd"}:
+                raise ValueError(
+                    "magnetic_ac.requirement_interpretation must be "
+                    "'total_vector_asd'"
+                )
+        canonical[section_name] = section
+    merged = _deep_merge(DEFAULT_OBSERVATORY_ERROR_CONFIG, canonical)
+    for section_name, section in merged.items():
+        sigma_level = int(section["sigma_level"])
+        if sigma_level not in {2, 3} or sigma_level != section["sigma_level"]:
+            raise ValueError(f"{section_name}.sigma_level must be 2 or 3")
+        section["sigma_level"] = sigma_level
+    return merged
+
+
+def sigma_from_requirement(value: float, sigma_level: int) -> float:
+    """Convert a symmetric requirement at 2 or 3 sigma to one deviation."""
+
+    level = int(sigma_level)
+    if level not in {2, 3} or level != sigma_level:
+        raise ValueError("sigma_level must be 2 or 3")
+    return float(value) / level
 
 
 def sigma_from_3sigma(value: float) -> float:
     """Convert a symmetric 3-sigma requirement to one standard deviation."""
 
-    return float(value) / 3.0
+    return sigma_from_requirement(value, 3)
+
+
+def component_sigma_from_3d_radial_requirement(
+    radius: float, sigma_level: int
+) -> float:
+    """Return component sigma for a 2σ or 3σ isotropic radial contour."""
+
+    level = int(sigma_level)
+    if level not in {2, 3} or level != sigma_level:
+        raise ValueError("sigma_level must be 2 or 3")
+    probability = 0.9545 if level == 2 else 0.9973
+    return _component_sigma_from_3d_radial_probability(radius, probability)
 
 
 def component_sigma_from_3d_radial_3sigma(
@@ -136,14 +216,20 @@ def component_sigma_from_3d_radial_3sigma(
     A small bisection fallback is used for other probabilities.
     """
 
-    radius_3sigma = float(radius_3sigma)
+    return _component_sigma_from_3d_radial_probability(radius_3sigma, probability)
+
+
+def _component_sigma_from_3d_radial_probability(
+    radius: float, probability: float
+) -> float:
+    radius = float(radius)
     probability = float(probability)
-    if radius_3sigma < 0:
-        raise ValueError("radius_3sigma must be non-negative")
+    if radius < 0:
+        raise ValueError("radius must be non-negative")
     if not 0.0 < probability < 1.0:
         raise ValueError("probability must lie between 0 and 1")
     if np.isclose(probability, 0.9973):
-        return radius_3sigma / 3.762
+        return radius / 3.762
 
     def cdf(x: float) -> float:
         return float(
@@ -158,7 +244,7 @@ def component_sigma_from_3d_radial_3sigma(
             lo = mid
         else:
             hi = mid
-    return radius_3sigma / (0.5 * (lo + hi))
+    return radius / (0.5 * (lo + hi))
 
 
 def generate_ou_process(
@@ -344,7 +430,9 @@ def _apply_multiplicative_bias_ou(
     requirement_key: str,
     rng: np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    sigma_total = sigma_from_3sigma(float(section[requirement_key]))
+    sigma_total = sigma_from_requirement(
+        float(section[requirement_key]), int(section["sigma_level"])
+    )
     sigma_bias, sigma_ou = _variance_partition(section, sigma_total)
     n_mc, n_times, n_spacecraft = sampled.shape
     bias = rng.normal(scale=sigma_bias, size=(n_mc, n_spacecraft))
@@ -365,7 +453,7 @@ def magnetic_asd_total(
     anchors: list[Mapping[str, Any]],
     extrapolation: str = "continue_last_loglog_slope",
 ) -> np.ndarray:
-    """Evaluate the total-vector 3-sigma magnetic ASD in pT/sqrt(Hz)."""
+    """Evaluate the configured total-vector magnetic ASD in pT/sqrt(Hz)."""
 
     freq = np.asarray(frequency, dtype=float)
     if np.any(freq < 0):
@@ -400,14 +488,25 @@ def magnetic_asd_total(
 def magnetic_component_asd_1sigma_nT(
     frequency: np.ndarray, section: Mapping[str, Any]
 ) -> np.ndarray:
-    """Convert 3-sigma total-vector pT ASD to 1-sigma component nT ASD."""
+    """Convert total-vector requirement ASD to one-sigma component nT ASD."""
 
     total_pT = magnetic_asd_total(
         frequency,
         list(section["anchors"]),
         str(section.get("extrapolate_above_10Hz", "continue_last_loglog_slope")),
     )
-    return total_pT / (3.0 * np.sqrt(3.0)) * 1.0e-3
+    interpretation = section.get(
+        "requirement_interpretation", "3sigma_total_vector_asd"
+    )
+    legacy = interpretation == "3sigma_total_vector_asd"
+    if interpretation not in {"total_vector_asd", "3sigma_total_vector_asd"}:
+        raise ValueError(
+            "requirement_interpretation must be 'total_vector_asd'"
+        )
+    if legacy and section.get("sigma_level", 3) != 3:
+        raise ValueError("3sigma_total_vector_asd implies sigma_level 3")
+    sigma_level = 3 if legacy else section.get("sigma_level", 3)
+    return total_pT / (float(sigma_level) * np.sqrt(3.0)) * 1.0e-3
 
 
 def generate_colored_noise_from_asd(
@@ -504,7 +603,7 @@ def apply_observatory_measurement_errors(
     if cfg["density"].get("enabled", True):
         n_obs, n_bias, n_log_error = _apply_multiplicative_bias_ou(
             n_sampled, np.asarray(time["n"], dtype=float), cfg["density"],
-            "requirement_3sigma_fraction", rng
+            "requirement_fraction", rng
         )
     else:
         n_obs = n_sampled.copy()
@@ -521,7 +620,7 @@ def apply_observatory_measurement_errors(
         speed = np.linalg.norm(v_work, axis=-1)
         speed_obs, v_bias, v_log_error = _apply_multiplicative_bias_ou(
             speed, np.asarray(time["v"], dtype=float), cfg["velocity_speed"],
-            "requirement_3sigma_fraction", rng
+            "requirement_fraction", rng
         )
         scale = np.divide(speed_obs, speed, out=np.ones_like(speed), where=speed > 0.0)
         v_work = v_work * scale[..., None]
@@ -532,7 +631,10 @@ def apply_observatory_measurement_errors(
     errors["velocity_speed_log_error"] = v_log_error
     if cfg["velocity_angle"].get("enabled", True):
         sigma_angle = np.deg2rad(
-            sigma_from_3sigma(float(cfg["velocity_angle"]["requirement_3sigma_deg"]))
+            sigma_from_requirement(
+                float(cfg["velocity_angle"]["requirement_deg"]),
+                cfg["velocity_angle"]["sigma_level"],
+            )
         )
         v_work, alpha, beta = apply_transverse_angular_ou(
             v_work,
@@ -550,7 +652,10 @@ def apply_observatory_measurement_errors(
     n_mc = v_sampled.shape[0]
     n_spacecraft = v_sampled.shape[2]
     align_sigma = np.deg2rad(
-        sigma_from_3sigma(float(cfg["alignment"]["requirement_3sigma_deg_per_axis"]))
+        sigma_from_requirement(
+            float(cfg["alignment"]["requirement_deg_per_axis"]),
+            cfg["alignment"]["sigma_level"],
+        )
     )
     if cfg["alignment"].get("enabled", True):
         v_align_rotvec = rng.normal(scale=align_sigma, size=(n_mc, n_spacecraft, 3))
@@ -579,8 +684,9 @@ def apply_observatory_measurement_errors(
     b_sampled = np.asarray(sampled["B"], dtype=float)
     b_work = b_sampled.copy()
     if cfg["magnetic_dc"].get("enabled", True):
-        dc_sigma = sigma_from_3sigma(
-            float(cfg["magnetic_dc"]["requirement_3sigma_nT_per_axis"])
+        dc_sigma = sigma_from_requirement(
+            float(cfg["magnetic_dc"]["requirement_nT_per_axis"]),
+            cfg["magnetic_dc"]["sigma_level"],
         )
         dc = rng.normal(scale=dc_sigma, size=(b_sampled.shape[0], b_sampled.shape[2], 3))
         b_work = b_work + dc[:, None, :, :]

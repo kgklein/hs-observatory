@@ -4,6 +4,25 @@ The `errors.model: observatory` generation path implements a HelioSwarm-like
 requirement-driven error model in package-native units: seconds, km, cm^-3,
 km/s, and nT.
 
+Each error section has a `sigma_level` of `2` or `3` (default `3`). Its
+unit-specific `requirement_*` value is divided by that level to obtain the
+one-sigma width. This permits mixed requirements, for example:
+
+```yaml
+errors:
+  model: observatory
+  timing:
+    requirement_ms: 12.5
+    sigma_level: 3
+  density:
+    requirement_fraction: 0.04
+    sigma_level: 2
+```
+
+The legacy `requirement_3sigma_*` keys remain accepted as 3-sigma inputs.
+They cannot be combined with their neutral replacement or with
+`sigma_level: 2`.
+
 For each Monte Carlo realization, clock and position offsets are drawn once per
 spacecraft and held fixed over the interval. The timing requirement is treated
 as a 12.5 ms 3-sigma value by default. The position requirement is treated as a
@@ -27,6 +46,11 @@ The magnetic AC anchors are interpreted as 3-sigma total-vector ASD values in
 pT/sqrt(Hz). They are converted to one-sigma per-component nT/sqrt(Hz) by
 dividing by `3 * sqrt(3)` and by 1000. Log-log slopes are used between anchors,
 and the final slope continues above 10 Hz.
+
+More generally, magnetic AC anchors use `requirement_interpretation:
+total_vector_asd` and are divided by `sigma_level * sqrt(3)`. Position
+requirements use the matching isotropic 3D radial confidence contour: 95.45%
+for 2 sigma and 99.73% for 3 sigma.
 
 The generator writes sampled errors under `/errors`, including:
 

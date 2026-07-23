@@ -1,0 +1,162 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-08-25T12:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [105.0, 2.0, 245.0]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: simulation_sampled
+
+  background:
+    n: 5.0
+    v: [400.0, 0.0, 0.0]
+    B: [0.0, 0.0, 5.0]
+
+  simulation:
+    format: bp
+    sources:
+      field: ../gkeyll/data/ot3D_field_75.bp
+      moments: ../gkeyll/data/ot3D_ion_75.bp
+
+    # Packed Gkeyll CartGridField conventions. The ion file stores Euler
+    # variables: mass density rho_i and momentum density rho_i*u.
+    layout:
+      field_variable: CartGridField
+      moments_variable: CartGridField
+      B_components: [3, 4, 5]
+      density_component: 0
+      density_representation: mass_density
+      density_mass: 100.0
+      momentum_components: [1, 2, 3]
+      velocity_representation: momentum_density
+
+    coordinates:
+      units: rho_p
+      box_size_rho_p: [314.15926, 314.15926, 1570.79632]
+      rho_p_km: 100.0
+
+    coordinate_mapping:
+      # Put H at box center at t_start, then retain the formation translation.
+      method: hub_centered
+      hub_spacecraft: 0
+
+    boundary: periodic
+
+    fields_are:
+      n: total
+      v: fluctuation
+      B: total
+
+    # Convert provider values to cm^-3, km/s, and nT.
+    #
+    # Density: the BP ion component 0 is mass density rho_i, not number density.
+    # With density_representation: mass_density and density_mass: 100, the loader
+    # first converts rho_i -> n_i = rho_i / 100. The resulting code number
+    # density has mean about 1, so n: 5 maps the reference state to 5 cm^-3.
+    #
+    # Magnetic field: the code guide field is Bz ~= 0.2. B: 25 maps that guide
+    # field to 5 nT.
+    #
+    # Velocity: the BP ion components 1,2,3 are momentum density rho_i*u, so the
+    # loader first computes code velocity u = (rho_i*u) / rho_i. To preserve the
+    # Alfvenic relation after choosing physical n and B scales, map one code
+    # Alfven speed B_code/sqrt(rho_code) to B_phys/sqrt(mu0*m_p*n_phys):
+    #
+    #   v_scale = (B_scale nT) / sqrt(mu0*m_p*(n_scale cm^-3)) / 1000
+    #           ~= 2438 km/s for B_scale=25 and n_scale=5.
+    scale_factors:
+      n: 5.0
+      v: 2438.0
+      B: 25.0
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  model: observatory
+  random_seed: 12345
+  n_mc: 10
+
+  timing:
+    enabled: false
+    requirement_ms: 12.5
+    sigma_level: 3
+    model: constant_per_spacecraft
+
+  position:
+    enabled: false
+    requirement_magnitude_km: 2.5
+    sigma_level: 3
+    model: isotropic_3d_gaussian_position_error
+
+  density:
+    enabled: true
+    requirement_fraction: 0.06
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_speed:
+    enabled: false
+    requirement_fraction: 0.03
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_angle:
+    enabled: false
+    requirement_deg: 0.25
+    sigma_level: 2
+    model: transverse_ou_rotation
+    ou_correlation_time_s: 300.0
+
+  magnetic_dc:
+    enabled: false
+    requirement_nT_per_axis: 0.15
+    sigma_level: 3
+    model: constant_per_axis_offset
+
+  magnetic_ac:
+    enabled: false
+    model: colored_gaussian_noise_merged_product
+    requirement_interpretation: total_vector_asd
+    sigma_level: 3
+    component_distribution: uniform
+    anchors:
+      - {frequency_Hz: 0.001, asd_pT_per_sqrtHz: 1500.0}
+      - {frequency_Hz: 1.0, asd_pT_per_sqrtHz: 15.0}
+      - {frequency_Hz: 10.0, asd_pT_per_sqrtHz: 1.5}
+    extrapolate_above_10Hz: continue_last_loglog_slope
+
+  alignment:
+    enabled: false
+    requirement_deg_per_axis: 3.0
+    sigma_level: 3
+    model: independent_constant_rotation_B_and_V
+
+output:
+  path: outputs/sim-prod-130.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  alfven_enabled: true
+  alfven_fluctuations: true
+  truth_velocity_frame: spacecraft
+  truth_path: outputs/sim-prod-130_truth.png
+  geometry_path: outputs/sim-prod-130_geometry.png
+  alfven_path: outputs/sim-prod-130_alfven.png
+  dpi: 150
