@@ -20,7 +20,7 @@ structure_function:
     random_seed: 12345
   min_order: 1
   max_order: 6
-  n_lambda_bins: 10
+  n_lambda_bins: 9
   lambda_bins_km: null
   scale_ranges_km:
     total: [500.0, 2000.0]
