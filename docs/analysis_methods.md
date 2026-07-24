@@ -153,6 +153,15 @@ The product distinguishes four quantities:
 - `measured`: realization-level results from stored observed fields, position
   offsets, and timing offsets after linear synchronization.
 
+Coarse truth defaults to `truth.coarse_average_method: fft`. For each static
+configuration size, this applies a periodic spherical top-hat convolution to
+the simulation grid and trilinearly samples the convolved field along the
+barycenter trajectory. It exactly matches direct grid-node averaging when the
+barycenter lies on a grid node; off-grid centers interpolate between those
+grid-centered averages. The original per-barycenter grid-node selection
+remains available as `truth.coarse_average_method: direct`, including for
+time-varying configuration sizes.
+
 The primary solenoidal diagnostic is
 `abs(divergence) / curl_magnitude`. A configuration-specific denominator
 floor defaults to one percent of the median coarse-truth curl magnitude.

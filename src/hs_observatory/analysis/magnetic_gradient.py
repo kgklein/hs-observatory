@@ -420,6 +420,66 @@ def periodic_spherical_average(
     return np.mean(selected, axis=0), int(len(selected)), wrapped
 
 
+def periodic_spherical_average_fft(
+    grid: np.ndarray,
+    centers: np.ndarray,
+    radius: float,
+    box_size: Sequence[float],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sample a periodic spherical top-hat convolution at arbitrary centers.
+
+    The convolution is exact for spheres centered on grid nodes.  Values at
+    off-grid centers are obtained by periodic trilinear interpolation of that
+    convolved grid.
+    """
+
+    values = np.asarray(grid, dtype=float)
+    points = np.asarray(centers, dtype=float)
+    box = np.asarray(box_size, dtype=float)
+    if values.ndim < 3 or points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("grid and centers must have shapes (nx,ny,nz,...) and (n,3)")
+    if box.shape != (3,) or np.any(box <= 0.0) or radius < 0.0:
+        raise ValueError("invalid periodic grid, centers, radius, or box size")
+    if not np.all(np.isfinite(points)):
+        raise ValueError("centers contain non-finite values")
+
+    shape = np.asarray(values.shape[:3], dtype=int)
+    spacing = box / shape
+    offsets_squared = []
+    for count, step in zip(shape, spacing):
+        indices = np.arange(count)
+        offsets_squared.append((np.minimum(indices, count - indices) * step) ** 2)
+    xy_squared = offsets_squared[0][:, None] + offsets_squared[1][None, :]
+    mask = np.empty(tuple(shape), dtype=bool)
+    threshold = radius**2 * (1.0 + 32.0 * np.finfo(float).eps)
+    for z_index, z_squared in enumerate(offsets_squared[2]):
+        mask[:, :, z_index] = xy_squared + z_squared <= threshold
+    count = int(np.count_nonzero(mask))
+    if count == 0:
+        output = np.full((len(points), *values.shape[3:]), np.nan)
+        return output, np.zeros(len(points), dtype=np.int64), np.zeros(len(points), dtype=bool)
+
+    kernel = mask.astype(float)
+    kernel /= float(count)
+    kernel_spectrum = np.fft.rfftn(kernel, axes=(0, 1, 2))
+    flat_values = values.reshape((*shape, -1))
+    sampled = np.empty((len(points), flat_values.shape[-1]), dtype=float)
+    interpolator = PeriodicTrilinearInterpolator(box)
+    for component in range(flat_values.shape[-1]):
+        spectrum = np.fft.rfftn(flat_values[..., component], axes=(0, 1, 2))
+        spectrum *= kernel_spectrum
+        convolved = np.fft.irfftn(spectrum, s=tuple(shape), axes=(0, 1, 2))
+        sampled[:, component] = interpolator.sample(convolved, points)
+
+    mapped = np.mod(points, box)
+    wrapped = np.any((mapped < radius) | (mapped + radius >= box), axis=1)
+    return (
+        sampled.reshape((len(points), *values.shape[3:])),
+        np.full(len(points), count, dtype=np.int64),
+        wrapped,
+    )
+
+
 def select_configurations(
     positions: np.ndarray,
     *,
@@ -515,6 +575,9 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("Only the repository's Q/chi shape metric is currently available")
     if int(truth.get("derivative_order", 2)) != 2:
         raise ValueError("magnetic_gradient.truth.derivative_order must be 2")
+    coarse_average_method = str(truth.get("coarse_average_method", "fft")).lower()
+    if coarse_average_method not in {"direct", "fft"}:
+        raise ValueError("magnetic_gradient.truth.coarse_average_method must be direct or fft")
     if str(ratio.get("denominator", "curl_magnitude")) != "curl_magnitude":
         raise ValueError("divergence_ratio.denominator must be curl_magnitude")
     floor_fraction = float(ratio.get("floor_fraction_of_median_truth", 0.01))
@@ -561,6 +624,7 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         "truth": {
             "pointwise_barycenter": bool(truth.get("pointwise_barycenter", True)),
             "derivative_order": int(truth.get("derivative_order", 2)),
+            "coarse_average_method": coarse_average_method,
         },
         "ratio_floor_fraction": floor_fraction,
         "store_all_realizations": bool(monte_carlo.get("store_all_realizations", True)),
@@ -735,6 +799,7 @@ def _truth_products(
     gradient_grid: np.ndarray,
     true_positions: np.ndarray,
     geometry: Mapping[str, Any],
+    average_method: str,
 ) -> dict[str, np.ndarray]:
     barycenter = np.asarray(geometry["barycenter"])
     initial_hub = np.asarray(true_positions[0, 0], dtype=float)
@@ -749,14 +814,23 @@ def _truth_products(
     coarse_gradient = np.full_like(point_gradient, np.nan)
     cell_count = np.zeros(len(mapped), dtype=np.int64)
     wrapped = np.zeros(len(mapped), dtype=bool)
-    for time_index, (center, size) in enumerate(
-        zip(mapped, np.asarray(geometry["characteristic_size"]))
-    ):
-        coarse_gradient[time_index], cell_count[time_index], wrapped[time_index] = (
-            periodic_spherical_average(
-                gradient_grid, center, 0.5 * float(size), field_model.box_size_km
+    sizes = np.asarray(geometry["characteristic_size"], dtype=float)
+    if average_method == "fft":
+        if not np.allclose(sizes, sizes[0], rtol=1.0e-10, atol=1.0e-8):
+            raise ValueError(
+                "FFT coarse truth requires static configuration size; "
+                "use truth.coarse_average_method: direct for time-varying geometry"
             )
+        coarse_gradient, cell_count, wrapped = periodic_spherical_average_fft(
+            gradient_grid, mapped, 0.5 * float(sizes[0]), field_model.box_size_km
         )
+    else:
+        for time_index, (center, size) in enumerate(zip(mapped, sizes)):
+            coarse_gradient[time_index], cell_count[time_index], wrapped[time_index] = (
+                periodic_spherical_average(
+                    gradient_grid, center, 0.5 * float(size), field_model.box_size_km
+                )
+            )
     return {
         "coarse_gradient": coarse_gradient,
         "point_gradient": point_gradient,
@@ -885,6 +959,12 @@ def compute_magnetic_gradient_analysis(
     truth_metadata: dict[str, Any] = {
         "simulation_snapshots_used": 1,
         "derivative_method": "second-order centered finite difference",
+        "coarse_average_method": settings["truth"]["coarse_average_method"],
+        "coarse_average_interpolation": (
+            "periodic trilinear after grid-node convolution"
+            if settings["truth"]["coarse_average_method"] == "fft"
+            else "none; direct grid-node selection at each barycenter"
+        ),
         "native_gradient_used": False,
         "simulation_grid_shape": list(magnetic_grid.shape[:3]),
         "box_size_km": simulation.box_size_km.tolist(),
@@ -905,7 +985,11 @@ def compute_magnetic_gradient_analysis(
             )
         )
         truth = _truth_products(
-            simulation, simulation_gradient, true_positions, geometry
+            simulation,
+            simulation_gradient,
+            true_positions,
+            geometry,
+            settings["truth"]["coarse_average_method"],
         )
         floor = _truth_derived(truth, settings["ratio_floor_fraction"])
         true_estimate = _estimate_series(positions, fields, settings["gradient"])
@@ -1362,6 +1446,9 @@ def plot_magnetic_gradient_product(
             4, len(categories), figsize=(4.4 * len(categories), 12.0), squeeze=False, sharex=True
         )
         row_values: list[list[np.ndarray]] = [[] for _ in range(4)]
+        # Values used to choose display limits.  In particular, do not let
+        # near-zero coarse-truth divergence/curl ratios compress the estimates.
+        row_scale_values: list[list[np.ndarray]] = [[] for _ in range(4)]
         truth_color = "#111111"
         true_color = SPACECRAFT_COLORS["H"]
         measured_color = SPACECRAFT_COLORS["N1"]
@@ -1404,6 +1491,7 @@ def plot_magnetic_gradient_product(
                     values = np.asarray(true[quantity], dtype=float)
                 axis.plot(time, values, color=true_color, linewidth=1.1, label="true estimate")
                 row_values[row].append(values)
+                row_scale_values[row].append(values)
                 if summary is not None and quantity in summary:
                     q25 = np.asarray(summary[f"{quantity}/q25"], dtype=float)
                     median = np.asarray(summary[f"{quantity}/median"], dtype=float)
@@ -1417,15 +1505,17 @@ def plot_magnetic_gradient_product(
                         label="measured median/IQR",
                     )
                     row_values[row].extend((q25, median, q75))
+                    row_scale_values[row].extend((q25, median, q75))
                 axis.set_ylabel(ylabel)
                 axis.grid(alpha=0.22)
                 if column == 0 and row == 0:
                     axis.legend(fontsize=8, frameon=False)
             axes[-1, column].set_xlabel("Time (s)")
         for row in range(4):
+            values_for_limits = row_scale_values[row] or row_values[row]
             finite_parts = [
                 value[np.isfinite(value)]
-                for value in row_values[row]
+                for value in values_for_limits
                 if np.any(np.isfinite(value))
             ]
             finite = np.concatenate(finite_parts) if finite_parts else np.asarray([])
@@ -1442,16 +1532,22 @@ def plot_magnetic_gradient_product(
                     for axis in axes[row]:
                         axis.set_yscale("log")
                     finite = positive
-            low, high = np.nanpercentile(finite, (0.5, 99.5))
+            elif row == 3 and row4 in {"affine_rms_residual", "condition_number"}:
+                positive = finite[finite > 0.0]
+                if positive.size:
+                    for axis in axes[row]:
+                        axis.set_yscale("log")
+                    finite = positive
+            is_log = axes[row, 0].get_yscale() == "log"
+            limit_values = np.log10(finite) if is_log else finite
+            low, high = np.nanpercentile(limit_values, (0.5, 99.5))
             if np.isfinite(low) and np.isfinite(high) and high > low:
                 padding = 0.05 * (high - low)
+                lower, upper = low - padding, high + padding
+                if is_log:
+                    lower, upper = 10.0**lower, 10.0**upper
                 for axis in axes[row]:
-                    lower = (
-                        max(low - padding, np.finfo(float).tiny)
-                        if axis.get_yscale() == "log"
-                        else low - padding
-                    )
-                    axis.set_ylim(lower, high + padding)
+                    axis.set_ylim(lower, upper)
         figure.suptitle("HelioSwarm Multi-Spacecraft Magnetic-Gradient Diagnostics")
         figure.tight_layout()
         output = Path(output_path)

@@ -12,6 +12,7 @@ from hs_observatory.analysis.magnetic_gradient import (
     gradient_curl_divergence,
     periodic_grid_gradient,
     periodic_spherical_average,
+    periodic_spherical_average_fft,
     select_configurations,
     plot_magnetic_gradient_product,
 )
@@ -114,6 +115,34 @@ def test_periodic_derivative_and_boundary_crossing_sphere():
         values, np.array([0.01, 1.0, 1.0]), 0.4, box
     )
     assert np.isfinite(average) and count > 0 and wrapped
+
+
+def test_fft_spherical_average_matches_direct_at_grid_centers():
+    rng = np.random.default_rng(42)
+    shape = (12, 10, 8)
+    box = np.array([6.0, 5.0, 8.0])
+    values = rng.normal(size=(*shape, 2))
+    indices = np.array([[0, 2, 3], [5, 7, 1], [11, 9, 7]])
+    centers = indices * box / np.asarray(shape)
+    fft_average, fft_count, fft_wrapped = periodic_spherical_average_fft(
+        values, centers, 1.6, box
+    )
+    for sample, center in enumerate(centers):
+        direct, count, wrapped = periodic_spherical_average(values, center, 1.6, box)
+        assert np.allclose(fft_average[sample], direct, rtol=1.0e-12, atol=1.0e-12)
+        assert fft_count[sample] == count
+        assert fft_wrapped[sample] == wrapped
+
+
+def test_fft_spherical_average_preserves_constant_field_off_grid():
+    shape = (9, 8, 7)
+    box = np.array([9.0, 8.0, 14.0])
+    values = np.broadcast_to([2.0, -4.0], (*shape, 2))
+    centers = np.array([[4.25, 4.0, 7.0], [8.8, 7.9, 13.7]])
+    average, count, wrapped = periodic_spherical_average_fft(values, centers, 2.2, box)
+    assert np.allclose(average, [2.0, -4.0])
+    assert np.all(count > 0)
+    assert not wrapped[0] and wrapped[1]
 
 
 def test_configuration_selection_uses_q_quality_and_expected_scale_ranges():

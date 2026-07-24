@@ -1,0 +1,61 @@
+analysis:
+  method: magnetic_gradient
+
+input:
+  path: outputs/sim-prod-110.h5
+
+output:
+  path: outputs/sim-prod-110_magnetic_gradients.h5
+
+magnetic_gradient:
+  use_true: true
+  use_measured: true
+
+  gradient:
+    method: least_squares
+    rcond: null
+    condition_number_max: 1.0e12
+    allow_pseudoinverse: true
+
+  time_sync:
+    method: linear
+    allow_extrapolation: false
+
+  configuration_selection:
+    shape_metric: q
+    max_q: 0.6
+    small:
+      enabled: true
+    intermediate:
+      enabled: true
+      l_min_km: 800.0
+      l_max_km: 1200.0
+    large:
+      enabled: true
+      l_min_km: 1500.0
+    all_nine:
+      enabled: true
+
+  truth:
+    pointwise_barycenter: true
+    derivative_order: 2
+    coarse_average_method: fft
+    periodic_boundaries: auto
+
+  divergence_ratio:
+    denominator: curl_magnitude
+    floor_fraction_of_median_truth: 0.01
+
+  monte_carlo:
+    percentiles: [25, 50, 75]
+    store_all_realizations: true
+
+  storage:
+    compression: gzip
+    compression_level: 4
+    chunk_time: 256
+
+  diagnostics:
+    verbose: false
+    time_index: 0
+    mc_index: 0
