@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from hs_observatory.visualization import SPACECRAFT_COLORS  # noqa: E402
 
 
-CONFIGURATION_ORDER = ("small", "intermediate", "large", "all_nine")
+CONFIGURATION_ORDER = ("small", "intermediate", "best_multi", "large", "all_nine")
 
 
 @dataclass(frozen=True)
@@ -489,12 +489,12 @@ def select_configurations(
     large_l_min_km: float = 1500.0,
     enabled: Mapping[str, bool] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Select deterministic small/intermediate/large tetrahedra and all nine."""
+    """Select deterministic tetrahedra, best 5--8 point subset, and all nine."""
 
     points = np.asarray(positions, dtype=float)
     if points.shape != (9, 3):
         raise ValueError("configuration selection requires exactly nine spacecraft")
-    use = {name: True for name in CONFIGURATION_ORDER}
+    use = {name: name != "best_multi" for name in CONFIGURATION_ORDER}
     use.update(dict(enabled or {}))
     candidates = []
     for indices in combinations(range(9), 4):
@@ -535,6 +535,26 @@ def select_configurations(
             "indices": np.asarray(indices, dtype=int),
             "geometry": geometry,
             "criterion": criterion,
+        }
+    if use["best_multi"]:
+        multi_candidates = []
+        for count in range(5, 9):
+            for indices in combinations(range(9), count):
+                geometry = geometry_diagnostics(points[np.asarray(indices)])
+                multi_candidates.append((indices, geometry))
+        indices, geometry = min(
+            multi_candidates,
+            key=lambda item: (
+                item[1].chi,
+                item[1].condition_number,
+                item[1].characteristic_size,
+                item[0],
+            ),
+        )
+        selected["best_multi"] = {
+            "indices": np.asarray(indices, dtype=int),
+            "geometry": geometry,
+            "criterion": "minimum Q among all subsets with 5 <= N <= 8",
         }
     if use["all_nine"]:
         selected["all_nine"] = {
@@ -594,8 +614,9 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
     enabled = {}
     for name in CONFIGURATION_ORDER:
         section = selection.get(name, {})
+        default_enabled = name != "best_multi"
         enabled[name] = (
-            bool(section.get("enabled", True))
+            bool(section.get("enabled", default_enabled))
             if isinstance(section, Mapping)
             else bool(section)
         )

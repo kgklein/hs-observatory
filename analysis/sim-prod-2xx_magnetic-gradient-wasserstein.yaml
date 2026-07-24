@@ -1,0 +1,25 @@
+all_errors_case: "200"
+cdf_points: 256
+dpi: 300
+
+cases:
+  "200":
+    path: outputs/sim-prod-200_magnetic_gradients.h5
+    label: all errors
+  "210":
+    path: outputs/sim-prod-210_magnetic_gradients.h5
+    label: timing
+  "220":
+    path: outputs/sim-prod-220_magnetic_gradients.h5
+    label: position
+  "260":
+    path: outputs/sim-prod-260_magnetic_gradients.h5
+    label: magnetic DC+AC
+  "270":
+    path: outputs/sim-prod-270_magnetic_gradients.h5
+    label: alignment
+
+output:
+  figure: outputs/sim-prod-2xx_magnetic_gradient_wasserstein.png
+  json: outputs/sim-prod-2xx_magnetic_gradient_wasserstein.json
+  csv: outputs/sim-prod-2xx_magnetic_gradient_wasserstein.csv

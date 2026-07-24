@@ -249,3 +249,32 @@ def plot_magnetic_gradient_main(argv: list[str] | None = None) -> int:
     )
     print(output)
     return 0
+
+
+def plot_magnetic_gradient_wasserstein_main(argv: list[str] | None = None) -> int:
+    """Plot curl-magnitude Wasserstein diagnostics from saved gradient products."""
+
+    from hs_observatory.analysis.magnetic_gradient_wasserstein import (
+        magnetic_gradient_wasserstein_from_config,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Plot magnetic-gradient curl-magnitude Wasserstein diagnostics"
+    )
+    parser.add_argument("config", help="lightweight Wasserstein comparison YAML")
+    args = parser.parse_args(argv)
+    output, diagnostics = magnetic_gradient_wasserstein_from_config(args.config)
+    print(output)
+    print(
+        "configuration,case,method_W1_norm,"
+        "measurement_W1_norm_median,total_W1_norm_median,pointwise_norm_median"
+    )
+    for category, product in diagnostics["configurations"].items():
+        for case, entry in product["cases"].items():
+            print(
+                f"{category},{case},{entry['method_w1_normalized']:.8g},"
+                f"{entry['measurement_w1_normalized']['median']:.8g},"
+                f"{entry['total_w1_normalized']['median']:.8g},"
+                f"{entry['pointwise_median_absolute_error_normalized']['median']:.8g}"
+            )
+    return 0

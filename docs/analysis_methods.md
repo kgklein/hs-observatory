@@ -175,6 +175,10 @@ Configuration selection defaults to the repository's established Q metric:
 the smallest tetrahedron with `Q <= 0.6`, the best-shaped tetrahedron in
 800--1200 km, the best-shaped tetrahedron at or above 1500 km, and all nine
 spacecraft. See `configs/example_magnetic_gradient.yaml` for all controls.
+An optional `best_multi` category selects the minimum-Q subset across every
+five-, six-, seven-, and eight-spacecraft combination. It excludes all nine
+because `all_nine` is stored as its own category. The legacy `large`
+tetrahedron selector remains independently available.
 
 ```bash
 hsobs-analyze configs/example_magnetic_gradient.yaml
@@ -187,6 +191,35 @@ the observation file or simulation and therefore cannot repeat the gradient
 or coarse-volume calculations. Its fourth row can be selected with
 `--row4 affine_rms_residual`, `condition_number`, `chi`, or `d_ep` (`d_ep`
 is currently recorded as unavailable/NaN).
+
+### Curl-magnitude Wasserstein decomposition
+
+Saved magnetic-gradient products can also be compared with the lightweight
+`hsobs-plot-magnetic-gradient-wasserstein` postprocessor. For coarse truth
+`C`, the error-free spacecraft estimate `T`, and measured MC member `M`, it
+computes empirical one-dimensional distances over their common valid times:
+
+- intrinsic method error: `W1(T, C)`;
+- measurement error: `W1(M, T)`;
+- total error: `W1(M, C)`.
+
+Raw distances use nT/km. Dimensionless distances divide all three quantities
+by the median positive coarse-truth curl magnitude for that configuration.
+Each measured distance is calculated separately for every MC member and
+reported as its median and interquartile range. A normalized pointwise median
+absolute error between `M(t)` and `T(t)` complements the distributional
+metric, which intentionally ignores temporal ordering.
+
+The isolated terms obey the Wasserstein triangle inequality but are not an
+additive error budget. Run the configured `2xx` comparison with:
+
+```bash
+scripts/plot_sim_prod_2xx_magnetic_gradient_wasserstein.sh
+```
+
+The YAML controls case labels and writes the figure plus JSON and CSV
+diagnostics. Missing case products are warned about and skipped, allowing the
+comparison to be rerun as long calculations finish.
 
 ## `rbf_reconstruction`
 

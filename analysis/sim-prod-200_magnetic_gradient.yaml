@@ -31,8 +31,10 @@ magnetic_gradient:
       l_min_km: 800.0
       l_max_km: 1200.0
     large:
-      enabled: true
+      enabled: false
       l_min_km: 1500.0
+    best_multi:
+      enabled: true
     all_nine:
       enabled: true
 

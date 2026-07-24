@@ -1,5 +1,8 @@
+from itertools import combinations
+
 import h5py
 import numpy as np
+import pytest
 import yaml
 
 from hs_observatory.analyze import analyze_from_config
@@ -159,6 +162,19 @@ def test_configuration_selection_uses_q_quality_and_expected_scale_ranges():
     assert 800.0 <= selected["intermediate"]["geometry"].characteristic_size <= 1200.0
     assert selected["large"]["geometry"].characteristic_size >= 1500.0
     assert np.array_equal(selected["all_nine"]["indices"], np.arange(9))
+
+
+def test_best_multi_selects_most_regular_five_to_eight_spacecraft_subset():
+    positions = _points(9, seed=27) * np.array([900.0, 700.0, 500.0])
+    enabled = {name: False for name in ("small", "intermediate", "large", "all_nine")}
+    enabled["best_multi"] = True
+    selected = select_configurations(positions, enabled=enabled)["best_multi"]
+    assert 5 <= len(selected["indices"]) <= 8
+    candidate_q = []
+    for count in range(5, 9):
+        for indices in combinations(range(9), count):
+            candidate_q.append(geometry_diagnostics(positions[list(indices)]).chi)
+    assert selected["geometry"].chi == pytest.approx(min(candidate_q))
 
 
 def test_static_geometry_detection_ignores_translation_but_not_shape_change():
