@@ -7,6 +7,7 @@ import yaml
 
 from hs_observatory.analyze import analyze_from_config
 from hs_observatory.analysis.magnetic_gradient import (
+    _curl_error_decomposition,
     align_spacecraft_samples,
     divergence_curl_ratio,
     estimate_gradient_least_squares,
@@ -293,3 +294,65 @@ def test_end_to_end_hdf5_analysis_and_product_only_plot(tmp_path):
     figure_path = tmp_path / "gradient.png"
     assert plot_magnetic_gradient_product(product_path, figure_path, dpi=80) == figure_path
     assert figure_path.stat().st_size > 0
+    cropped_path = tmp_path / "gradient_cropped.png"
+    assert (
+        plot_magnetic_gradient_product(
+            product_path,
+            cropped_path,
+            start_time_s=1.0,
+            stop_time_s=3.0,
+            dpi=80,
+        )
+        == cropped_path
+    )
+    assert cropped_path.stat().st_size > 0
+    decomposition_path = tmp_path / "gradient_error_decomposition.png"
+    assert (
+        plot_magnetic_gradient_product(
+            product_path,
+            decomposition_path,
+            layout="error_decomposition",
+            start_time_s=1.0,
+            stop_time_s=3.0,
+            dpi=80,
+        )
+        == decomposition_path
+    )
+    assert decomposition_path.stat().st_size > 0
+    with h5py.File(product_path) as handle:
+        group = handle["configurations/small"]
+        selected = np.asarray([False, True, True, True, False])
+        decomposition = _curl_error_decomposition(group, selected)
+        coarse = np.asarray(group["truth/coarse_curl"])[selected]
+        ideal = np.asarray(group["true_estimate/curl"])[selected]
+        measured = np.asarray(group["measured/curl"])[:, selected]
+        normalization = np.median(np.linalg.norm(coarse, axis=-1))
+        np.testing.assert_allclose(decomposition["normalization"], normalization)
+        np.testing.assert_allclose(
+            decomposition["finite_scale_error"],
+            np.linalg.norm(ideal - coarse, axis=-1) / normalization,
+        )
+        expected_measurement = (
+            np.linalg.norm(measured - ideal[np.newaxis, :, :], axis=-1)
+            / normalization
+        )
+        np.testing.assert_allclose(
+            decomposition["measurement_error_median"],
+            np.nanpercentile(expected_measurement, 50.0, axis=0),
+        )
+    with pytest.raises(ValueError, match="greater than"):
+        plot_magnetic_gradient_product(
+            product_path,
+            cropped_path,
+            start_time_s=3.0,
+            stop_time_s=1.0,
+            dpi=80,
+        )
+    with pytest.raises(ValueError, match="contains no analysis samples"):
+        plot_magnetic_gradient_product(
+            product_path,
+            cropped_path,
+            start_time_s=100.0,
+            stop_time_s=200.0,
+            dpi=80,
+        )

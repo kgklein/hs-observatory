@@ -1034,6 +1034,38 @@ def _fit_range_index(exponents: dict[str, Any], fit_range: str | None) -> tuple[
     return names.index(selected), selected
 
 
+def structure_function_kurtosis_ylim(
+    sf_results: list[dict[str, Any] | str | Path],
+    *,
+    quantity: str = "z_plus",
+    gaussian_reference: float = 5.0 / 3.0,
+) -> tuple[float, float]:
+    """Return shared log-scale kurtosis limits for publication summaries."""
+
+    if quantity not in FIELDS:
+        raise ValueError("quantity must be 'z_plus' or 'z_minus'")
+    plotted_values: list[np.ndarray] = [np.asarray([gaussian_reference], dtype=float)]
+    for sf_result in sf_results:
+        products = _summary_result(sf_result).get("products", {})
+        if "truth" not in products or "observed" not in products:
+            raise ValueError("summary plot requires separate 'truth' and 'observed' products")
+        plotted_values.append(_flatness_from_product(products["truth"], quantity).reshape(-1))
+        observed = _flatness_from_product(products["observed"], quantity)
+        plotted_values.extend(_ensemble_interval(observed))
+    values = np.concatenate([np.asarray(value, dtype=float).reshape(-1) for value in plotted_values])
+    values = values[np.isfinite(values) & (values > 0.0)]
+    if values.size == 0:
+        raise ValueError("no positive finite kurtosis values are available")
+    lower = float(np.min(values))
+    upper = float(np.max(values))
+    if lower == upper:
+        return lower / 1.1, upper * 1.1
+    log_margin = 0.05 * (np.log(upper) - np.log(lower))
+    return float(np.exp(np.log(lower) - log_margin)), float(
+        np.exp(np.log(upper) + log_margin)
+    )
+
+
 def plot_structure_function_summary_row(
     sf_result: dict[str, Any] | str | Path,
     *,
@@ -1044,7 +1076,13 @@ def plot_structure_function_summary_row(
     quantity: str = "z_plus",
     run_label: str | None = None,
     fit_range: str | None = None,
+    fit_lambda_range_km: tuple[float, float] | None = None,
+    min_fit_bins: int | None = None,
     gaussian_reference: float = 5.0 / 3.0,
+    structure_ylim: tuple[float, float] | None = None,
+    exponent_ylim: tuple[float, float] | None = None,
+    kurtosis_ylim: tuple[float, float] | None = None,
+    show_p_model: bool = True,
     show_pair_counts: bool = False,
 ):
     """Plot one publication-style truth/MC structure-function summary row.
@@ -1065,6 +1103,38 @@ def plot_structure_function_summary_row(
         raise ValueError("p_value must be between 0 and 1")
     if max_order is not None and max_order < 1:
         raise ValueError("max_order must be positive or None")
+    if fit_lambda_range_km is not None:
+        fit_lower, fit_upper = (float(value) for value in fit_lambda_range_km)
+        if not np.isfinite(fit_lower) or not np.isfinite(fit_upper) or fit_upper <= fit_lower:
+            raise ValueError("fit_lambda_range_km must be increasing finite bounds")
+    if min_fit_bins is not None and min_fit_bins < 2:
+        raise ValueError("min_fit_bins must be at least 2")
+    if structure_ylim is not None:
+        structure_lower, structure_upper = (float(value) for value in structure_ylim)
+        if (
+            not np.isfinite(structure_lower)
+            or not np.isfinite(structure_upper)
+            or structure_lower <= 0.0
+            or structure_upper <= structure_lower
+        ):
+            raise ValueError("structure_ylim must be increasing positive finite bounds")
+    if exponent_ylim is not None:
+        exponent_lower, exponent_upper = (float(value) for value in exponent_ylim)
+        if (
+            not np.isfinite(exponent_lower)
+            or not np.isfinite(exponent_upper)
+            or exponent_upper <= exponent_lower
+        ):
+            raise ValueError("exponent_ylim must be increasing finite bounds")
+    if kurtosis_ylim is not None:
+        kurtosis_lower, kurtosis_upper = (float(value) for value in kurtosis_ylim)
+        if (
+            not np.isfinite(kurtosis_lower)
+            or not np.isfinite(kurtosis_upper)
+            or kurtosis_lower <= 0.0
+            or kurtosis_upper <= kurtosis_lower
+        ):
+            raise ValueError("kurtosis_ylim must be increasing positive finite bounds")
     products = result.get("products", {})
     if "truth" not in products or "observed" not in products:
         raise ValueError("summary plot requires separate 'truth' and 'observed' products")
@@ -1156,6 +1226,8 @@ def plot_structure_function_summary_row(
     structure_axis.set_xlabel(r"$\lambda$ [km]")
     structure_axis.set_ylabel(r"$S_n(\lambda)$")
     structure_axis.set_title("structure functions")
+    if structure_ylim is not None:
+        structure_axis.set_ylim(structure_lower, structure_upper)
     structure_axis.grid(True, which="both", alpha=0.18)
     order_legend = structure_axis.legend(
         handles=order_handles, fontsize=7.5, ncols=2, loc="upper left", title="order"
@@ -1182,12 +1254,51 @@ def plot_structure_function_summary_row(
         bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.5},
     )
 
-    truth_exponents = truth[quantity]["scaling_exponents"]
-    mc_exponents = observed[quantity]["scaling_exponents"]
-    truth_range_index, selected_range = _fit_range_index(truth_exponents, fit_range)
+    if fit_lambda_range_km is None:
+        truth_exponents = truth[quantity]["scaling_exponents"]
+        mc_exponents = observed[quantity]["scaling_exponents"]
+        selected_fit_range = fit_range
+    else:
+        selected_fit_range = "plot_refit"
+        fit_ranges = {selected_fit_range: [fit_lower, fit_upper]}
+        refit_min_bins = (
+            int(min_fit_bins)
+            if min_fit_bins is not None
+            else int(result.get("config", {}).get("min_fit_bins", 3))
+        )
+        truth_exponents = _fit_scaling_exponents(
+            truth_sf,
+            np.asarray(truth["counts"], dtype=float),
+            truth_lambda,
+            truth_orders.tolist(),
+            fit_ranges,
+            refit_min_bins,
+        )
+        mc_exponents = _fit_scaling_exponents(
+            mc_sf,
+            np.asarray(observed["counts"], dtype=float),
+            mc_lambda,
+            mc_orders.tolist(),
+            fit_ranges,
+            refit_min_bins,
+        )
+    truth_range_index, selected_range = _fit_range_index(
+        truth_exponents, selected_fit_range
+    )
     mc_range_index, mc_selected_range = _fit_range_index(mc_exponents, selected_range)
     if mc_selected_range != selected_range:  # pragma: no cover - defensive
         raise ValueError("truth and observed exponent fit ranges do not match")
+    fit_bounds = truth_exponents["scale_ranges_km"][selected_range]
+    structure_xlim = structure_axis.get_xlim()
+    structure_axis.axvspan(
+        fit_bounds[0],
+        fit_bounds[1],
+        color="0.7",
+        alpha=0.25,
+        linewidth=0,
+        zorder=0,
+    )
+    structure_axis.set_xlim(structure_xlim)
     truth_xi = np.asarray(truth_exponents["raw"], dtype=float)[0, truth_range_index]
     mc_xi = np.asarray(mc_exponents["raw"], dtype=float)[:, mc_range_index]
     exponent_orders = np.asarray(truth["orders"], dtype=int)
@@ -1216,18 +1327,21 @@ def plot_structure_function_summary_row(
         label="MC median and 5th–95th",
         zorder=4,
     )
-    prediction = 1.0 - np.log2(
-        float(p_value) ** (fitted_orders / 3.0)
-        + (1.0 - float(p_value)) ** (fitted_orders / 3.0)
-    )
-    exponent_axis.plot(
-        fitted_orders, prediction, color="black", linestyle="--", linewidth=1.25,
-        label=fr"$p$-model ($p={p_value:g}$)", zorder=2
-    )
+    if show_p_model:
+        prediction = 1.0 - np.log2(
+            float(p_value) ** (fitted_orders / 3.0)
+            + (1.0 - float(p_value)) ** (fitted_orders / 3.0)
+        )
+        exponent_axis.plot(
+            fitted_orders, prediction, color="black", linestyle="--", linewidth=1.25,
+            label=fr"$p$-model ($p={p_value:g}$)", zorder=2
+        )
     exponent_axis.set_xlabel(r"order $n$")
     exponent_axis.set_ylabel(r"$\xi_n$")
     exponent_axis.set_title("scaling exponents")
     exponent_axis.set_xticks(fitted_orders)
+    if exponent_ylim is not None:
+        exponent_axis.set_ylim(exponent_lower, exponent_upper)
     exponent_axis.grid(True, alpha=0.18)
     exponent_axis.legend(fontsize=7.5, loc="best")
 
@@ -1255,6 +1369,8 @@ def plot_structure_function_summary_row(
     flatness_axis.set_xlabel(r"$\lambda$ [km]")
     flatness_axis.set_ylabel(r"$S_4(\lambda)/[S_2(\lambda)]^2$")
     flatness_axis.set_title("kurtosis")
+    if kurtosis_ylim is not None:
+        flatness_axis.set_ylim(kurtosis_lower, kurtosis_upper)
     flatness_axis.grid(True, which="both", alpha=0.18)
     flatness_axis.legend(fontsize=7.5, loc="best")
 
@@ -1290,6 +1406,53 @@ def plot_structure_function_summary_row(
     return figure, axes_array
 
 
+def structure_function_summary_ylims(
+    sf_results: list[dict[str, Any] | str | Path],
+    *,
+    p_values: list[float] | None = None,
+    quantity: str = "z_plus",
+    max_order: int | None = 6,
+    fit_range: str | None = None,
+    fit_lambda_range_km: tuple[float, float] | None = None,
+    min_fit_bins: int | None = None,
+    gaussian_reference: float = 5.0 / 3.0,
+    show_p_model: bool = True,
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Return common y limits for the three publication-summary panels."""
+
+    import matplotlib.pyplot as plt
+
+    if not sf_results:
+        raise ValueError("at least one structure-function result is required")
+    if p_values is None:
+        p_values = [0.9] * len(sf_results)
+    if len(p_values) != len(sf_results):
+        raise ValueError("p_values must have one entry per structure-function result")
+    panel_limits: list[list[tuple[float, float]]] = [[], [], []]
+    for sf_result, p_value in zip(sf_results, p_values):
+        figure, axes = plot_structure_function_summary_row(
+            sf_result,
+            p_value=p_value,
+            quantity=quantity,
+            max_order=max_order,
+            fit_range=fit_range,
+            fit_lambda_range_km=fit_lambda_range_km,
+            min_fit_bins=min_fit_bins,
+            gaussian_reference=gaussian_reference,
+            show_p_model=show_p_model,
+        )
+        for panel_index in range(3):
+            panel_limits[panel_index].append(axes[panel_index].get_ylim())
+        plt.close(figure)
+    return tuple(
+        (
+            float(min(lower for lower, _upper in limits)),
+            float(max(upper for _lower, upper in limits)),
+        )
+        for limits in panel_limits
+    )
+
+
 def plot_structure_function_summary(
     sf_result: dict[str, Any] | str | Path,
     p_value: float = 0.9,
@@ -1300,7 +1463,13 @@ def plot_structure_function_summary(
     max_order: int | None = 6,
     run_label: str | None = None,
     fit_range: str | None = None,
+    fit_lambda_range_km: tuple[float, float] | None = None,
+    min_fit_bins: int | None = None,
     gaussian_reference: float = 5.0 / 3.0,
+    structure_ylim: tuple[float, float] | None = None,
+    exponent_ylim: tuple[float, float] | None = None,
+    kurtosis_ylim: tuple[float, float] | None = None,
+    show_p_model: bool = True,
     show_pair_counts: bool = False,
     dpi: int = 300,
 ) -> Path:
@@ -1316,7 +1485,13 @@ def plot_structure_function_summary(
         quantity=quantity,
         run_label=run_label,
         fit_range=fit_range,
+        fit_lambda_range_km=fit_lambda_range_km,
+        min_fit_bins=min_fit_bins,
         gaussian_reference=gaussian_reference,
+        structure_ylim=structure_ylim,
+        exponent_ylim=exponent_ylim,
+        kurtosis_ylim=kurtosis_ylim,
+        show_p_model=show_p_model,
         show_pair_counts=show_pair_counts,
     )
     output = Path(output_path)

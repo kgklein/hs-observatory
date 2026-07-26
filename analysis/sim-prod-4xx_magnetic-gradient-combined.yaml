@@ -1,0 +1,27 @@
+all_errors_case: "400"
+cdf_points: 256
+dpi: 300
+interval_percentiles: [5, 95]
+configuration: most_regular
+start_time_s: 150
+stop_time_s: 200
+
+cases:
+  "400":
+    path: outputs/sim-prod-400_magnetic_gradients.h5
+    label: all errors
+  "410":
+    path: outputs/sim-prod-410_magnetic_gradients.h5
+    label: timing
+  "420":
+    path: outputs/sim-prod-420_magnetic_gradients.h5
+    label: position
+  "460":
+    path: outputs/sim-prod-460_magnetic_gradients.h5
+    label: magnetic DC+AC
+  "470":
+    path: outputs/sim-prod-470_magnetic_gradients.h5
+    label: alignment
+
+output:
+  figure: outputs/sim-prod-4xx_magnetic_gradient_combined.png

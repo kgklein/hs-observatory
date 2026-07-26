@@ -1,6 +1,7 @@
 all_errors_case: "400"
 cdf_points: 256
 dpi: 300
+interval_percentiles: [5, 95]
 
 cases:
   "400":

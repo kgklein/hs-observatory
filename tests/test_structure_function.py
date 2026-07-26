@@ -15,6 +15,8 @@ from hs_observatory.analysis.structure_function import (
     plot_structure_function_diagnostic,
     plot_structure_function_summary,
     plot_structure_function_summary_row,
+    structure_function_kurtosis_ylim,
+    structure_function_summary_ylims,
 )
 
 
@@ -514,3 +516,64 @@ def test_summary_row_optionally_adds_pair_count_panel():
     np.testing.assert_allclose(axes[3].lines[0].get_ydata(), [1.0, 1.0, 1.0])
     np.testing.assert_allclose(axes[3].lines[1].get_ydata(), [1.0, 1.0, 1.0])
     plt.close(figure)
+
+
+def test_summary_row_can_refit_saved_structure_functions_and_hide_p_model():
+    import matplotlib.pyplot as plt
+
+    figure, axes = plot_structure_function_summary_row(
+        _summary_plot_result(),
+        p_value=0.9,
+        fit_lambda_range_km=(1.0, 2.0),
+        min_fit_bins=2,
+        show_p_model=False,
+    )
+
+    # Sampled truth and the MC errorbar remain, but the p-model curve is absent.
+    assert not any("model" in line.get_label() for line in axes[1].lines)
+    np.testing.assert_allclose(axes[1].lines[0].get_ydata(), np.arange(1, 8) / 3.0)
+    assert len(axes[0].patches) == 1
+    fit_box = axes[0].patches[0]
+    display_vertices = fit_box.get_transform().transform(fit_box.get_path().vertices)
+    fit_box_x = axes[0].transData.inverted().transform(display_vertices)[:, 0]
+    np.testing.assert_allclose([fit_box_x.min(), fit_box_x.max()], [1.0, 2.0])
+    plt.close(figure)
+
+
+def test_shared_kurtosis_limits_can_be_applied_to_multiple_rows():
+    import matplotlib.pyplot as plt
+
+    result = _summary_plot_result()
+    limits = structure_function_kurtosis_ylim([result, result])
+    first, first_axes = plot_structure_function_summary_row(result, kurtosis_ylim=limits)
+    second, second_axes = plot_structure_function_summary_row(result, kurtosis_ylim=limits)
+
+    np.testing.assert_allclose(first_axes[2].get_ylim(), limits)
+    np.testing.assert_allclose(second_axes[2].get_ylim(), limits)
+    plt.close(first)
+    plt.close(second)
+
+
+def test_shared_summary_limits_cover_and_align_all_three_panels():
+    import matplotlib.pyplot as plt
+
+    result = _summary_plot_result()
+    limits = structure_function_summary_ylims(
+        [result, result], p_values=[0.9, 0.7], show_p_model=False
+    )
+    figures_and_axes = [
+        plot_structure_function_summary_row(
+            result,
+            p_value=p_value,
+            structure_ylim=limits[0],
+            exponent_ylim=limits[1],
+            kurtosis_ylim=limits[2],
+            show_p_model=False,
+        )
+        for p_value in (0.9, 0.7)
+    ]
+
+    for figure, axes in figures_and_axes:
+        for panel_index, expected in enumerate(limits):
+            np.testing.assert_allclose(axes[panel_index].get_ylim(), expected)
+        plt.close(figure)

@@ -231,20 +231,41 @@ def plot_magnetic_gradient_main(argv: list[str] | None = None) -> int:
     parser.add_argument("product", help="magnetic-gradient analysis HDF5 file")
     parser.add_argument("--output", required=True, help="output figure path")
     parser.add_argument(
+        "--layout",
+        choices=("standard", "error_decomposition"),
+        default="standard",
+        help="standard diagnostics or compact curl-error decomposition",
+    )
+    parser.add_argument(
         "--row4",
-        choices=("affine_rms_residual", "condition_number", "chi", "d_ep"),
-        default="affine_rms_residual",
+        choices=("divergence", "affine_rms_residual", "condition_number", "chi", "d_ep"),
+        default="divergence",
     )
     parser.add_argument(
         "--ratio-scale", choices=("auto", "linear", "log"), default="auto"
+    )
+    parser.add_argument(
+        "--start-time",
+        type=float,
+        default=None,
+        help="first analysis time to plot, in seconds",
+    )
+    parser.add_argument(
+        "--stop-time",
+        type=float,
+        default=None,
+        help="last analysis time to plot, in seconds",
     )
     parser.add_argument("--dpi", type=int, default=300)
     args = parser.parse_args(argv)
     output = plot_magnetic_gradient_product(
         args.product,
         args.output,
+        layout=args.layout,
         row4=args.row4,
         ratio_scale=args.ratio_scale,
+        start_time_s=args.start_time,
+        stop_time_s=args.stop_time,
         dpi=args.dpi,
     )
     print(output)
@@ -277,4 +298,56 @@ def plot_magnetic_gradient_wasserstein_main(argv: list[str] | None = None) -> in
                 f"{entry['total_w1_normalized']['median']:.8g},"
                 f"{entry['pointwise_median_absolute_error_normalized']['median']:.8g}"
             )
+    return 0
+
+
+def plot_magnetic_gradient_combined_main(argv: list[str] | None = None) -> int:
+    """Plot combined time-domain and distributional curl diagnostics."""
+
+    from hs_observatory.analysis.magnetic_gradient_wasserstein import (
+        magnetic_gradient_combined_from_config,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Plot six-panel magnetic-gradient curl diagnostics"
+    )
+    parser.add_argument("config", help="combined magnetic-gradient comparison YAML")
+    parser.add_argument("--output", default=None, help="override output figure path")
+    parser.add_argument(
+        "--configuration",
+        default=None,
+        help="tetrahedron category or most_regular",
+    )
+    parser.add_argument("--start-time", type=float, default=None)
+    parser.add_argument("--stop-time", type=float, default=None)
+    parser.add_argument("--dpi", type=int, default=None)
+    args = parser.parse_args(argv)
+    output, _diagnostics, configuration = magnetic_gradient_combined_from_config(
+        args.config,
+        output_override=args.output,
+        configuration_override=args.configuration,
+        start_time_override=args.start_time,
+        stop_time_override=args.stop_time,
+        dpi_override=args.dpi,
+    )
+    print(output)
+    print(f"configuration={configuration}")
+    return 0
+
+
+def plot_magnetic_gradient_correlation_main(argv: list[str] | None = None) -> int:
+    """Plot saved magnetic-gradient correlation products without recalculation."""
+
+    from hs_observatory.analysis.magnetic_gradient_correlation import (
+        plot_magnetic_gradient_correlations_from_config,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Plot magnetic-gradient Pearson-correlation diagnostics"
+    )
+    parser.add_argument("config", help="magnetic-gradient correlation YAML")
+    args = parser.parse_args(argv)
+    outputs = plot_magnetic_gradient_correlations_from_config(args.config)
+    for name, output in outputs.items():
+        print(f"{name}={output}")
     return 0

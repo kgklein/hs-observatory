@@ -1,0 +1,65 @@
+analysis:
+  method: magnetic_gradient_correlation
+
+input:
+  path: outputs/sim-prod-400_magnetic_gradients.h5
+
+output:
+  path: outputs/sim-prod-400_magnetic_gradient_correlations.h5
+
+magnetic_gradient_correlation:
+  selection:
+    shape_metric: chi
+    max_pair_scale_ratio_warning: 2.0
+
+  correlation:
+    minimum_valid_samples: 30
+    minimum_standard_deviation: 1.0e-15
+    measured_percentiles: [5, 50, 95]
+    compute_measured_vs_coarse: true
+    compute_nrmse: true
+    compute_regression: true
+
+  bootstrap:
+    enabled: false
+
+  diagnostic:
+    configuration: most_regular_n4
+    component: [0, 0]
+    realization: 0
+
+  storage:
+    compression: gzip
+
+  diagnostics:
+    verbose: true
+
+plot:
+  heatmaps:
+    enabled: true
+    output: outputs/sim-prod-400_gradient_correlation_heatmaps.png
+    color_limits: [-1.0, 1.0]
+    annotate_values: true
+    dpi: 300
+
+  measured_vs_ideal_heatmaps:
+    enabled: true
+    output: outputs/sim-prod-400_gradient_correlation_measured_vs_ideal_heatmaps.png
+    dpi: 300
+
+  summary:
+    enabled: true
+    output: outputs/sim-prod-400_gradient_correlation_summary.png
+    dpi: 300
+
+  combined:
+    enabled: true
+    output: outputs/sim-prod-400_gradient_correlation_combined.png
+    color_limits: [-1.0, 1.0]
+    annotate_values: true
+    dpi: 300
+
+  diagnostic:
+    enabled: true
+    output: outputs/sim-prod-400_gradient_correlation_diagnostic.png
+    dpi: 200

@@ -20,6 +20,7 @@ htmlcov/
 
 # Generated observations and figures
 outputs/
+*.log
 
 # Local HelioSwarm mission data
 data/helioswarm_cdf/
@@ -29,3 +30,12 @@ data/helioswarm_cdf/
 !scripts/increment_pdf_wasserstein_publication.sh
 !scripts/run_malara_prod_generation_batch.sh
 !scripts/run_sim_prod_generation_batch.sh
+!scripts/run_sim_prod_magnetic_gradient_batch.sh
+!scripts/plot_sim_prod_400_magnetic_gradient.sh
+!scripts/plot_sim_prod_400_magnetic_gradient_error_decomposition.sh
+!scripts/plot_sim_prod_4xx_magnetic_gradient_combined.sh
+!scripts/run_sim_prod_400_magnetic_gradient_correlation.sh
+!scripts/plot_sim_prod_400_magnetic_gradient_correlation.sh
+
+analysis/*yaml~
+generation/*yaml~

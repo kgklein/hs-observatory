@@ -1,11 +1,11 @@
 # Cheap publication stage: every path below is an existing analysis product
 # produced by elsasser_increment_pdf_static, never a raw observation HDF5 file.
 p_value: 0.7
-selected_lag_km: 1600  # null selects the second-largest usable lag from case 101
+selected_lag_km: 400  # null selects the second-largest usable lag from case 101
 denominator_tolerance: 1.0e-12
 difference_y_min: 1.0e-4
 wasserstein_x_min: 0.001  # exact zeros are shown with a left-pointing boundary marker
-wasserstein_x_max: 0.2
+wasserstein_x_max: 0.5
 case_order: supplied  # or: median
 all_errors_case: "101"
 show_individual_bands: false

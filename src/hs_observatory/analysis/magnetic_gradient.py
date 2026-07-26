@@ -1438,17 +1438,290 @@ def _read_scalar_or_series(dataset: h5py.Dataset, n_time: int) -> np.ndarray:
     return np.full(n_time, float(values)) if values.ndim == 0 else values
 
 
+def _curl_error_decomposition(
+    group: h5py.Group, time_mask: np.ndarray
+) -> dict[str, np.ndarray | float]:
+    """Return finite-scale and measurement curl-vector errors.
+
+    ``C_C``, ``C_T``, and ``C_M`` denote the coarse-truth, ideal-estimate,
+    and measured-realization curl vectors, respectively.  Both error terms
+    are normalized by the median coarse-truth curl magnitude over the
+    selected plotting interval.
+    """
+
+    coarse_curl = np.asarray(group["truth/coarse_curl"], dtype=float)[time_mask]
+    ideal_curl = np.asarray(group["true_estimate/curl"], dtype=float)[time_mask]
+    coarse_magnitude = np.linalg.norm(coarse_curl, axis=-1)
+    finite_coarse_magnitude = coarse_magnitude[np.isfinite(coarse_magnitude)]
+    if not finite_coarse_magnitude.size:
+        raise ValueError(
+            "curl-error decomposition requires a finite coarse-truth curl "
+            "magnitude in the selected interval"
+        )
+    normalization = float(np.nanmedian(finite_coarse_magnitude))
+    if normalization <= 0.0:
+        raise ValueError(
+            "curl-error decomposition requires a positive median coarse-truth "
+            "curl magnitude in the selected interval"
+        )
+    finite_scale_error = np.linalg.norm(ideal_curl - coarse_curl, axis=-1)
+
+    if "measured/curl" not in group:
+        raise ValueError(
+            "curl-error decomposition requires stored measured curl realizations; "
+            "rerun the analysis with monte_carlo.store_all_realizations: true"
+        )
+    measured_curl = np.asarray(group["measured/curl"], dtype=float)[:, time_mask, :]
+    measurement_error = np.linalg.norm(
+        measured_curl - ideal_curl[np.newaxis, :, :], axis=-1
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        q25, median, q75 = np.nanpercentile(
+            measurement_error, (25.0, 50.0, 75.0), axis=0
+        )
+    return {
+        "normalization": normalization,
+        "finite_scale_error": finite_scale_error / normalization,
+        "measurement_error_q25": q25 / normalization,
+        "measurement_error_median": median / normalization,
+        "measurement_error_q75": q75 / normalization,
+    }
+
+
+def _plot_curl_error_decomposition(
+    handle: h5py.File,
+    categories: list[str],
+    full_time: np.ndarray,
+    time_mask: np.ndarray,
+    output_path: str | Path,
+    *,
+    start_time_s: float | None,
+    stop_time_s: float | None,
+    dpi: int,
+) -> Path:
+    """Plot the compact curl finite-scale/measurement-error decomposition."""
+
+    time = full_time[time_mask]
+    figure, axes = plt.subplots(
+        3,
+        len(categories),
+        figsize=(4.4 * len(categories), 9.5),
+        squeeze=False,
+        sharex=True,
+    )
+    row_values: list[list[np.ndarray]] = [[] for _ in range(3)]
+    truth_color = "#111111"
+    ideal_color = SPACECRAFT_COLORS["H"]
+    measured_color = SPACECRAFT_COLORS["N1"]
+
+    for column, category in enumerate(categories):
+        group = handle[f"configurations/{category}"]
+        truth = group["truth"]
+        ideal = group["true_estimate"]
+        summary = group.get("mc_summary")
+        if summary is None:
+            raise ValueError(
+                "curl-error decomposition requires Monte Carlo summary datasets"
+            )
+        indices = np.asarray(group["spacecraft_indices"], dtype=int).tolist()
+        ids = [
+            value.decode("utf-8") if isinstance(value, bytes) else str(value)
+            for value in group["spacecraft_ids"][...]
+        ]
+        size = _read_scalar_or_series(
+            group["geometry/characteristic_size"], len(full_time)
+        )[time_mask]
+        chi = _read_scalar_or_series(group["geometry/chi"], len(full_time))[time_mask]
+        axes[0, column].set_title(
+            f"{category.replace('_', ' ')}\n{ids} / {indices}; N={len(indices)}\n"
+            f"median L={np.nanmedian(size):.3g} km, Q={np.nanmedian(chi):.3g}",
+            fontsize=9,
+        )
+
+        coarse_magnitude = np.asarray(
+            truth["coarse_curl_magnitude"], dtype=float
+        )[time_mask]
+        ideal_magnitude = np.asarray(ideal["curl_magnitude"], dtype=float)[time_mask]
+        measured_magnitude_q25 = np.asarray(
+            summary["curl_magnitude/q25"], dtype=float
+        )[time_mask]
+        measured_magnitude_median = np.asarray(
+            summary["curl_magnitude/median"], dtype=float
+        )[time_mask]
+        measured_magnitude_q75 = np.asarray(
+            summary["curl_magnitude/q75"], dtype=float
+        )[time_mask]
+        axis = axes[0, column]
+        axis.plot(
+            time,
+            coarse_magnitude,
+            color=truth_color,
+            linewidth=1.5,
+            label="coarse truth",
+        )
+        axis.plot(
+            time,
+            ideal_magnitude,
+            color=ideal_color,
+            linewidth=1.1,
+            label="ideal estimate",
+        )
+        axis.fill_between(
+            time,
+            measured_magnitude_q25,
+            measured_magnitude_q75,
+            color=measured_color,
+            alpha=0.23,
+            linewidth=0,
+        )
+        axis.plot(
+            time,
+            measured_magnitude_median,
+            color=measured_color,
+            linewidth=1.2,
+            label="measured median/IQR",
+        )
+        row_values[0].extend(
+            (
+                coarse_magnitude,
+                ideal_magnitude,
+                measured_magnitude_q25,
+                measured_magnitude_median,
+                measured_magnitude_q75,
+            )
+        )
+
+        ideal_total_error = np.asarray(ideal["curl_l2_error"], dtype=float)[time_mask]
+        measured_total_q25 = np.asarray(
+            summary["curl_l2_error/q25"], dtype=float
+        )[time_mask]
+        measured_total_median = np.asarray(
+            summary["curl_l2_error/median"], dtype=float
+        )[time_mask]
+        measured_total_q75 = np.asarray(
+            summary["curl_l2_error/q75"], dtype=float
+        )[time_mask]
+        axis = axes[1, column]
+        axis.plot(
+            time,
+            ideal_total_error,
+            color=ideal_color,
+            linewidth=1.1,
+            label=r"ideal $|C_T-C_C|$",
+        )
+        axis.fill_between(
+            time,
+            measured_total_q25,
+            measured_total_q75,
+            color=measured_color,
+            alpha=0.23,
+            linewidth=0,
+        )
+        axis.plot(
+            time,
+            measured_total_median,
+            color=measured_color,
+            linewidth=1.2,
+            label=r"measured $|C_M-C_C|$ median/IQR",
+        )
+        row_values[1].extend(
+            (
+                ideal_total_error,
+                measured_total_q25,
+                measured_total_median,
+                measured_total_q75,
+            )
+        )
+
+        decomposition = _curl_error_decomposition(group, time_mask)
+        finite_scale_error = np.asarray(
+            decomposition["finite_scale_error"], dtype=float
+        )
+        measurement_median = np.asarray(
+            decomposition["measurement_error_median"], dtype=float
+        )
+        axis = axes[2, column]
+        axis.plot(
+            time,
+            finite_scale_error,
+            color=ideal_color,
+            linewidth=1.1,
+            label=r"$|C_T-C_C|/\mathrm{median}_t|C_C|$",
+        )
+        axis.plot(
+            time,
+            measurement_median,
+            color=measured_color,
+            linewidth=1.2,
+            label=(
+                r"$\mathrm{median}_{MC}|C_M-C_T|/"
+                r"\mathrm{median}_t|C_C|$"
+            ),
+        )
+        row_values[2].extend((finite_scale_error, measurement_median))
+
+        for row, ylabel in enumerate(
+            (
+                r"$|\nabla\times B|$ (nT/km)",
+                r"$|\Delta(\nabla\times B)|$ (nT/km)",
+                "Normalized curl-vector error",
+            )
+        ):
+            axes[row, column].set_ylabel(ylabel)
+            axes[row, column].grid(alpha=0.22)
+            if column == 0:
+                axes[row, column].legend(fontsize=7, frameon=False)
+        axes[-1, column].set_xlabel("Time (s)")
+        axes[-1, column].set_xlim(
+            left=start_time_s if start_time_s is not None else time[0],
+            right=stop_time_s if stop_time_s is not None else time[-1],
+        )
+
+    for row, values in enumerate(row_values):
+        finite_parts = [
+            value[np.isfinite(value)] for value in values if np.any(np.isfinite(value))
+        ]
+        finite = np.concatenate(finite_parts) if finite_parts else np.asarray([])
+        if not finite.size:
+            continue
+        low, high = np.nanmin(finite), np.nanmax(finite)
+        if not np.isfinite(low) or not np.isfinite(high):
+            continue
+        if high <= low:
+            high = low + max(abs(low) * 0.05, 1.0)
+        padding = 0.05 * (high - low)
+        lower = max(0.0, low - padding)
+        upper = high + padding
+        for axis in axes[row]:
+            axis.set_ylim(lower, upper)
+
+    figure.suptitle("HelioSwarm Magnetic-Gradient Curl Error Decomposition")
+    figure.tight_layout()
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=dpi, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
 def plot_magnetic_gradient_product(
     product_path: str | Path,
     output_path: str | Path,
     *,
-    row4: str = "affine_rms_residual",
+    layout: str = "standard",
+    row4: str = "divergence",
     ratio_scale: str = "auto",
+    start_time_s: float | None = None,
+    stop_time_s: float | None = None,
     dpi: int = 300,
 ) -> Path:
     """Plot a saved product without accessing observations or simulation data."""
 
+    if layout not in {"standard", "error_decomposition"}:
+        raise ValueError("layout must be standard or error_decomposition")
     row4_aliases = {
+        "divergence": "divergence",
         "affine_rms_residual": "affine_rms_residual",
         "condition_number": "condition_number",
         "chi": "chi",
@@ -1458,18 +1731,59 @@ def plot_magnetic_gradient_product(
         raise ValueError(f"row4 must be one of {sorted(row4_aliases)}")
     if ratio_scale not in {"auto", "linear", "log"}:
         raise ValueError("ratio_scale must be auto, linear, or log")
+    if start_time_s is not None and not np.isfinite(start_time_s):
+        raise ValueError("start_time_s must be finite")
+    if stop_time_s is not None and not np.isfinite(stop_time_s):
+        raise ValueError("stop_time_s must be finite")
+    if (
+        start_time_s is not None
+        and stop_time_s is not None
+        and stop_time_s <= start_time_s
+    ):
+        raise ValueError("stop_time_s must be greater than start_time_s")
     with h5py.File(product_path, "r") as handle:
-        time = np.asarray(handle["time/analysis_time"], dtype=float)
+        full_time = np.asarray(handle["time/analysis_time"], dtype=float)
+        time_mask = np.ones(full_time.shape, dtype=bool)
+        if start_time_s is not None:
+            time_mask &= full_time >= start_time_s
+        if stop_time_s is not None:
+            time_mask &= full_time <= stop_time_s
+        if not np.any(time_mask):
+            available = (
+                f"{np.nanmin(full_time):g}–{np.nanmax(full_time):g} s"
+                if full_time.size
+                else "empty"
+            )
+            raise ValueError(
+                "requested time range contains no analysis samples; "
+                f"available range is {available}"
+            )
+        time = full_time[time_mask]
         categories = [name for name in CONFIGURATION_ORDER if name in handle["configurations"]]
         if not categories:
             raise ValueError("Gradient product contains no selected configurations")
+        if layout == "error_decomposition":
+            return _plot_curl_error_decomposition(
+                handle,
+                categories,
+                full_time,
+                time_mask,
+                output_path,
+                start_time_s=start_time_s,
+                stop_time_s=stop_time_s,
+                dpi=dpi,
+            )
         figure, axes = plt.subplots(
-            4, len(categories), figsize=(4.4 * len(categories), 12.0), squeeze=False, sharex=True
+            5,
+            len(categories),
+            figsize=(4.4 * len(categories), 15.0),
+            squeeze=False,
+            sharex=True,
         )
-        row_values: list[list[np.ndarray]] = [[] for _ in range(4)]
+        row_values: list[list[np.ndarray]] = [[] for _ in range(5)]
         # Values used to choose display limits.  In particular, do not let
         # near-zero coarse-truth divergence/curl ratios compress the estimates.
-        row_scale_values: list[list[np.ndarray]] = [[] for _ in range(4)]
+        row_scale_values: list[list[np.ndarray]] = [[] for _ in range(5)]
         truth_color = "#111111"
         true_color = SPACECRAFT_COLORS["H"]
         measured_color = SPACECRAFT_COLORS["N1"]
@@ -1483,8 +1797,12 @@ def plot_magnetic_gradient_product(
                 value.decode("utf-8") if isinstance(value, bytes) else str(value)
                 for value in group["spacecraft_ids"][...]
             ]
-            size = _read_scalar_or_series(group["geometry/characteristic_size"], len(time))
-            chi = _read_scalar_or_series(group["geometry/chi"], len(time))
+            size = _read_scalar_or_series(
+                group["geometry/characteristic_size"], len(full_time)
+            )[time_mask]
+            chi = _read_scalar_or_series(
+                group["geometry/chi"], len(full_time)
+            )[time_mask]
             axes[0, column].set_title(
                 f"{category.replace('_', ' ')}\n{ids} / {indices}; N={len(indices)}\n"
                 f"median L={np.nanmedian(size):.3g} km, Q={np.nanmedian(chi):.3g}",
@@ -1498,41 +1816,117 @@ def plot_magnetic_gradient_product(
                     "coarse_divergence_curl_ratio",
                     r"$|\nabla\cdot B|/|\nabla\times B|$",
                 ),
-                (row4_aliases[row4], None, _row4_label(row4)),
+                (
+                    row4_aliases[row4],
+                    "coarse_divergence" if row4 == "divergence" else None,
+                    _row4_label(row4),
+                ),
+                ("curl", "coarse_curl", r"$\nabla\times B$ (nT/km)"),
             )
             for row, (quantity, truth_quantity, ylabel) in enumerate(specifications):
                 axis = axes[row, column]
+                is_vector = quantity == "curl"
+                component_colors = ("#d1495b", "#2a9d60", "#3777bb")
                 if truth_quantity is not None:
-                    values = np.asarray(truth[truth_quantity], dtype=float)
-                    axis.plot(time, values, color=truth_color, linewidth=1.5, label="coarse truth")
+                    values = np.asarray(truth[truth_quantity], dtype=float)[time_mask]
+                    if is_vector:
+                        for component, color in enumerate(component_colors):
+                            axis.plot(
+                                time,
+                                values[:, component],
+                                color=color,
+                                linewidth=1.2,
+                                linestyle=":",
+                                label=f"coarse {('x', 'y', 'z')[component]}",
+                            )
+                    else:
+                        axis.plot(
+                            time,
+                            values,
+                            color=truth_color,
+                            linewidth=1.5,
+                            label="coarse truth",
+                        )
                     row_values[row].append(values)
                 if row == 3 and row4 in {"chi", "d_ep"}:
-                    values = _read_scalar_or_series(group[f"geometry/{row4}"], len(time))
+                    values = _read_scalar_or_series(
+                        group[f"geometry/{row4}"], len(full_time)
+                    )[time_mask]
                 else:
-                    values = np.asarray(true[quantity], dtype=float)
-                axis.plot(time, values, color=true_color, linewidth=1.1, label="true estimate")
+                    values = np.asarray(true[quantity], dtype=float)[time_mask]
+                if is_vector:
+                    for component, color in enumerate(component_colors):
+                        axis.plot(
+                            time,
+                            values[:, component],
+                            color=color,
+                            linewidth=1.0,
+                            linestyle="--",
+                            label=f"estimate {('x', 'y', 'z')[component]}",
+                        )
+                else:
+                    axis.plot(
+                        time,
+                        values,
+                        color=true_color,
+                        linewidth=1.1,
+                        label="true estimate",
+                    )
                 row_values[row].append(values)
                 row_scale_values[row].append(values)
                 if summary is not None and quantity in summary:
-                    q25 = np.asarray(summary[f"{quantity}/q25"], dtype=float)
-                    median = np.asarray(summary[f"{quantity}/median"], dtype=float)
-                    q75 = np.asarray(summary[f"{quantity}/q75"], dtype=float)
-                    axis.fill_between(time, q25, q75, color=measured_color, alpha=0.23, linewidth=0)
-                    axis.plot(
-                        time,
-                        median,
-                        color=measured_color,
-                        linewidth=1.2,
-                        label="measured median/IQR",
-                    )
+                    q25 = np.asarray(summary[f"{quantity}/q25"], dtype=float)[time_mask]
+                    median = np.asarray(
+                        summary[f"{quantity}/median"], dtype=float
+                    )[time_mask]
+                    q75 = np.asarray(summary[f"{quantity}/q75"], dtype=float)[time_mask]
+                    if is_vector:
+                        for component, color in enumerate(component_colors):
+                            axis.fill_between(
+                                time,
+                                q25[:, component],
+                                q75[:, component],
+                                color=color,
+                                alpha=0.12,
+                                linewidth=0,
+                            )
+                            axis.plot(
+                                time,
+                                median[:, component],
+                                color=color,
+                                linewidth=1.15,
+                                label=f"measured {('x', 'y', 'z')[component]}",
+                            )
+                    else:
+                        axis.fill_between(
+                            time,
+                            q25,
+                            q75,
+                            color=measured_color,
+                            alpha=0.23,
+                            linewidth=0,
+                        )
+                        axis.plot(
+                            time,
+                            median,
+                            color=measured_color,
+                            linewidth=1.2,
+                            label="measured median/IQR",
+                        )
                     row_values[row].extend((q25, median, q75))
                     row_scale_values[row].extend((q25, median, q75))
                 axis.set_ylabel(ylabel)
                 axis.grid(alpha=0.22)
                 if column == 0 and row == 0:
                     axis.legend(fontsize=8, frameon=False)
+                elif column == 0 and is_vector:
+                    axis.legend(fontsize=6, frameon=False, ncol=3)
             axes[-1, column].set_xlabel("Time (s)")
-        for row in range(4):
+            axes[-1, column].set_xlim(
+                left=start_time_s if start_time_s is not None else time[0],
+                right=stop_time_s if stop_time_s is not None else time[-1],
+            )
+        for row in range(5):
             values_for_limits = row_scale_values[row] or row_values[row]
             finite_parts = [
                 value[np.isfinite(value)]
@@ -1580,6 +1974,7 @@ def plot_magnetic_gradient_product(
 
 def _row4_label(row4: str) -> str:
     return {
+        "divergence": r"$\nabla\cdot B$ (nT/km)",
         "affine_rms_residual": "Affine RMS residual (nT)",
         "condition_number": "Condition number",
         "chi": r"$Q=\sqrt{E^2+P^2}$",

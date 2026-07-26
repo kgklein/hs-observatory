@@ -26,6 +26,7 @@ def _load_builtins() -> None:
         elsasser,
         elsasser_increment_pdf_static,
         magnetic_gradient,
+        magnetic_gradient_correlation,
         rbf_reconstruction,
         static_decorrelation,
         structure_function,
