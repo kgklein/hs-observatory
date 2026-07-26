@@ -5,10 +5,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLOTTER="${ROOT}/.venv/bin/hsobs-plot-structure-function"
 
 usage() {
-  echo "Usage: $0 [--pair-counts] {000|001|002} [...]" >&2
-  echo "  000: p=0.9 (orange)" >&2
-  echo "  001: p=0.7 (green)" >&2
-  echo "  002: p=0.5 (blue)" >&2
+  echo "Usage: $0 [--pair-counts] {100|101|102} [...]" >&2
+  echo "  100: p=0.9 (orange)" >&2
+  echo "  101: p=0.7 (green)" >&2
+  echo "  102: p=0.5 (blue)" >&2
 }
 
 show_pair_counts=false
@@ -31,9 +31,9 @@ plot_run() {
   local p_value
 
   case "${run_id}" in
-    000) p_value="0.9" ;;
-    001) p_value="0.7" ;;
-    002) p_value="0.5" ;;
+    100) p_value="0.9" ;;
+    101) p_value="0.7" ;;
+    102) p_value="0.5" ;;
     *)
       echo "Unknown run ID: ${run_id}" >&2
       usage
