@@ -570,7 +570,10 @@ def plot_increment_pdf_wasserstein_publication(
     distance_axis.set_yticklabels([diagnostics["cases"][case]["label"] for case in ordered])
     distance_axis.invert_yaxis()
     distance_axis.set_xlabel(r"$D_W^R$")
-    distance_axis.set_title("(c) PDF mismatch by error case")
+    distance_panel_label = "c" if show_difference_panel else "b"
+    distance_axis.set_title(
+        f"({distance_panel_label}) PDF mismatch by error case"
+    )
     distance_axis.set_xscale("log")
     if wasserstein_x_max is not None:
         distance_axis.set_xlim(wasserstein_x_min, wasserstein_x_max)

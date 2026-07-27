@@ -204,6 +204,6 @@ def test_publication_plot_can_show_only_current_panels_a_and_c(tmp_path, monkeyp
     assert len(figure.axes) == 2
     assert [axis.get_title() for axis in figure.axes] == [
         r"(a) $p=0.7$, $\lambda_\perp=400\,\mathrm{km}$",
-        "(c) PDF mismatch by error case",
+        "(b) PDF mismatch by error case",
     ]
     real_close(figure)
