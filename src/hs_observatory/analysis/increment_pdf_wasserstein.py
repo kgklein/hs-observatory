@@ -391,9 +391,11 @@ def plot_increment_pdf_wasserstein_publication(
     difference_y_min: float = 1.0e-4,
     wasserstein_x_min: float = 1.0e-3,
     wasserstein_x_max: float | None = 0.2,
+    show_difference_panel: bool = True,
+    append_lag_to_filename: bool = False,
     dpi: int = 300,
 ) -> tuple[Path, dict[str, Any]]:
-    """Create the three-panel figure entirely from saved increment-PDF products."""
+    """Create the publication figure entirely from saved increment-PDF products."""
 
     import matplotlib.pyplot as plt
 
@@ -430,13 +432,27 @@ def plot_increment_pdf_wasserstein_publication(
         if isinstance(configured[case]["path"], Mapping):
             loaded[case] = dict(configured[case]["path"])
 
-    figure, (pdf_axis, difference_axis, distance_axis) = plt.subplots(
-        1,
-        3,
-        figsize=(16.3, 5.2),
-        gridspec_kw={"width_ratios": [1.45, 1.2, 1.0]},
-    )
-    figure.subplots_adjust(left=0.055, right=0.985, bottom=0.16, top=0.88, wspace=0.32)
+    if show_difference_panel:
+        figure, (pdf_axis, difference_axis, distance_axis) = plt.subplots(
+            1,
+            3,
+            figsize=(16.3, 5.2),
+            gridspec_kw={"width_ratios": [1.45, 1.2, 1.0]},
+        )
+        figure.subplots_adjust(
+            left=0.055, right=0.985, bottom=0.16, top=0.88, wspace=0.32
+        )
+    else:
+        figure, (pdf_axis, distance_axis) = plt.subplots(
+            1,
+            2,
+            figsize=(11.2, 5.2),
+            gridspec_kw={"width_ratios": [1.45, 1.0]},
+        )
+        difference_axis = None
+        figure.subplots_adjust(
+            left=0.08, right=0.98, bottom=0.16, top=0.88, wspace=0.34
+        )
     colors = plt.cm.tab10(np.linspace(0.0, 0.9, max(1, len(loaded))))
     color_by_case = {case: colors[index] for index, case in enumerate(loaded)}
 
@@ -481,18 +497,19 @@ def plot_increment_pdf_wasserstein_publication(
             linestyle="--" if emphasized else "-", linewidth=2.2 if emphasized else 1.15,
             alpha=1.0 if emphasized else 0.82, label=entry["label"], zorder=4 if emphasized else 2,
         )
-        case_truth = product["truth_density"][index]
-        difference = symmetric_pdf_difference(median, case_truth, product["x_edges"])
-        difference_selected = np.isfinite(difference) & (difference > 0.0)
-        difference_axis.plot(
-            product["x_centers"][difference_selected],
-            difference[difference_selected],
-            color=color,
-            linestyle="--" if emphasized else "-",
-            linewidth=2.2 if emphasized else 1.15,
-            alpha=1.0 if emphasized else 0.82,
-            zorder=4 if emphasized else 2,
-        )
+        if difference_axis is not None:
+            case_truth = product["truth_density"][index]
+            difference = symmetric_pdf_difference(median, case_truth, product["x_edges"])
+            difference_selected = np.isfinite(difference) & (difference > 0.0)
+            difference_axis.plot(
+                product["x_centers"][difference_selected],
+                difference[difference_selected],
+                color=color,
+                linestyle="--" if emphasized else "-",
+                linewidth=2.2 if emphasized else 1.15,
+                alpha=1.0 if emphasized else 0.82,
+                zorder=4 if emphasized else 2,
+            )
 
     lag_km = reference_entry["selected_lag_km"]
     lag_label = f"{lag_km:,.0f}" if lag_km >= 1_000 else f"{lag_km:.3g}"
@@ -507,19 +524,20 @@ def plot_increment_pdf_wasserstein_publication(
     pdf_axis.grid(True, which="both", alpha=0.17)
     pdf_axis.legend(frameon=False, fontsize=8)
 
-    difference_axis.set_title("(b) Symmetric PDF difference")
-    difference_axis.set_xlabel(
-        r"$\delta z^+_\perp / \exp[\langle\ln(\delta z^+_\perp)\mid"
-        r"\lambda_\perp\rangle]$"
-    )
-    difference_axis.set_ylabel(
-        r"$|\mathrm{PDF}_{MC}-\mathrm{PDF}_{true}|/"
-        r"|\mathrm{PDF}_{MC}+\mathrm{PDF}_{true}|$"
-    )
-    difference_axis.set_xscale("linear")
-    difference_axis.set_yscale("log")
-    difference_axis.set_ylim(bottom=difference_y_min)
-    difference_axis.grid(True, which="both", alpha=0.17)
+    if difference_axis is not None:
+        difference_axis.set_title("(b) Symmetric PDF difference")
+        difference_axis.set_xlabel(
+            r"$\delta z^+_\perp / \exp[\langle\ln(\delta z^+_\perp)\mid"
+            r"\lambda_\perp\rangle]$"
+        )
+        difference_axis.set_ylabel(
+            r"$|\mathrm{PDF}_{MC}-\mathrm{PDF}_{true}|/"
+            r"|\mathrm{PDF}_{MC}+\mathrm{PDF}_{true}|$"
+        )
+        difference_axis.set_xscale("linear")
+        difference_axis.set_yscale("log")
+        difference_axis.set_ylim(bottom=difference_y_min)
+        difference_axis.grid(True, which="both", alpha=0.17)
 
     ordered = _case_order(diagnostics, case_order)
     for position, case in enumerate(ordered):
@@ -552,10 +570,7 @@ def plot_increment_pdf_wasserstein_publication(
     distance_axis.set_yticklabels([diagnostics["cases"][case]["label"] for case in ordered])
     distance_axis.invert_yaxis()
     distance_axis.set_xlabel(r"$D_W^R$")
-    distance_axis.set_title(
-        "(c) PDF mismatch by error case\n"
-        rf"$\lambda_\perp={lag_label}\,\mathrm{{km}}$"
-    )
+    distance_axis.set_title("(c) PDF mismatch by error case")
     distance_axis.set_xscale("log")
     if wasserstein_x_max is not None:
         distance_axis.set_xlim(wasserstein_x_min, wasserstein_x_max)
@@ -564,6 +579,11 @@ def plot_increment_pdf_wasserstein_publication(
     distance_axis.grid(True, axis="x", which="both", alpha=0.2)
 
     output = Path(output_path)
+    if append_lag_to_filename:
+        filename_lag = lag_label.replace(",", "")
+        output = output.with_name(
+            f"{output.stem}-lambda-{filename_lag}{output.suffix}"
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=dpi, bbox_inches="tight")
     plt.close(figure)
@@ -623,7 +643,11 @@ def write_increment_pdf_wasserstein_csv(
     return output
 
 
-def plot_increment_pdf_wasserstein_from_config(config_path: str | Path) -> tuple[Path, dict[str, Any]]:
+def plot_increment_pdf_wasserstein_from_config(
+    config_path: str | Path,
+    *,
+    panels_a_c: bool = False,
+) -> tuple[Path, dict[str, Any]]:
     """Read a lightweight YAML plot config and create figure plus diagnostics."""
 
     import yaml
@@ -674,5 +698,7 @@ def plot_increment_pdf_wasserstein_from_config(config_path: str | Path) -> tuple
             if config.get("wasserstein_x_max", 0.2) is None
             else float(config.get("wasserstein_x_max", 0.2))
         ),
+        show_difference_panel=not panels_a_c,
+        append_lag_to_filename=bool(config.get("append_lag_to_filename", True)),
         dpi=int(config.get("dpi", 300)),
     )

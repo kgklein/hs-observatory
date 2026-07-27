@@ -130,6 +130,56 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-order", type=int, default=6)
     parser.add_argument("--fit-range", default=None, help="named exponent fit range")
     parser.add_argument(
+        "--fit-lambda-range",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("MIN", "MAX"),
+        help="refit the saved structure functions over these lambda bounds in km",
+    )
+    parser.add_argument(
+        "--min-fit-bins",
+        type=int,
+        default=None,
+        help="minimum number of populated lambda bins required for a refit",
+    )
+    parser.add_argument(
+        "--no-p-model",
+        action="store_false",
+        dest="show_p_model",
+        help="hide the p-model reference curve",
+    )
+    parser.add_argument(
+        "--no-kurtosis",
+        action="store_false",
+        dest="show_kurtosis",
+        help="omit the kurtosis panel",
+    )
+    parser.add_argument(
+        "--structure-ylim",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("MIN", "MAX"),
+        help="set common structure-function y-axis bounds",
+    )
+    parser.add_argument(
+        "--exponent-ylim",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("MIN", "MAX"),
+        help="set common scaling-exponent y-axis bounds",
+    )
+    parser.add_argument(
+        "--kurtosis-ylim",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("MIN", "MAX"),
+        help="set common kurtosis y-axis bounds",
+    )
+    parser.add_argument(
         "--pair-counts", action="store_true",
         help="add a fourth panel showing the number of baseline pairs per bin",
     )
@@ -143,7 +193,14 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
         run_color=args.run_color,
         max_order=args.max_order,
         fit_range=args.fit_range,
+        fit_lambda_range_km=args.fit_lambda_range,
+        min_fit_bins=args.min_fit_bins,
+        show_p_model=args.show_p_model,
+        show_kurtosis=args.show_kurtosis,
         show_pair_counts=args.pair_counts,
+        structure_ylim=args.structure_ylim,
+        exponent_ylim=args.exponent_ylim,
+        kurtosis_ylim=args.kurtosis_ylim,
         dpi=args.dpi,
     )
     print(output)
@@ -203,8 +260,16 @@ def plot_increment_pdf_wasserstein_main(argv: list[str] | None = None) -> int:
         description="Plot PDF comparisons and Rayleigh-normalized Wasserstein diagnostics"
     )
     parser.add_argument("config", help="lightweight publication plotting YAML")
+    parser.add_argument(
+        "--panels-a-c",
+        action="store_true",
+        help="plot only the current PDF (a) and Wasserstein (c) panels",
+    )
     args = parser.parse_args(argv)
-    output, diagnostics = plot_increment_pdf_wasserstein_from_config(args.config)
+    output, diagnostics = plot_increment_pdf_wasserstein_from_config(
+        args.config,
+        panels_a_c=args.panels_a_c,
+    )
     print(output)
     print("case,label,lag_km,DW_R_p25,DW_R_p50,DW_R_p75,DW_R_median_pdf")
     for case, entry in diagnostics["cases"].items():

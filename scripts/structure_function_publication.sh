@@ -3,22 +3,64 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLOTTER="${ROOT}/.venv/bin/hsobs-plot-structure-function"
+PYTHON="${ROOT}/.venv/bin/python"
+if [[ ! -x "${PYTHON}" ]]; then
+  PYTHON="python3"
+fi
+export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 usage() {
-  echo "Usage: $0 [--pair-counts] {100|101|102} [...]" >&2
-  echo "  100: p=0.9 (orange)" >&2
-  echo "  101: p=0.7 (green)" >&2
-  echo "  102: p=0.5 (blue)" >&2
+  echo "Usage: $0 [OPTIONS] {100|101|102|400|401|402} [...]" >&2
+  echo "  100, 400: p=0.9 (orange)" >&2
+  echo "  101, 401: p=0.7 (green)" >&2
+  echo "  102, 402: p=0.5 (blue)" >&2
+  echo "Options:" >&2
+  echo "  --pair-counts                 show the baseline-pair count panel" >&2
+  echo "  --fit-lambda-range MIN MAX    refit tsi_n over this lambda range [km]" >&2
+  echo "  --min-fit-bins N              require at least N bins in the refit" >&2
+  echo "  --no-p-model                  hide the p-model reference curve" >&2
+  echo "  --no-kurtosis                 plot only the first two summary panels" >&2
+  echo "Batch runs automatically use common y-axis limits." >&2
 }
 
 show_pair_counts=false
+show_p_model=true
+show_kurtosis=true
+fit_lambda_range=()
+min_fit_bins=()
 run_ids=()
-for argument in "$@"; do
-  case "${argument}" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --pair-counts) show_pair_counts=true ;;
+    --no-p-model) show_p_model=false ;;
+    --no-kurtosis) show_kurtosis=false ;;
+    --fit-lambda-range)
+      if [[ $# -lt 3 ]]; then
+        echo "--fit-lambda-range requires MIN and MAX" >&2
+        usage
+        exit 2
+      fi
+      fit_lambda_range=("$2" "$3")
+      shift 2
+      ;;
+    --min-fit-bins)
+      if [[ $# -lt 2 ]]; then
+        echo "--min-fit-bins requires N" >&2
+        usage
+        exit 2
+      fi
+      min_fit_bins=("$2")
+      shift
+      ;;
     -h|--help) usage; exit 0 ;;
-    *) run_ids+=("${argument}") ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 2
+      ;;
+    *) run_ids+=("$1") ;;
   esac
+  shift
 done
 
 if [[ ${#run_ids[@]} -eq 0 ]]; then
@@ -26,49 +68,94 @@ if [[ ${#run_ids[@]} -eq 0 ]]; then
   exit 2
 fi
 
-plot_run() {
-  local run_id="$1"
-  local p_value
-
+batch_inputs=()
+batch_p_values=()
+for run_id in "${run_ids[@]}"; do
   case "${run_id}" in
-    100) p_value="0.9" ;;
-    101) p_value="0.7" ;;
-    102) p_value="0.5" ;;
+    100|400) batch_p_values+=("0.9") ;;
+    101|401) batch_p_values+=("0.7") ;;
+    102|402) batch_p_values+=("0.5") ;;
     *)
       echo "Unknown run ID: ${run_id}" >&2
       usage
-      return 2
+      exit 2
       ;;
   esac
+  input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
+  if [[ ! -f "${input}" ]]; then
+    echo "Input not found: ${input}" >&2
+    exit 1
+  fi
+  batch_inputs+=("${input}")
+done
+
+common_structure_ylim=()
+common_exponent_ylim=()
+common_kurtosis_ylim=()
+if [[ ${#run_ids[@]} -gt 1 ]]; then
+  limit_arguments=(
+    "${show_p_model}" "${show_kurtosis}"
+    "${fit_lambda_range[0]:-}" "${fit_lambda_range[1]:-}" "${min_fit_bins[0]:-}"
+  )
+  for index in "${!run_ids[@]}"; do
+    limit_arguments+=("${batch_inputs[index]}" "${batch_p_values[index]}")
+  done
+  common_limits_output="$(
+    "${PYTHON}" -c \
+      'import sys; from hs_observatory.analysis.structure_function import structure_function_summary_ylims; args = sys.argv[1:]; show_p_model = args[0] == "true"; show_kurtosis = args[1] == "true"; fit_range = None if args[2] == "" else (float(args[2]), float(args[3])); min_bins = None if args[4] == "" else int(args[4]); pairs = args[5:]; limits = structure_function_summary_ylims(pairs[0::2], p_values=[float(value) for value in pairs[1::2]], fit_lambda_range_km=fit_range, min_fit_bins=min_bins, show_p_model=show_p_model, show_kurtosis=show_kurtosis); print(" ".join(repr(bound) for panel in limits for bound in panel))' \
+      "${limit_arguments[@]}"
+  )"
+  read -r -a common_limits <<< "${common_limits_output}"
+  common_structure_ylim=("${common_limits[0]}" "${common_limits[1]}")
+  common_exponent_ylim=("${common_limits[2]}" "${common_limits[3]}")
+  if [[ "${show_kurtosis}" == true ]]; then
+    common_kurtosis_ylim=("${common_limits[4]}" "${common_limits[5]}")
+  fi
+  echo "Using common y-axis limits for ${#run_ids[@]} runs."
+fi
+
+plot_run() {
+  local run_id="$1"
+  local p_value="$2"
 
   local input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
   local output="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.png"
 
-  if [[ ! -f "${input}" ]]; then
-    echo "Input not found: ${input}" >&2
-    return 1
+  local plot_args=(
+    "${input}" --p-value "${p_value}" --quantity z_plus --output "${output}"
+  )
+  if [[ "${show_pair_counts}" == true ]]; then
+    plot_args+=(--pair-counts)
+  fi
+  if [[ "${show_p_model}" == false ]]; then
+    plot_args+=(--no-p-model)
+  fi
+  if [[ "${show_kurtosis}" == false ]]; then
+    plot_args+=(--no-kurtosis)
+  fi
+  if [[ ${#fit_lambda_range[@]} -gt 0 ]]; then
+    plot_args+=(--fit-lambda-range "${fit_lambda_range[@]}")
+  fi
+  if [[ ${#min_fit_bins[@]} -gt 0 ]]; then
+    plot_args+=(--min-fit-bins "${min_fit_bins[@]}")
+  fi
+  if [[ ${#common_structure_ylim[@]} -gt 0 ]]; then
+    plot_args+=(--structure-ylim "${common_structure_ylim[@]}")
+    plot_args+=(--exponent-ylim "${common_exponent_ylim[@]}")
+  fi
+  if [[ ${#common_kurtosis_ylim[@]} -gt 0 ]]; then
+    plot_args+=(--kurtosis-ylim "${common_kurtosis_ylim[@]}")
   fi
 
   if [[ -x "${PLOTTER}" ]]; then
-    local plot_args=(
-      "${input}" --p-value "${p_value}" --quantity z_plus --output "${output}"
-    )
-    if [[ "${show_pair_counts}" == true ]]; then
-      plot_args+=(--pair-counts)
-    fi
     "${PLOTTER}" "${plot_args[@]}"
   else
-    local python="${ROOT}/.venv/bin/python"
-    if [[ ! -x "${python}" ]]; then
-      python="python3"
-    fi
-    export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
-    "${python}" -c \
-      'import sys; from hs_observatory.analysis.structure_function import plot_structure_function_summary; plot_structure_function_summary(sys.argv[1], p_value=float(sys.argv[2]), output_path=sys.argv[3], quantity="z_plus", show_pair_counts=sys.argv[4] == "true")' \
-      "${input}" "${p_value}" "${output}" "${show_pair_counts}"
+    "${PYTHON}" -c \
+      'import sys; from hs_observatory.cli import plot_structure_function_summary_main; raise SystemExit(plot_structure_function_summary_main(sys.argv[1:]))' \
+      "${plot_args[@]}"
   fi
 }
 
-for run_id in "${run_ids[@]}"; do
-  plot_run "${run_id}"
+for index in "${!run_ids[@]}"; do
+  plot_run "${run_ids[index]}" "${batch_p_values[index]}"
 done

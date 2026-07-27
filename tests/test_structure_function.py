@@ -518,6 +518,34 @@ def test_summary_row_optionally_adds_pair_count_panel():
     plt.close(figure)
 
 
+def test_summary_row_can_omit_kurtosis_with_or_without_pair_counts():
+    import matplotlib.pyplot as plt
+
+    figure, axes = plot_structure_function_summary_row(
+        _summary_plot_result(), p_value=0.9, show_kurtosis=False
+    )
+    assert len(axes) == 2
+    assert [axis.get_title() for axis in axes] == [
+        "structure functions",
+        "scaling exponents",
+    ]
+    plt.close(figure)
+
+    figure, axes = plot_structure_function_summary_row(
+        _summary_plot_result(),
+        p_value=0.9,
+        show_kurtosis=False,
+        show_pair_counts=True,
+    )
+    assert len(axes) == 3
+    assert [axis.get_title() for axis in axes] == [
+        "structure functions",
+        "scaling exponents",
+        "pairs per bin",
+    ]
+    plt.close(figure)
+
+
 def test_summary_row_can_refit_saved_structure_functions_and_hide_p_model():
     import matplotlib.pyplot as plt
 
@@ -577,3 +605,16 @@ def test_shared_summary_limits_cover_and_align_all_three_panels():
         for panel_index, expected in enumerate(limits):
             np.testing.assert_allclose(axes[panel_index].get_ylim(), expected)
         plt.close(figure)
+
+
+def test_shared_summary_limits_can_exclude_kurtosis():
+    result = _summary_plot_result()
+
+    limits = structure_function_summary_ylims(
+        [result, result],
+        p_values=[0.9, 0.7],
+        show_p_model=False,
+        show_kurtosis=False,
+    )
+
+    assert len(limits) == 2

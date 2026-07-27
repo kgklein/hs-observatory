@@ -1,28 +1,29 @@
 # Cheap publication stage: every path below is an existing analysis product
 # produced by elsasser_increment_pdf_static, never a raw observation HDF5 file.
 p_value: 0.7
-selected_lag_km: 400  # null selects the second-largest usable lag from case 101
+selected_lag_km: 1600  # null selects the second-largest usable lag from case 101
 denominator_tolerance: 1.0e-12
 difference_y_min: 1.0e-4
 wasserstein_x_min: 0.001  # exact zeros are shown with a left-pointing boundary marker
 wasserstein_x_max: 0.5
 case_order: supplied  # or: median
-all_errors_case: "101"
+all_errors_case: "401"
 show_individual_bands: false
+append_lag_to_filename: true
 dpi: 300
 
 cases:
-  "101":
-    path: outputs/malara-prod-101_elsasser_increment_pdf.h5
+  "401":
+    path: outputs/malara-prod-401_elsasser_increment_pdf.h5
     label: all errors
   # Labels for individual sources are deliberately editable rather than encoded in Python.
-  "111": {path: outputs/malara-prod-111_elsasser_increment_pdf.h5, label: timing}
-  "121": {path: outputs/malara-prod-121_elsasser_increment_pdf.h5, label: position}
-  "131": {path: outputs/malara-prod-131_elsasser_increment_pdf.h5, label: density}
-  "141": {path: outputs/malara-prod-141_elsasser_increment_pdf.h5, label: velocity speed}
-  "151": {path: outputs/malara-prod-151_elsasser_increment_pdf.h5, label: velocity angle}
-  "161": {path: outputs/malara-prod-161_elsasser_increment_pdf.h5, label: magnetic}
-  "171": {path: outputs/malara-prod-171_elsasser_increment_pdf.h5, label: alignment}
+  "411": {path: outputs/malara-prod-411_elsasser_increment_pdf.h5, label: timing}
+  "421": {path: outputs/malara-prod-421_elsasser_increment_pdf.h5, label: position}
+  "431": {path: outputs/malara-prod-431_elsasser_increment_pdf.h5, label: density}
+  "441": {path: outputs/malara-prod-441_elsasser_increment_pdf.h5, label: velocity speed}
+  "451": {path: outputs/malara-prod-451_elsasser_increment_pdf.h5, label: velocity angle}
+  "461": {path: outputs/malara-prod-461_elsasser_increment_pdf.h5, label: magnetic}
+  "471": {path: outputs/malara-prod-471_elsasser_increment_pdf.h5, label: alignment}
 
 output:
   figure: outputs/malara-prod-p07_increment_pdf_wasserstein.png

@@ -181,3 +181,29 @@ def test_publication_plot_and_diagnostic_files_use_saved_products(tmp_path):
             difference_y_min=0.0,
             dpi=60,
         )
+
+
+def test_publication_plot_can_show_only_current_panels_a_and_c(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    product = _write_product(tmp_path / "001.h5")
+    real_close = plt.close
+    monkeypatch.setattr(plt, "close", lambda _figure: None)
+
+    output, _diagnostics = plot_increment_pdf_wasserstein_publication(
+        {"001": {"path": product, "label": "all errors"}},
+        output_path=tmp_path / "panels-a-c.png",
+        show_difference_panel=False,
+        append_lag_to_filename=True,
+        dpi=60,
+    )
+
+    figure = plt.gcf()
+    assert output.name == "panels-a-c-lambda-400.png"
+    assert output.stat().st_size > 0
+    assert len(figure.axes) == 2
+    assert [axis.get_title() for axis in figure.axes] == [
+        r"(a) $p=0.7$, $\lambda_\perp=400\,\mathrm{km}$",
+        "(c) PDF mismatch by error case",
+    ]
+    real_close(figure)

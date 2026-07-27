@@ -1083,6 +1083,7 @@ def plot_structure_function_summary_row(
     exponent_ylim: tuple[float, float] | None = None,
     kurtosis_ylim: tuple[float, float] | None = None,
     show_p_model: bool = True,
+    show_kurtosis: bool = True,
     show_pair_counts: bool = False,
 ):
     """Plot one publication-style truth/MC structure-function summary row.
@@ -1090,7 +1091,7 @@ def plot_structure_function_summary_row(
     ``products['truth']`` is treated as the unperturbed sampled observation and
     ``products['observed']`` as the Monte Carlo ensemble. Percentiles are always
     calculated from observed members only. When *axes* is supplied, it must be
-    a row of three axes (or four when *show_pair_counts* is true).
+    a row containing the enabled panels.
     """
 
     import matplotlib.pyplot as plt
@@ -1142,17 +1143,17 @@ def plot_structure_function_summary_row(
     observed = products["observed"]
 
     if axes is None:
-        panel_count = 4 if show_pair_counts else 3
+        panel_count = 2 + int(show_kurtosis) + int(show_pair_counts)
         figure, axes_array = plt.subplots(
             1, panel_count,
-            figsize=(18.4 if show_pair_counts else 14.2, 4.25),
+            figsize=({2: 9.6, 3: 14.2, 4: 18.4}[panel_count], 4.25),
             constrained_layout=True,
             squeeze=False,
         )
         axes_array = axes_array[0]
     else:
         axes_array = np.asarray(axes, dtype=object).reshape(-1)
-        expected_axes = 4 if show_pair_counts else 3
+        expected_axes = 2 + int(show_kurtosis) + int(show_pair_counts)
         if axes_array.size != expected_axes:
             raise ValueError(f"axes must contain exactly {expected_axes} Matplotlib axes")
         figure = axes_array[0].figure
@@ -1181,7 +1182,7 @@ def plot_structure_function_summary_row(
     if mc_sf.ndim != 3 or mc_sf.shape[0] < 1:
         raise ValueError("observed S_n must contain at least one MC member")
 
-    structure_axis, exponent_axis, flatness_axis = axes_array[:3]
+    structure_axis, exponent_axis = axes_array[:2]
     order_handles = []
     for plot_index, order in enumerate(plotted_orders):
         marker = _ORDER_MARKERS[plot_index % len(_ORDER_MARKERS)]
@@ -1345,37 +1346,40 @@ def plot_structure_function_summary_row(
     exponent_axis.grid(True, alpha=0.18)
     exponent_axis.legend(fontsize=7.5, loc="best")
 
-    truth_flatness = _flatness_from_product(truth, quantity)
-    mc_flatness = _flatness_from_product(observed, quantity)
-    flat_lower, flat_median, flat_upper = _ensemble_interval(mc_flatness)
-    flatness_axis.fill_between(
-        mc_lambda, flat_lower, flat_upper, color=color, alpha=0.15, linewidth=0,
-        label="MC 5th–95th", zorder=1
-    )
-    flatness_axis.plot(
-        truth_lambda, truth_flatness[0], color=color, linestyle="-", linewidth=1.6,
-        marker="o", markersize=4.0, markerfacecolor="white", label="sampled truth", zorder=3
-    )
-    flatness_axis.plot(
-        mc_lambda, flat_median, color=color, linestyle="--", linewidth=1.4,
-        marker="o", markersize=4.0, label="MC median", zorder=4
-    )
-    flatness_axis.axhline(
-        gaussian_reference, color="black", linestyle="--", linewidth=1.2,
-        label="3D Gaussian", zorder=2
-    )
-    flatness_axis.set_xscale("log")
-    flatness_axis.set_yscale("log")
-    flatness_axis.set_xlabel(r"$\lambda$ [km]")
-    flatness_axis.set_ylabel(r"$S_4(\lambda)/[S_2(\lambda)]^2$")
-    flatness_axis.set_title("kurtosis")
-    if kurtosis_ylim is not None:
-        flatness_axis.set_ylim(kurtosis_lower, kurtosis_upper)
-    flatness_axis.grid(True, which="both", alpha=0.18)
-    flatness_axis.legend(fontsize=7.5, loc="best")
+    if show_kurtosis:
+        flatness_axis = axes_array[2]
+        truth_flatness = _flatness_from_product(truth, quantity)
+        mc_flatness = _flatness_from_product(observed, quantity)
+        flat_lower, flat_median, flat_upper = _ensemble_interval(mc_flatness)
+        flatness_axis.fill_between(
+            mc_lambda, flat_lower, flat_upper, color=color, alpha=0.15, linewidth=0,
+            label="MC 5th–95th", zorder=1
+        )
+        flatness_axis.plot(
+            truth_lambda, truth_flatness[0], color=color, linestyle="-", linewidth=1.6,
+            marker="o", markersize=4.0, markerfacecolor="white",
+            label="sampled truth", zorder=3
+        )
+        flatness_axis.plot(
+            mc_lambda, flat_median, color=color, linestyle="--", linewidth=1.4,
+            marker="o", markersize=4.0, label="MC median", zorder=4
+        )
+        flatness_axis.axhline(
+            gaussian_reference, color="black", linestyle="--", linewidth=1.2,
+            label="3D Gaussian", zorder=2
+        )
+        flatness_axis.set_xscale("log")
+        flatness_axis.set_yscale("log")
+        flatness_axis.set_xlabel(r"$\lambda$ [km]")
+        flatness_axis.set_ylabel(r"$S_4(\lambda)/[S_2(\lambda)]^2$")
+        flatness_axis.set_title("kurtosis")
+        if kurtosis_ylim is not None:
+            flatness_axis.set_ylim(kurtosis_lower, kurtosis_upper)
+        flatness_axis.grid(True, which="both", alpha=0.18)
+        flatness_axis.legend(fontsize=7.5, loc="best")
 
     if show_pair_counts:
-        count_axis = axes_array[3]
+        count_axis = axes_array[2 + int(show_kurtosis)]
         truth_counts = np.asarray(truth["counts"], dtype=float)
         mc_counts = np.asarray(observed["counts"], dtype=float)
         if truth_counts.ndim != 2 or truth_counts.shape[0] != 1:
@@ -1417,8 +1421,9 @@ def structure_function_summary_ylims(
     min_fit_bins: int | None = None,
     gaussian_reference: float = 5.0 / 3.0,
     show_p_model: bool = True,
-) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
-    """Return common y limits for the three publication-summary panels."""
+    show_kurtosis: bool = True,
+) -> tuple[tuple[float, float], ...]:
+    """Return common y limits for the enabled publication-summary panels."""
 
     import matplotlib.pyplot as plt
 
@@ -1428,7 +1433,8 @@ def structure_function_summary_ylims(
         p_values = [0.9] * len(sf_results)
     if len(p_values) != len(sf_results):
         raise ValueError("p_values must have one entry per structure-function result")
-    panel_limits: list[list[tuple[float, float]]] = [[], [], []]
+    panel_count = 2 + int(show_kurtosis)
+    panel_limits: list[list[tuple[float, float]]] = [[] for _ in range(panel_count)]
     for sf_result, p_value in zip(sf_results, p_values):
         figure, axes = plot_structure_function_summary_row(
             sf_result,
@@ -1440,8 +1446,9 @@ def structure_function_summary_ylims(
             min_fit_bins=min_fit_bins,
             gaussian_reference=gaussian_reference,
             show_p_model=show_p_model,
+            show_kurtosis=show_kurtosis,
         )
-        for panel_index in range(3):
+        for panel_index in range(panel_count):
             panel_limits[panel_index].append(axes[panel_index].get_ylim())
         plt.close(figure)
     return tuple(
@@ -1470,6 +1477,7 @@ def plot_structure_function_summary(
     exponent_ylim: tuple[float, float] | None = None,
     kurtosis_ylim: tuple[float, float] | None = None,
     show_p_model: bool = True,
+    show_kurtosis: bool = True,
     show_pair_counts: bool = False,
     dpi: int = 300,
 ) -> Path:
@@ -1492,6 +1500,7 @@ def plot_structure_function_summary(
         exponent_ylim=exponent_ylim,
         kurtosis_ylim=kurtosis_ylim,
         show_p_model=show_p_model,
+        show_kurtosis=show_kurtosis,
         show_pair_counts=show_pair_counts,
     )
     output = Path(output_path)
