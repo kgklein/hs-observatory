@@ -973,6 +973,7 @@ def _ordered_pdf_cases(
 def _publication_lag_indices(
     cases: list[tuple[float, dict[str, np.ndarray]]],
     selected_lags: Sequence[float] | None,
+    panel_count: int = 3,
 ) -> tuple[np.ndarray, np.ndarray]:
     centers = cases[0][1]["lambda_centers"]
     common_valid = np.ones(centers.shape, dtype=bool)
@@ -981,27 +982,38 @@ def _publication_lag_indices(
     available_indices = np.flatnonzero(common_valid & np.isfinite(centers))
     available_lags = centers[available_indices]
     if selected_lags is None:
-        if available_indices.size == 3:
+        if available_indices.size == panel_count:
             indices = available_indices
-        elif available_indices.size < 5:
+        elif available_indices.size < panel_count + 2:
             raise ValueError(
-                "default selection requires exactly three preselected bins or at least five "
-                "commonly valid lag bins"
+                f"default selection requires exactly {panel_count} preselected bins or at "
+                f"least {panel_count + 2} commonly valid lag bins"
             )
         else:
-            locations = (1, available_indices.size // 2, available_indices.size - 2)
+            if panel_count == 3:
+                locations = (1, available_indices.size // 2, available_indices.size - 2)
+            else:
+                locations = np.rint(
+                    np.linspace(1, available_indices.size - 2, panel_count)
+                ).astype(int)
             indices = available_indices[np.asarray(locations)]
     else:
         requested = np.asarray(selected_lags, dtype=float)
-        if requested.shape != (3,) or not np.all(np.isfinite(requested)):
-            raise ValueError("selected_lags must contain exactly three finite lag values in km")
-        if available_indices.size < 3:
-            raise ValueError("at least three commonly valid calculated lag bins are required")
+        if requested.shape != (panel_count,) or not np.all(np.isfinite(requested)):
+            raise ValueError(
+                f"selected_lags must contain exactly {panel_count} finite lag values in km"
+            )
+        if available_indices.size < panel_count:
+            raise ValueError(
+                f"at least {panel_count} commonly valid calculated lag bins are required"
+            )
         indices = np.asarray(
             [available_indices[int(np.argmin(np.abs(available_lags - lag)))] for lag in requested]
         )
-        if np.unique(indices).size != 3:
-            raise ValueError("selected lag values must match three distinct available lag bins")
+        if np.unique(indices).size != panel_count:
+            raise ValueError(
+                f"selected lag values must match {panel_count} distinct available lag bins"
+            )
     return indices, centers[indices]
 
 
@@ -1010,17 +1022,17 @@ def plot_increment_pdf_publication_row(
     *,
     selected_lags: Sequence[float] | None = None,
     quantity: str = "z_plus",
+    layout: str = "1x3",
     axes: Any = None,
 ):
-    """Build the three-panel normalized Elsasser increment-PDF publication figure.
+    """Build a normalized Elsasser increment-PDF publication figure.
 
     Each mapping value is an HDF5 product written once by
     ``elsasser_increment_pdf_static`` and containing one truth dataset plus an
-    observed MC ensemble. Defaults select the second-smallest, middle, and
-    second-largest commonly valid lags. If analysis saved exactly three valid
-    lag bins, those are used directly. Pass three lag values in km to select the
-    nearest saved bins instead. Histogram grids must be aligned within and across
-    the three products; fixed publication-analysis bin bounds ensure it.
+    observed MC ensemble. The default 1x3 layout selects three lags; the 2x2
+    layout selects four. Explicit lag values select the nearest saved bins.
+    Histogram grids must be aligned within and across the three products; fixed
+    publication-analysis bin bounds ensure it.
 
     The return value is ``(figure, axes, matched_lags_km)`` so callers and tests
     can inspect the inexpensive plotting result without rerunning analysis.
@@ -1037,18 +1049,37 @@ def plot_increment_pdf_publication_row(
 
     if quantity != "z_plus":
         raise ValueError("this publication figure supports quantity='z_plus' only")
+    if layout not in {"1x3", "2x2"}:
+        raise ValueError("layout must be '1x3' or '2x2'")
+    panel_count = 4 if layout == "2x2" else 3
     cases = _ordered_pdf_cases(results_by_p, quantity)
-    lag_indices, matched_lags = _publication_lag_indices(cases, selected_lags)
+    lag_indices, matched_lags = _publication_lag_indices(
+        cases, selected_lags, panel_count
+    )
     if axes is None:
-        figure, axes_array = plt.subplots(
-            1, 3, figsize=(13.6, 4.35), sharey=True, squeeze=False
-        )
-        axes_array = axes_array[0]
-        figure.subplots_adjust(left=0.065, right=0.995, bottom=0.17, top=0.80, wspace=0.16)
+        if layout == "2x2":
+            figure, axes_array = plt.subplots(
+                2, 2, figsize=(11.2, 8.3), sharey=True, squeeze=False
+            )
+            axes_array = axes_array.reshape(-1)
+            figure.subplots_adjust(
+                left=0.08, right=0.99, bottom=0.09, top=0.90,
+                wspace=0.16, hspace=0.36,
+            )
+        else:
+            figure, axes_array = plt.subplots(
+                1, 3, figsize=(13.6, 4.35), sharey=True, squeeze=False
+            )
+            axes_array = axes_array[0]
+            figure.subplots_adjust(
+                left=0.065, right=0.995, bottom=0.17, top=0.80, wspace=0.16
+            )
     else:
         axes_array = np.asarray(axes, dtype=object).reshape(-1)
-        if axes_array.size != 3:
-            raise ValueError("axes must contain exactly three Matplotlib axes")
+        if axes_array.size != panel_count:
+            raise ValueError(
+                f"axes must contain exactly {panel_count} Matplotlib axes"
+            )
         figure = axes_array[0].figure
         if any(axis.figure is not figure for axis in axes_array):
             raise ValueError("all supplied axes must belong to the same figure")
@@ -1121,7 +1152,7 @@ def plot_increment_pdf_publication_row(
     ]
     figure.legend(
         handles=case_handles + meaning_handles, loc="upper center", bbox_to_anchor=(0.5, 0.985),
-        ncols=7,
+        ncols=4 if layout == "2x2" else 7,
         frameon=False, fontsize=8.5, handlelength=2.4, columnspacing=1.2,
     )
     return figure, axes_array, matched_lags
@@ -1133,6 +1164,7 @@ def plot_increment_pdf_publication(
     quantity: str = "z_plus",
     output_path: str | Path = "elsasser_increment_pdf_publication.png",
     *,
+    layout: str = "1x3",
     dpi: int = 300,
 ) -> Path:
     """Save a publication PDF figure using only existing analysis products."""
@@ -1140,7 +1172,10 @@ def plot_increment_pdf_publication(
     import matplotlib.pyplot as plt
 
     figure, _axes, _lags = plot_increment_pdf_publication_row(
-        results_by_p, selected_lags=selected_lags, quantity=quantity
+        results_by_p,
+        selected_lags=selected_lags,
+        quantity=quantity,
+        layout=layout,
     )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

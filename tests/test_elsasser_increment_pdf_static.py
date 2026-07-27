@@ -459,6 +459,18 @@ def test_increment_pdf_publication_uses_saved_products_and_selects_lags(tmp_path
     np.testing.assert_allclose(axes[0].lines[2].get_ydata(), expected_p09_median)
     plt.close(figure)
 
+    grid_figure, grid_axes, grid_matched = plot_increment_pdf_publication_row(
+        products,
+        selected_lags=[90.0, 290.0, 510.0, 690.0],
+        layout="2x2",
+    )
+    assert len(grid_axes) == 4
+    np.testing.assert_allclose(grid_matched, [100.0, 300.0, 500.0, 700.0])
+    for axis in grid_axes:
+        assert axis.get_xscale() == "linear"
+        assert axis.get_yscale() == "log"
+    plt.close(grid_figure)
+
     selected_only = np.zeros(7, dtype=bool)
     selected_only[[1, 3, 5]] = True
     for path in products.values():

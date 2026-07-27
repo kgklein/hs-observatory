@@ -223,11 +223,22 @@ def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", required=True, help="output publication figure path")
     parser.add_argument(
-        "--lags", type=float, nargs=3, default=None, metavar=("SMALL", "MEDIUM", "LARGE"),
-        help="three requested perpendicular lags in km; nearest saved bins are used",
+        "--lags", type=float, nargs="+", default=None, metavar="LAG",
+        help="requested perpendicular lags in km; three for 1x3 or four for 2x2",
+    )
+    parser.add_argument(
+        "--layout",
+        choices=("1x3", "2x2"),
+        default="1x3",
+        help="panel layout; default: 1x3",
     )
     parser.add_argument("--dpi", type=int, default=300)
     args = parser.parse_args(argv)
+    expected_lags = 4 if args.layout == "2x2" else 3
+    if args.lags is not None and len(args.lags) != expected_lags:
+        parser.error(
+            f"--layout {args.layout} requires exactly {expected_lags} --lags values"
+        )
     results_by_p = {}
     for specification in args.result:
         try:
@@ -243,6 +254,7 @@ def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
         selected_lags=args.lags,
         quantity="z_plus",
         output_path=args.output,
+        layout=args.layout,
         dpi=args.dpi,
     )
     print(output)
