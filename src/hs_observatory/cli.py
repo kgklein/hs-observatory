@@ -29,10 +29,21 @@ def generate_main(argv: list[str] | None = None) -> int:
         choices=("spacecraft", "plasma"),
         help="override the velocity frame used only in the truth visualization",
     )
+    parser.add_argument(
+        "--3d-connection",
+        action="append",
+        dest="configuration_3d_extra_connections",
+        metavar="LABEL-LABEL",
+        help=(
+            "additional solid pair in the 3D geometry plot; repeat as needed "
+            "(valid labels: Hub, N1 through N8; example: N2-N5)"
+        ),
+    )
     args = parser.parse_args(argv)
     output = generate_from_config(
         args.config,
         truth_velocity_frame=args.truth_velocity_frame,
+        configuration_3d_extra_connections=args.configuration_3d_extra_connections,
     )
     print(output)
     return 0

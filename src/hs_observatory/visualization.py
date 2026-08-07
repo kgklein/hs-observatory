@@ -1179,6 +1179,200 @@ def geometry_summary_paths(
     return base.with_suffix(".pdf"), base.with_suffix(".png")
 
 
+def configuration_3d_paths(
+    output_path: str | Path,
+    metadata: Mapping[str, Any] | None = None,
+) -> tuple[Path, Path]:
+    """Return time-tagged PDF and PNG paths for the 3D configuration plot."""
+
+    output = Path(output_path)
+    tag = _selected_time_label(metadata)
+    safe_tag = "".join(char if char.isalnum() else "-" for char in tag).strip("-")
+    safe_tag = "-".join(part for part in safe_tag.split("-") if part) or "unknown-time"
+    base = output.parent / "geometry_overviews" / f"{output.stem}_3d_configuration_{safe_tag}"
+    return base.with_suffix(".pdf"), base.with_suffix(".png")
+
+
+def helio_swarm_mesocenter(positions: np.ndarray) -> np.ndarray:
+    """Return the arithmetic mean of the nine GSE spacecraft positions."""
+
+    sample = _single_sample_positions(positions)
+    if sample.shape != (9, 3):
+        raise ValueError(f"3D configuration requires positions for 9 spacecraft; got {sample.shape}")
+    if not np.all(np.isfinite(sample)):
+        raise ValueError("3D configuration positions contain non-finite values")
+    return np.mean(sample, axis=0)
+
+
+def default_configuration_connections(
+    spacecraft_ids: Sequence[str] = ("H", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8"),
+) -> tuple[tuple[str, str], ...]:
+    """Return only the eight default Hub-to-Node spokes."""
+
+    labels = tuple("Hub" if value == "H" else value for value in spacecraft_ids)
+    if set(labels) != {"Hub", *(f"N{index}" for index in range(1, 9))}:
+        raise ValueError("3D configuration requires spacecraft H (Hub) and N1 through N8")
+    return tuple(("Hub", f"N{index}") for index in range(1, 9))
+
+
+def parse_configuration_connections(
+    specifications: Sequence[str] | str | None,
+) -> tuple[tuple[str, str], ...]:
+    """Parse extra pairs written as ``Hub-N3`` or ``N2-N5``.
+
+    A YAML string or list of strings is accepted. Comma-separated strings are
+    also supported for convenient CLI use.
+    """
+
+    if specifications is None:
+        return ()
+    raw = [specifications] if isinstance(specifications, str) else list(specifications)
+    items = [item.strip() for value in raw for item in str(value).split(",") if item.strip()]
+    valid = {"Hub", *(f"N{index}" for index in range(1, 9))}
+    pairs: list[tuple[str, str]] = []
+    for item in items:
+        parts = tuple(part.strip() for part in item.split("-"))
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(
+                f"Invalid 3D connection {item!r}; expected LABEL-LABEL, e.g. N2-N5"
+            )
+        first, second = parts
+        invalid = [label for label in parts if label not in valid]
+        if invalid:
+            raise ValueError(
+                f"Invalid spacecraft label(s) {', '.join(invalid)} in connection {item!r}; "
+                "valid labels are Hub and N1 through N8"
+            )
+        if first == second:
+            raise ValueError(f"Invalid 3D connection {item!r}; endpoints must differ")
+        pair = (first, second)
+        if pair not in pairs and pair[::-1] not in pairs:
+            pairs.append(pair)
+    return tuple(pairs)
+
+
+def plot_3d_configuration(
+    positions: np.ndarray,
+    spacecraft_ids: Sequence[str],
+    *,
+    metadata: Mapping[str, Any] | None = None,
+    extra_connections: Sequence[str] | str | None = None,
+):
+    """Plot the mesocentric HelioSwarm configuration in actual GSE axes."""
+
+    sample = _single_sample_positions(positions)
+    if len(spacecraft_ids) != 9 or sample.shape != (9, 3):
+        raise ValueError("3D configuration requires exactly 9 spacecraft positions and labels")
+    display_labels = tuple("Hub" if label == "H" else label for label in spacecraft_ids)
+    defaults = default_configuration_connections(spacecraft_ids)
+    extras = parse_configuration_connections(extra_connections)
+    index_by_label = {label: index for index, label in enumerate(display_labels)}
+    mesocenter = helio_swarm_mesocenter(sample)
+    relative = sample - mesocenter
+    extent = float(np.max(np.abs(relative)))
+    axis_limit = 1.12 * extent if extent > 0.0 else 1.0
+
+    with plt.rc_context({
+        "font.size": 9.0,
+        "axes.titlesize": 11.0,
+        "axes.labelsize": 9.5,
+        "xtick.labelsize": 8.0,
+        "ytick.labelsize": 8.0,
+        "savefig.bbox": "tight",
+    }):
+        figure = plt.figure(figsize=(6.8, 6.25), constrained_layout=True)
+        layout_engine = figure.get_layout_engine()
+        if layout_engine is not None:
+            layout_engine.set(rect=(0.0, 0.14, 1.0, 0.82))
+        axis = figure.add_subplot(111, projection="3d")
+        low = -axis_limit
+        high = axis_limit
+        for index, (spacecraft_id, label) in enumerate(zip(spacecraft_ids, display_labels)):
+            color = spacecraft_color(spacecraft_id)
+            x, y, z = relative[index]
+            # The X-Z projection terminates on the +Y wall; the other two
+            # projections remain on the negative X and Z bounding planes.
+            axis.plot([x, low], [y, y], [z, z], "--", color=color, alpha=0.22, lw=0.65)
+            axis.plot([x, x], [y, high], [z, z], "--", color=color, alpha=0.22, lw=0.65)
+            axis.plot([x, x], [y, y], [z, low], "--", color=color, alpha=0.22, lw=0.65)
+            axis.scatter(
+                [low, x, x], [y, high, y], [z, z, low], s=18, c=color,
+                alpha=0.48, edgecolors="none", depthshade=False,
+            )
+            axis.scatter(
+                x, y, z, s=76 if label == "Hub" else 55, c=color,
+                edgecolors="#202020", linewidths=0.55, depthshade=False, zorder=6,
+            )
+
+        connections = defaults + tuple(pair for pair in extras if pair not in defaults and pair[::-1] not in defaults)
+        for first, second in connections:
+            left, right = index_by_label[first], index_by_label[second]
+            color = spacecraft_color(spacecraft_ids[right])
+            axis.plot(*relative[[left, right]].T, color=color, lw=1.65, alpha=0.88)
+
+        axis.set(xlim=(-axis_limit, axis_limit), ylim=(-axis_limit, axis_limit),
+                 zlim=(-axis_limit, axis_limit), xlabel=r"$X_{GSE}$ (km)",
+                 ylabel=r"$Y_{GSE}$ (km)", zlabel=r"$Z_{GSE}$ (km)")
+        axis.set_box_aspect((1, 1, 1))
+        axis.view_init(elev=24, azim=-56)
+        axis.grid(True, alpha=0.24)
+        axis.set_title(f"HelioSwarm Configuration\n{_selected_time_title_label(metadata)}", pad=13)
+        figure.text(
+            0.5, 0.064,
+            r"GSE coordinates; Sunward is $-X_{GSE}$  |  Origin at HelioSwarm mesocenter",
+            ha="center", va="bottom", fontsize=8.0, color="#444444",
+        )
+        legend_handles = [
+            Line2D(
+                [0], [0], marker="o", linestyle="none", markersize=6.0,
+                markerfacecolor=spacecraft_color(spacecraft_id),
+                markeredgecolor="#202020", markeredgewidth=0.4, label=label,
+            )
+            for spacecraft_id, label in zip(spacecraft_ids, display_labels)
+        ]
+        figure.legend(
+            handles=legend_handles,
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.012),
+            ncol=9,
+            frameon=False,
+            fontsize=7.8,
+            handletextpad=0.3,
+            columnspacing=0.75,
+            borderaxespad=0.0,
+        )
+    diagnostics = {
+        "requested_configuration_time": (metadata or {}).get("requested_time")
+        or (metadata or {}).get("configuration_time"),
+        "matched_cdf_sample_time": (metadata or {}).get("selected_time"),
+        "matched_sample_index": (metadata or {}).get("selected_index"),
+        "mesocenter_km": mesocenter.tolist(),
+        "axis_limit_km": axis_limit,
+        "default_connections": defaults,
+        "extra_connections": extras,
+    }
+    return figure, diagnostics
+
+
+def save_3d_configuration(
+    *, output_path: str | Path, config: dict, positions: np.ndarray,
+    spacecraft_ids: Sequence[str], metadata: Mapping[str, Any] | None = None,
+    extra_connections: Sequence[str] | str | None = None,
+) -> tuple[Path, Path, dict[str, Any]]:
+    """Write the reusable 3D configuration plot as PDF and PNG."""
+
+    pdf_path, png_path = configuration_3d_paths(output_path, metadata)
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    figure, diagnostics = plot_3d_configuration(
+        positions, spacecraft_ids, metadata=metadata, extra_connections=extra_connections,
+    )
+    figure.savefig(pdf_path)
+    figure.savefig(png_path, dpi=int(config.get("dpi", 150)))
+    plt.close(figure)
+    diagnostics.update(output_pdf_path=str(pdf_path), output_png_path=str(png_path))
+    return pdf_path, png_path, diagnostics
+
+
 def _axis_limits(values: np.ndarray, pad: float = 0.08) -> tuple[float, float]:
     finite = np.asarray(values, dtype=float)
     finite = finite[np.isfinite(finite)]

@@ -29,10 +29,13 @@ from hs_observatory.io.hdf5 import write_observations
 from hs_observatory.spacecraft.configuration import SpacecraftConfiguration
 from hs_observatory.visualization import (
     alfven_visualization_path,
+    configuration_3d_paths,
     geometry_summary_paths,
     observed_alfven_visualization_path,
     observed_visualization_paths,
+    parse_configuration_connections,
     save_default_visualizations,
+    save_3d_configuration,
     save_geometry_summary,
     save_observed_visualizations,
     visualization_paths,
@@ -267,6 +270,7 @@ def generate_from_config(
     config_path: str | Path,
     *,
     truth_velocity_frame: str | None = None,
+    configuration_3d_extra_connections: list[str] | None = None,
 ) -> Path:
     loaded = load_generation_config(config_path)
     config = loaded.data
@@ -389,6 +393,14 @@ def generate_from_config(
 
     output_path = Path(config["output"]["path"])
     visualization_config = config.get("visualization", {})
+    configured_3d_connections = (
+        configuration_3d_extra_connections
+        if configuration_3d_extra_connections is not None
+        else visualization_config.get("configuration_3d_extra_connections")
+    )
+    # Validate before writing any generation products. Accepted entries use
+    # LABEL-LABEL syntax, for example Hub-N3, N2-N5, or N4-N7.
+    parse_configuration_connections(configured_3d_connections)
     visualization_enabled = bool(visualization_config.get("enabled", True))
     requested_truth_velocity_frame = str(
         truth_velocity_frame
@@ -420,6 +432,9 @@ def generate_from_config(
         )
     truth_plot_path, geometry_plot_path = visualization_paths(output_path, visualization_config)
     geometry_summary_pdf_path, geometry_summary_png_path = geometry_summary_paths(
+        output_path, spacecraft["n"].metadata
+    )
+    configuration_3d_pdf_path, configuration_3d_png_path = configuration_3d_paths(
         output_path, spacecraft["n"].metadata
     )
     alfven_plot_path = alfven_visualization_path(output_path, visualization_config)
@@ -476,6 +491,12 @@ def generate_from_config(
         ),
         "geometry_summary_png_path": (
             str(geometry_summary_png_path) if visualization_enabled else "null"
+        ),
+        "configuration_3d_pdf_path": (
+            str(configuration_3d_pdf_path) if visualization_enabled else "null"
+        ),
+        "configuration_3d_png_path": (
+            str(configuration_3d_png_path) if visualization_enabled else "null"
         ),
         "alfven_visualization_enabled": alfven_visualization_enabled,
         "alfven_visualization_fluctuations": alfven_visualization_fluctuations,
@@ -549,6 +570,28 @@ def generate_from_config(
             f"{geometry_diagnostics['regular_size_ratio_at_least_3']}\n"
             f"  output PDF path: {pdf_path}\n"
             f"  output PNG path: {png_path}"
+        )
+        configuration_pdf, configuration_png, configuration_diagnostics = save_3d_configuration(
+            output_path=output,
+            config=visualization_config,
+            positions=spacecraft[path_quantity].position,
+            spacecraft_ids=spacecraft["n"].spacecraft_ids,
+            metadata=spacecraft["n"].metadata,
+            extra_connections=configured_3d_connections,
+        )
+        print(
+            "3D configuration diagnostics:\n"
+            f"  requested configuration_time: "
+            f"{configuration_diagnostics['requested_configuration_time']}\n"
+            f"  matched CDF sample time: "
+            f"{configuration_diagnostics['matched_cdf_sample_time']}\n"
+            f"  matched sample index: {configuration_diagnostics['matched_sample_index']}\n"
+            f"  mesocenter (GSE km): {configuration_diagnostics['mesocenter_km']}\n"
+            f"  symmetric axis limit: +/-{configuration_diagnostics['axis_limit_km']:.6g} km\n"
+            f"  default solid connections: {configuration_diagnostics['default_connections']}\n"
+            f"  extra solid connections: {configuration_diagnostics['extra_connections']}\n"
+            f"  output PDF path: {configuration_pdf}\n"
+            f"  output PNG path: {configuration_png}"
         )
     if observed_visualization_enabled:
         observed_truth = dict(truth)

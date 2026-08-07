@@ -12,7 +12,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/run_malara_prod_generation_batch.sh [options]
 
-Run generation/malara-prod-1*.yaml with bounded parallelism.
+Run generation/malara-prod-4*.yaml with bounded parallelism.
 
 Options:
   -j, --jobs N       Run at most N configs concurrently (default: 4)
@@ -80,10 +80,10 @@ fi
 
 mapfile -d "" CONFIGS < <(
   find "${ROOT}/generation" -maxdepth 1 -type f \
-    -name "malara-prod-1*.yaml" -print0 | sort -z
+    -name "malara-prod-4*.yaml" -print0 | sort -z
 )
 if ((${#CONFIGS[@]} == 0)); then
-  echo "No configs matched generation/malara-prod-1*.yaml" >&2
+  echo "No configs matched generation/malara-prod-4*.yaml" >&2
   exit 2
 fi
 

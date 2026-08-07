@@ -1,0 +1,54 @@
+# Minimal one-sample run for the geometry products at the malara-prod-401 epoch.
+# Run from the repository root with:
+#   hsobs-generate generation/malara-prod-401-geometry.yaml
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-08-25T12:00:00"
+  fallback_synthetic: false
+  velocity_km_s: [105.0, 2.0, 245.0]
+
+# Equal start and stop values produce exactly one sample for each quantity.
+time:
+  t_start_s: 0.0
+  t_stop_s: 0.0
+  cadence_s:
+    n: 1.0
+    v: 1.0
+    B: 1.0
+
+# Generation currently evaluates a field before invoking the shared geometry
+# workflow. An empty sine-sum field keeps that required step inexpensive.
+field:
+  model: sine_sum
+  background:
+    n: 5.0
+    v: [400.0, 0.0, 0.0]
+    B: [0.0, 0.0, 5.0]
+  modes: []
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  random_seed: 12345
+  n_mc: 1
+  time: {model: none}
+  position: {model: none}
+  variables:
+    n: {model: none}
+    v: {model: none}
+    B: {model: none}
+
+output:
+  path: outputs/malara-prod-401-geometry.h5
+  write_errors: false
+
+visualization:
+  enabled: true
+  observed_enabled: false
+  alfven_enabled: false
+  truth_velocity_frame: spacecraft
+  truth_path: outputs/malara-prod-401-geometry_truth.png
+  geometry_path: outputs/malara-prod-401-geometry.png
+  dpi: 300

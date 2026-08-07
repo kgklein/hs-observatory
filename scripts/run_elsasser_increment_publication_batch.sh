@@ -17,7 +17,7 @@ if [[ ! -x "${ANALYZER}" ]]; then
 fi
 
 mapfile -d "" CONFIGS < <(
-  find "${ROOT}/analysis" -maxdepth 1     -name "malara-prod-1*elsasser-increment-pdf-publication.yaml"     -print0 | sort -z
+  find "${ROOT}/analysis" -maxdepth 1     -name "malara-prod-4*elsasser-increment-pdf-publication.yaml"     -print0 | sort -z
 )
 if [[ ${#CONFIGS[@]} -ne 10 ]]; then
   echo "Expected 10 analysis configs, found ${#CONFIGS[@]}" >&2

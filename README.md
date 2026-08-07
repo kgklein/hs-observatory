@@ -332,6 +332,19 @@ visualization:
 
 When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_velocity_alfven.png`, `_observed_mcNNN.png`, `_geometry_observed_mcNNN.png`, and `_velocity_alfven_observed_mcNNN.png`. Observed time series are plotted against nominal time, consistent with the coordinate assumptions used by downstream analysis.
 
+The geometry-overview workflow also writes a mesocentric 3D GSE configuration
+as time-tagged PDF and PNG files under `geometry_overviews/`. Its default solid
+lines are the eight Hub-to-Node spokes. Additional solid pairs use
+`LABEL-LABEL` syntax (`Hub-N3`, `N2-N5`, etc.) in YAML:
+
+```yaml
+visualization:
+  configuration_3d_extra_connections: [N2-N5, N4-N7]
+```
+
+For a one-run override, repeat `hsobs-generate --3d-connection N2-N5` as
+needed. Valid labels are `Hub` and `N1` through `N8`.
+
 ## Extension points
 
 To add a field model, subclass `FieldModel` and implement `evaluate_quantity(quantity, time, position)`, then add construction by name alongside `field_from_config`. The inherited `evaluate(time, position)` convenience method evaluates all quantities on one shared grid. Field models contain no noise or file-I/O logic.
