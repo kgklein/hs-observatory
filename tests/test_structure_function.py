@@ -13,6 +13,8 @@ from hs_observatory.analysis.structure_function import (
     compute_all_spacetime_structure_functions,
     compute_pairwise_structure_functions,
     plot_structure_function_diagnostic,
+    plot_structure_function_overlay,
+    plot_structure_function_overlay_from_config,
     plot_structure_function_summary,
     plot_structure_function_summary_row,
     structure_function_kurtosis_ylim,
@@ -499,6 +501,69 @@ def test_summary_plot_accepts_json_and_supplied_axes(tmp_path):
     np.testing.assert_array_equal(returned_axes, axes)
     assert axes[0].lines[0].get_color() == "#123456"
     plt.close(figure)
+
+
+def test_structure_function_overlay_writes_two_panel_figure(tmp_path):
+    output = plot_structure_function_overlay(
+        {0.9: _summary_plot_result(), 0.7: _summary_plot_result(), 0.5: _summary_plot_result()},
+        tmp_path / "combined.png",
+        dpi=80,
+    )
+
+    assert output.is_file() and output.stat().st_size > 0
+
+
+def test_structure_function_overlay_from_config(tmp_path, monkeypatch):
+    import json
+
+    for case in (400, 401, 402):
+        (tmp_path / f"{case}.json").write_text(
+            json.dumps(_summary_plot_result()), encoding="utf-8"
+        )
+    config = tmp_path / "combined.yaml"
+    config.write_text(
+        """cases:
+  '400': {path: 400.json, p_value: 0.9}
+  '401': {path: 401.json, p_value: 0.7}
+  '402': {path: 402.json, p_value: 0.5}
+output: {figure: combined.png}
+dpi: 80
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    output = plot_structure_function_overlay_from_config(config)
+
+    assert output == Path("combined.png")
+    assert output.is_file() and output.stat().st_size > 0
+
+
+def test_structure_function_overlay_config_accepts_fit_overrides(tmp_path, monkeypatch):
+    import json
+
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps(_summary_plot_result()), encoding="utf-8")
+    config = tmp_path / "combined.yaml"
+    config.write_text(
+        """cases:
+  run: {path: result.json, p_value: 0.9}
+output: {figure: ignored.png}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    output = plot_structure_function_overlay_from_config(
+        config,
+        output_override="overridden.png",
+        fit_lambda_range_override=(1.0, 2.0),
+        min_fit_bins_override=2,
+        show_p_model_override=False,
+    )
+
+    assert output == Path("overridden.png")
+    assert output.is_file() and output.stat().st_size > 0
 
 
 def test_summary_row_optionally_adds_pair_count_panel():

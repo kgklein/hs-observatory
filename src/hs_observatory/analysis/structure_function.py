@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from itertools import combinations
 import json
@@ -1085,6 +1086,10 @@ def plot_structure_function_summary_row(
     show_p_model: bool = True,
     show_kurtosis: bool = True,
     show_pair_counts: bool = False,
+    show_legends: bool = True,
+    show_run_label: bool = True,
+    show_fit_span: bool = True,
+    p_model_color: str | None = None,
 ):
     """Plot one publication-style truth/MC structure-function summary row.
 
@@ -1230,10 +1235,6 @@ def plot_structure_function_summary_row(
     if structure_ylim is not None:
         structure_axis.set_ylim(structure_lower, structure_upper)
     structure_axis.grid(True, which="both", alpha=0.18)
-    order_legend = structure_axis.legend(
-        handles=order_handles, fontsize=7.5, ncols=2, loc="upper left", title="order"
-    )
-    structure_axis.add_artist(order_legend)
     provenance_handles = [
         Line2D([0], [0], color=color, linestyle="-", marker="o", markerfacecolor="white",
                linewidth=1.45, label="sampled truth"),
@@ -1241,19 +1242,25 @@ def plot_structure_function_summary_row(
                label="MC median"),
         Line2D([0], [0], color=color, linewidth=7, alpha=0.15, label="MC 5th–95th"),
     ]
-    structure_axis.legend(handles=provenance_handles, fontsize=7.5, loc="lower right")
-    structure_axis.text(
-        0.97,
-        0.97,
-        label,
-        color=color,
-        transform=structure_axis.transAxes,
-        ha="right",
-        va="top",
-        fontsize=10,
-        fontweight="bold",
-        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.5},
-    )
+    if show_legends:
+        order_legend = structure_axis.legend(
+            handles=order_handles, fontsize=7.5, ncols=2, loc="upper left", title="order"
+        )
+        structure_axis.add_artist(order_legend)
+        structure_axis.legend(handles=provenance_handles, fontsize=7.5, loc="lower right")
+    if show_run_label:
+        structure_axis.text(
+            0.97,
+            0.97,
+            label,
+            color=color,
+            transform=structure_axis.transAxes,
+            ha="right",
+            va="top",
+            fontsize=10,
+            fontweight="bold",
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.75, "pad": 1.5},
+        )
 
     if fit_lambda_range_km is None:
         truth_exponents = truth[quantity]["scaling_exponents"]
@@ -1291,14 +1298,15 @@ def plot_structure_function_summary_row(
         raise ValueError("truth and observed exponent fit ranges do not match")
     fit_bounds = truth_exponents["scale_ranges_km"][selected_range]
     structure_xlim = structure_axis.get_xlim()
-    structure_axis.axvspan(
-        fit_bounds[0],
-        fit_bounds[1],
-        color="0.7",
-        alpha=0.25,
-        linewidth=0,
-        zorder=0,
-    )
+    if show_fit_span:
+        structure_axis.axvspan(
+            fit_bounds[0],
+            fit_bounds[1],
+            color="0.7",
+            alpha=0.25,
+            linewidth=0,
+            zorder=0,
+        )
     structure_axis.set_xlim(structure_xlim)
     truth_xi = np.asarray(truth_exponents["raw"], dtype=float)[0, truth_range_index]
     mc_xi = np.asarray(mc_exponents["raw"], dtype=float)[:, mc_range_index]
@@ -1334,7 +1342,8 @@ def plot_structure_function_summary_row(
             + (1.0 - float(p_value)) ** (fitted_orders / 3.0)
         )
         exponent_axis.plot(
-            fitted_orders, prediction, color="black", linestyle="--", linewidth=1.25,
+            fitted_orders, prediction, color=p_model_color or "black",
+            linestyle="--", linewidth=1.25,
             label=fr"$p$-model ($p={p_value:g}$)", zorder=2
         )
     exponent_axis.set_xlabel(r"order $n$")
@@ -1344,7 +1353,8 @@ def plot_structure_function_summary_row(
     if exponent_ylim is not None:
         exponent_axis.set_ylim(exponent_lower, exponent_upper)
     exponent_axis.grid(True, alpha=0.18)
-    exponent_axis.legend(fontsize=7.5, loc="best")
+    if show_legends:
+        exponent_axis.legend(fontsize=7.5, loc="best")
 
     if show_kurtosis:
         flatness_axis = axes_array[2]
@@ -1376,7 +1386,8 @@ def plot_structure_function_summary_row(
         if kurtosis_ylim is not None:
             flatness_axis.set_ylim(kurtosis_lower, kurtosis_upper)
         flatness_axis.grid(True, which="both", alpha=0.18)
-        flatness_axis.legend(fontsize=7.5, loc="best")
+        if show_legends:
+            flatness_axis.legend(fontsize=7.5, loc="best")
 
     if show_pair_counts:
         count_axis = axes_array[2 + int(show_kurtosis)]
@@ -1406,8 +1417,212 @@ def plot_structure_function_summary_row(
         count_axis.set_ylabel("number of baseline pairs")
         count_axis.set_title("pairs per bin")
         count_axis.grid(True, which="both", alpha=0.18)
-        count_axis.legend(fontsize=7.5, loc="best")
+        if show_legends:
+            count_axis.legend(fontsize=7.5, loc="best")
     return figure, axes_array
+
+
+def plot_structure_function_overlay(
+    results_by_p: Mapping[float, dict[str, Any] | str | Path],
+    output_path: str | Path = "malara-prod-combined_sf_publication.png",
+    *,
+    quantity: str = "z_plus",
+    max_order: int | None = 6,
+    fit_range: str | None = "total",
+    fit_lambda_range_km: tuple[float, float] | None = None,
+    min_fit_bins: int | None = None,
+    show_p_model: bool = True,
+    dpi: int = 300,
+) -> Path:
+    """Overlay several Malara structure-function summaries in a two-panel figure."""
+
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    if not isinstance(results_by_p, Mapping) or not results_by_p:
+        raise ValueError("results_by_p must be a nonempty mapping")
+    cases = [(float(p_value), result) for p_value, result in results_by_p.items()]
+    if len({p_value for p_value, _result in cases}) != len(cases):
+        raise ValueError("results_by_p contains duplicate numeric p values")
+    cases.sort(key=lambda item: item[0], reverse=True)
+
+    figure, axes = plt.subplots(
+        1, 2, figsize=(12.8, 5.25), constrained_layout=True, squeeze=False
+    )
+    axes = axes[0]
+    for case_index, (p_value, result) in enumerate(cases):
+        plot_structure_function_summary_row(
+            result,
+            p_value=p_value,
+            axes=axes,
+            run_color=P_MODEL_RUN_COLORS.get(p_value),
+            max_order=max_order,
+            quantity=quantity,
+            fit_range=fit_range,
+            fit_lambda_range_km=fit_lambda_range_km,
+            min_fit_bins=min_fit_bins,
+            show_p_model=show_p_model,
+            show_kurtosis=False,
+            show_legends=False,
+            show_run_label=False,
+            show_fit_span=case_index == 0,
+            p_model_color=P_MODEL_RUN_COLORS.get(p_value),
+        )
+
+    first_result = _summary_result(cases[0][1])
+    truth_orders = np.asarray(first_result["products"]["truth"]["orders"], dtype=int)
+    plotted_orders = truth_orders if max_order is None else truth_orders[truth_orders <= max_order]
+    order_handles = [
+        Line2D(
+            [0], [0], color="0.25", linestyle="none",
+            marker=_ORDER_MARKERS[index % len(_ORDER_MARKERS)], markersize=5.0,
+            label=fr"$n={order}$",
+        )
+        for index, order in enumerate(plotted_orders)
+    ]
+    order_legend = axes[0].legend(
+        handles=order_handles, fontsize=7.5, ncols=2, loc="upper left", title="order"
+    )
+    axes[0].add_artist(order_legend)
+    run_handles = [
+        Line2D(
+            [0], [0], color=P_MODEL_RUN_COLORS.get(p_value, "#D55E00"),
+            linewidth=2.0, label=fr"$p={p_value:g}$",
+        )
+        for p_value, _result in cases
+    ]
+    run_legend = axes[0].legend(
+        handles=run_handles, fontsize=7.5, loc="center left", title="run"
+    )
+    axes[0].add_artist(run_legend)
+    provenance_handles = [
+        Line2D(
+            [0], [0], color="0.25", linestyle="-", marker="o",
+            markerfacecolor="white", linewidth=1.45, label="sampled truth",
+        ),
+        Line2D(
+            [0], [0], color="0.25", linestyle="--", marker="o",
+            linewidth=1.25, label="MC median",
+        ),
+        Line2D(
+            [0], [0], color="0.25", linewidth=7, alpha=0.15,
+            label="MC 5th–95th",
+        ),
+    ]
+    axes[0].legend(handles=provenance_handles, fontsize=7.5, loc="lower right")
+
+    exponent_handles = []
+    for p_value, _result in cases:
+        color = P_MODEL_RUN_COLORS.get(p_value, "#D55E00")
+        exponent_handles.extend(
+            [
+                Line2D(
+                    [0], [0], color=color, marker="o", markerfacecolor="white",
+                    linewidth=1.5, label=fr"sampled truth, $p={p_value:g}$",
+                ),
+                Line2D(
+                    [0], [0], color=color, marker="s", linestyle="none",
+                    label=fr"MC 5th–95th, $p={p_value:g}$",
+                ),
+            ]
+        )
+        if show_p_model:
+            exponent_handles.append(
+                Line2D(
+                    [0], [0], color=color, linestyle="--", linewidth=1.25,
+                    label=fr"$p$-model, $p={p_value:g}$",
+                )
+            )
+    axes[1].legend(
+        handles=exponent_handles,
+        fontsize=7.0,
+        ncols=3 if show_p_model else 2,
+        loc="upper left",
+    )
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=dpi, bbox_inches="tight")
+    plt.close(figure)
+    return output
+
+
+def plot_structure_function_overlay_from_config(
+    config_path: str | Path,
+    *,
+    output_override: str | Path | None = None,
+    fit_range_override: str | None = None,
+    fit_lambda_range_override: tuple[float, float] | None = None,
+    min_fit_bins_override: int | None = None,
+    show_p_model_override: bool | None = None,
+) -> Path:
+    """Create a structure-function overlay from a lightweight YAML config."""
+
+    import yaml
+
+    config = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    if not isinstance(config, Mapping):
+        raise ValueError("structure-function overlay config must be a YAML mapping")
+    cases = config.get("cases")
+    if not isinstance(cases, Mapping) or not cases:
+        raise ValueError("structure-function overlay config requires nonempty 'cases'")
+    results_by_p: dict[float, Path] = {}
+    for case_name, entry in cases.items():
+        if not isinstance(entry, Mapping) or "path" not in entry or "p_value" not in entry:
+            raise ValueError(f"cases.{case_name} must contain path and p_value")
+        p_value = float(entry["p_value"])
+        if p_value in results_by_p:
+            raise ValueError(f"duplicate p_value {p_value:g} in cases")
+        result_path = Path(str(entry["path"])).expanduser()
+        results_by_p[p_value] = (
+            result_path if result_path.is_absolute() else Path.cwd() / result_path
+        )
+    output = config.get("output", {})
+    if not isinstance(output, Mapping):
+        raise ValueError("output must be a mapping")
+    configured_fit_lambda_range = config.get("fit_lambda_range_km")
+    fit_lambda_range = (
+        fit_lambda_range_override
+        if fit_lambda_range_override is not None
+        else configured_fit_lambda_range
+    )
+    return plot_structure_function_overlay(
+        results_by_p,
+        output_path=(
+            output_override
+            if output_override is not None
+            else output.get("figure", "malara-prod-combined_sf_publication.png")
+        ),
+        quantity=str(config.get("quantity", "z_plus")),
+        max_order=(
+            None
+            if config.get("max_order", 6) is None
+            else int(config.get("max_order", 6))
+        ),
+        fit_range=(
+            fit_range_override
+            if fit_range_override is not None
+            else config.get("fit_range", "total")
+        ),
+        fit_lambda_range_km=(
+            None if fit_lambda_range is None else tuple(float(value) for value in fit_lambda_range)
+        ),
+        min_fit_bins=(
+            min_fit_bins_override
+            if min_fit_bins_override is not None
+            else (
+                None
+                if config.get("min_fit_bins") is None
+                else int(config["min_fit_bins"])
+            )
+        ),
+        show_p_model=(
+            show_p_model_override
+            if show_p_model_override is not None
+            else bool(config.get("show_p_model", True))
+        ),
+        dpi=int(config.get("dpi", 300)),
+    )
 
 
 def structure_function_summary_ylims(

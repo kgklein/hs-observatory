@@ -207,6 +207,58 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def plot_structure_function_overlay_main(argv: list[str] | None = None) -> int:
+    """Overlay several saved Malara structure-function publication results."""
+
+    from hs_observatory.analysis.structure_function import (
+        plot_structure_function_overlay_from_config,
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Overlay Malara structure functions and fitted scaling exponents"
+    )
+    parser.add_argument("config", help="structure-function overlay YAML")
+    parser.add_argument("--output", default=None, help="override output figure path")
+    parser.add_argument(
+        "--fit-range",
+        default=None,
+        help="use a named exponent fit range saved in the analysis JSON",
+    )
+    parser.add_argument(
+        "--fit-lambda-range",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("MIN_KM", "MAX_KM"),
+        help="refit the saved structure functions over these lambda bounds in km",
+    )
+    parser.add_argument(
+        "--min-fit-bins",
+        type=int,
+        default=None,
+        help="minimum number of populated lambda bins required for the refit",
+    )
+    parser.add_argument(
+        "--no-p-model",
+        action="store_const",
+        const=False,
+        default=None,
+        dest="show_p_model",
+        help="hide the theoretical p-model curves",
+    )
+    args = parser.parse_args(argv)
+    output = plot_structure_function_overlay_from_config(
+        args.config,
+        output_override=args.output,
+        fit_range_override=args.fit_range,
+        fit_lambda_range_override=args.fit_lambda_range,
+        min_fit_bins_override=args.min_fit_bins,
+        show_p_model_override=args.show_p_model,
+    )
+    print(output)
+    return 0
+
+
 def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
     """Plot three Malara cases from saved increment-PDF analysis HDF5 files."""
 

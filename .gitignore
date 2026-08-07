@@ -36,6 +36,7 @@ data/helioswarm_cdf/
 !scripts/plot_sim_prod_4xx_magnetic_gradient_combined.sh
 !scripts/run_sim_prod_400_magnetic_gradient_correlation.sh
 !scripts/plot_sim_prod_400_magnetic_gradient_correlation.sh
+!scripts/plot_malara_prod_combined_sf_publication.sh
 
 analysis/*yaml~
 generation/*yaml~
