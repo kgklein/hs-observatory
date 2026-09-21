@@ -213,19 +213,136 @@ def make_dot(modules: dict[str, Module], nodes: list[str], edges: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+# This is an intentionally curated view, not a quotient of every import edge.
+# Each displayed edge must have at least one direct source-import witness.
+OVERVIEW_LABELS = {
+    "cli": "CLI", "config": "Configuration", "generation": "Generation",
+    "spacecraft": "Spacecraft", "fields": "Fields", "errors": "Error models",
+    "io": "I/O", "dispatch": "Analysis dispatch",
+    "intermittency": "Elsasser / intermittency", "gradients": "Magnetic gradients",
+    "reconstruction": "Reconstruction", "diagnostics": "Other diagnostics",
+    "visualization": "Visualization / output",
+}
+OVERVIEW_RELATIONSHIPS = (
+    ("cli", "generation"), ("cli", "dispatch"),
+    ("generation", "config"), ("generation", "spacecraft"),
+    ("generation", "fields"), ("generation", "errors"),
+    ("generation", "io"), ("generation", "visualization"),
+    ("fields", "io"), ("dispatch", "config"),
+    ("dispatch", "intermittency"), ("dispatch", "gradients"),
+    ("dispatch", "reconstruction"), ("dispatch", "diagnostics"),
+    ("intermittency", "visualization"), ("gradients", "visualization"),
+    ("reconstruction", "visualization"), ("diagnostics", "visualization"),
+)
+
+
+def overview_group(name: str) -> str | None:
+    """Map modules to responsibilities; low-level utilities are intentionally omitted."""
+    name = short_name(name)
+    if name in {"cli", "config", "visualization"}:
+        return name
+    if name == "generate":
+        return "generation"
+    if name in {"analyze", "analysis.registry", "analysis.base"}:
+        return "dispatch"
+    for prefix in ("spacecraft", "fields", "errors", "io"):
+        if name.startswith(prefix + "."):
+            return prefix
+    if name.startswith(("analysis.elsasser", "analysis.increment_pdf",
+                        "analysis.structure_function", "analysis.derived.")):
+        return "intermittency"
+    if name.startswith("analysis.magnetic_gradient"):
+        return "gradients"
+    if name in {"analysis.rbf_reconstruction", "analysis.timesync"}:
+        return "reconstruction"
+    if name in {"analysis.diagnostics", "analysis.static_decorrelation", "analysis.timeseries_fft"}:
+        return "diagnostics"
+    return None
+
+
+def build_overview(nodes: list[str], edges: dict):
+    members: dict[str, list[str]] = {}
+    for name in sorted(nodes):
+        group = overview_group(name)
+        if group:
+            members.setdefault(group, []).append(name)
+    witnesses: dict[tuple[str, str], list[str]] = {}
+    for source, target in sorted(edges):
+        pair = (overview_group(source), overview_group(target))
+        if pair in OVERVIEW_RELATIONSHIPS:
+            witnesses.setdefault(pair, []).append(f"{short_name(source)} -> {short_name(target)}")
+    return dict(sorted(members.items())), dict(sorted(witnesses.items()))
+
+
+def make_overview_dot(members: dict, witnesses: dict) -> str:
+    quote = json.dumps
+    lines = [
+        "// Generated curated overview; arrows are selected source-backed dependencies.",
+        "digraph package_overview {",
+        '  graph [rankdir=LR, bgcolor="white", fontname="Helvetica", fontsize=12,',
+        '         nodesep=0.35, ranksep=0.7, pad=0.2,',
+        '         label="HS Observatory: architectural areas\\nSelected dependencies, not execution order", labelloc=t];',
+        '  node [shape=box, style="rounded,filled", fillcolor="#f7f8fa",',
+        '        color="#667085", fontname="Helvetica", fontsize=11, margin="0.14,0.10"];',
+        '  edge [color="#667085", arrowsize=0.7];',
+    ]
+    clusters = {
+        "Entry points": ("cli", "generation", "dispatch"),
+        "Generation and support": ("config", "spacecraft", "fields", "errors", "io"),
+        "Scientific analyses": ("intermittency", "gradients", "reconstruction", "diagnostics"),
+        "Output": ("visualization",),
+    }
+    for index, (label, groups) in enumerate(clusters.items()):
+        lines.extend([f"  subgraph cluster_{index} {{", f"    label={quote(label)};",
+                      '    color="#d0d5dd"; style="rounded";'])
+        for group in sorted(groups):
+            if group in members:
+                tooltip = ", ".join(short_name(name) for name in members[group])
+                lines.append(f"    {quote(group)} [label={quote(OVERVIEW_LABELS[group])}, tooltip={quote(tooltip)}];")
+        lines.append("  }")
+    for pair, evidence in sorted(witnesses.items()):
+        lines.append(f"  {quote(pair[0])} -> {quote(pair[1])} [tooltip={quote('; '.join(evidence))}];")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def render_svg(dot_path: Path, svg_path: Path, no_render: bool) -> None:
+    if no_render:
+        print("SVG rendering skipped (--no-render).")
+    elif (dot := shutil.which("dot")) is None:
+        print("SVG rendering skipped: Graphviz 'dot' executable not found; DOT is ready.")
+    else:
+        svg_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [dot, "-Tsvg", str(dot_path), "-o", str(svg_path)],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode:
+            raise ValueError(f"Graphviz rendering failed: {result.stderr.strip()}")
+        if result.stderr.strip():
+            print(result.stderr.strip(), file=sys.stderr)
+        print(f"Rendered {svg_path}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dot", type=Path, default=ROOT / "docs/architecture/module-dependencies.dot")
     parser.add_argument("--svg", type=Path, default=ROOT / "docs/architecture/module-dependencies.svg")
     parser.add_argument("--no-render", action="store_true", help="write DOT only")
     parser.add_argument("--full", action="store_true", help="include wrappers, initializers and registration edges")
+    parser.add_argument("--detailed-only", action="store_true", help="skip the curated overview")
     local = parser.add_mutually_exclusive_group()
     local.add_argument("--show-local-imports", dest="show_local", action="store_true")
     local.add_argument("--hide-local-imports", dest="show_local", action="store_false")
     parser.set_defaults(show_local=True)
     args = parser.parse_args(argv)
-    if args.dot.resolve() == args.svg.resolve():
-        parser.error("--dot and --svg must refer to different files")
+    overview_dot = args.dot.with_name("package-overview.dot")
+    overview_svg = args.svg.with_name("package-overview.svg")
+    outputs = [args.dot, args.svg]
+    if not args.detailed_only:
+        outputs.extend([overview_dot, overview_svg])
+    if len({path.resolve() for path in outputs}) != len(outputs):
+        parser.error("detailed and overview output paths must be distinct")
     try:
         modules = read_modules(ROOT / "src" / PACKAGE)
         if not modules:
@@ -246,21 +363,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {short_name(source)} -> {short_name(target)} ({reason})")
         for warning in warnings:
             print(f"Warning: {warning}", file=sys.stderr)
-        if args.no_render:
-            print("SVG rendering skipped (--no-render).")
-        elif (dot := shutil.which("dot")) is None:
-            print("SVG rendering skipped: Graphviz 'dot' executable not found; DOT is ready.")
-        else:
-            args.svg.parent.mkdir(parents=True, exist_ok=True)
-            result = subprocess.run(
-                [dot, "-Tsvg", str(args.dot), "-o", str(args.svg)],
-                capture_output=True, text=True, check=False,
-            )
-            if result.returncode:
-                raise ValueError(f"Graphviz rendering failed: {result.stderr.strip()}")
-            if result.stderr.strip():
-                print(result.stderr.strip(), file=sys.stderr)
-            print(f"Rendered {args.svg}")
+        render_svg(args.dot, args.svg, args.no_render)
+        if not args.detailed_only:
+            # --full is detail-only: initializer and registry noise never enter this view.
+            clean_nodes, clean_edges, _ = build_graph(modules, imports, show_local=args.show_local)
+            members, witnesses = build_overview(clean_nodes, clean_edges)
+            overview_dot.write_text(make_overview_dot(members, witnesses), encoding="utf-8")
+            print(f"Wrote {overview_dot}")
+            print(f"Overview nodes: {len(members)}; selected dependencies: {len(witnesses)}")
+            render_svg(overview_dot, overview_svg, args.no_render)
     except (OSError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

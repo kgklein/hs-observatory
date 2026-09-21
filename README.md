@@ -7,6 +7,13 @@ magnetic-gradient calculation for numerical-simulation observations. See
 [`configs/example_magnetic_gradient.yaml`](configs/example_magnetic_gradient.yaml)
 and [`docs/analysis_methods.md`](docs/analysis_methods.md#magnetic_gradient).
 
+## Documentation
+
+The documentation site intended for the public release is
+[HS Observatory](https://kgklein.github.io/hs-observatory/) (not yet published).
+For now, start with the [documentation home](docs/index.md) or follow the
+[local documentation development instructions](docs/developer/documentation.md).
+
 ## Install and run
 
 Python 3.10 or newer is required.
