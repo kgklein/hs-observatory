@@ -19,6 +19,19 @@ need to install documentation tools to generate or analyze observations.
 
 ## Optional dependencies
 
+For continuous SciPy-based RBF length-scale optimization and optional Crameri
+scientific colormaps:
+
+```bash
+python3 -m pip install -e ".[analysis]"
+```
+
+Core analyses work without this extra: explicit RBF cross-validation uses a
+logarithmic grid search without SciPy, and plotting uses Matplotlib colormap
+fallbacks without cmcrameri. The standalone
+`scripts/audit_magnetic_gradient_divergence.py` requires SciPy and therefore
+needs this extra; BP inputs additionally require `simulation-bp`.
+
 For the existing test and lint tools:
 
 ```bash
@@ -29,6 +42,12 @@ For ADIOS2 `.bp` simulation input:
 
 ```bash
 python3 -m pip install -e ".[simulation-bp]"
+```
+
+To install both sets of optional scientific features, combine the extras:
+
+```bash
+python3 -m pip install -e ".[analysis,simulation-bp]"
 ```
 
 The basic example uses a synthetic fallback and does not need simulation files

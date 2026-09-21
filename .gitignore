@@ -42,3 +42,4 @@ data/helioswarm_cdf/
 analysis/*yaml~
 generation/*yaml~
 figs/
+logs/
