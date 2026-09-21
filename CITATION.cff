@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: >
+  If you use HS Observatory in your research, please cite the software
+  using the metadata below and cite the relevant scientific publications
+  describing the methods used in your analysis.
+
+title: "HS Observatory"
+type: software
+version: "0.1.0"
+
+authors:
+  - family-names: Klein
+    given-names: Kristopher G.
+    orcid: "https://orcid.org/0000-0001-6038-1923"
+
+repository-code: "https://github.com/kgklein/hs-observatory"
+url: "https://kgklein.github.io/hs-observatory/"
+
+license: MIT
+
+date-released: 2026-09-21
+
+keywords:
+  - heliophysics
+  - solar wind
+  - plasma physics
+  - HelioSwarm
+  - multipoint measurements
+  - turbulence
+  - synthetic observations
