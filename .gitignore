@@ -17,6 +17,7 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+site/
 
 # Generated observations and figures
 outputs/
@@ -40,3 +41,4 @@ data/helioswarm_cdf/
 
 analysis/*yaml~
 generation/*yaml~
+figs/

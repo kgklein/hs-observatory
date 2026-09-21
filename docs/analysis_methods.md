@@ -20,6 +20,8 @@ The currently registered methods are:
 diagnostics
 elsasser
 elsasser_increment_pdf_static
+magnetic_gradient
+magnetic_gradient_correlation
 rbf_reconstruction
 static_decorrelation
 structure_function
@@ -59,8 +61,9 @@ Example: `configs/example_elsasser.yaml`.
 
 ## `elsasser_increment_pdf_static`
 
-Builds scale-conditioned PDFs of simultaneous Elsasser increments across
-spacecraft pairs.
+Builds scale-conditioned PDFs of Elsasser increments between `(time, spacecraft)`
+samples interpreted as points in a frozen spatial field, including simultaneous
+and different-time pairs.
 
 - Config section: `elsasser_increment_pdf_static`.
 - Output: HDF5 plus optional PDF diagnostic plots.

@@ -1,0 +1,47 @@
+site_name: HS Observatory
+site_description: Configurable synthetic multipoint observatory measurements and scientific analysis.
+site_url: https://kgklein.github.io/hs-observatory/
+repo_url: https://github.com/kgklein/hs-observatory
+repo_name: kgklein/hs-observatory
+theme:
+  name: material
+  font: false
+  palette:
+    primary: blue grey
+    accent: indigo
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+# Repository-facing instructions are preserved; index.md is the site landing page.
+exclude_docs: |
+  architecture/README.md
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - User Guide:
+      - Generating Synthetic Observations: user-guide/generation.md
+      - Analysis Methods: analysis_methods.md
+      - Observatory Error Model: observatory_error_model.md
+  - Architecture:
+      - Overview: architecture/index.md
+      - Module Dependencies: architecture/module-dependencies.md
+  - Developer Notes:
+      - Design: developer/design.md
+      - Documentation Development: developer/documentation.md
+      - Magnetic-Gradient Divergence Audit: magnetic_gradient_divergence_audit.md

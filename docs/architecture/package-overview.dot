@@ -1,0 +1,56 @@
+// Generated curated overview; arrows are selected source-backed dependencies.
+digraph package_overview {
+  graph [rankdir=LR, bgcolor="white", fontname="Helvetica", fontsize=12,
+         nodesep=0.35, ranksep=0.7, pad=0.2,
+         label="HS Observatory: architectural areas\nSelected dependencies, not execution order", labelloc=t];
+  node [shape=box, style="rounded,filled", fillcolor="#f7f8fa",
+        color="#667085", fontname="Helvetica", fontsize=11, margin="0.14,0.10"];
+  edge [color="#667085", arrowsize=0.7];
+  subgraph cluster_0 {
+    label="Entry points";
+    color="#d0d5dd"; style="rounded";
+    "cli" [label="CLI", tooltip="cli"];
+    "dispatch" [label="Analysis dispatch", tooltip="analysis.base, analysis.registry, analyze"];
+    "generation" [label="Generation", tooltip="generate"];
+  }
+  subgraph cluster_1 {
+    label="Generation and support";
+    color="#d0d5dd"; style="rounded";
+    "config" [label="Configuration", tooltip="config"];
+    "errors" [label="Error models", tooltip="errors.base, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck"];
+    "fields" [label="Fields", tooltip="fields.base, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum"];
+    "io" [label="I/O", tooltip="io.cdf_positions, io.hdf5, io.simulation_bp, io.simulation_npy"];
+    "spacecraft" [label="Spacecraft", tooltip="spacecraft.configuration"];
+  }
+  subgraph cluster_2 {
+    label="Scientific analyses";
+    color="#d0d5dd"; style="rounded";
+    "diagnostics" [label="Other diagnostics", tooltip="analysis.diagnostics, analysis.static_decorrelation, analysis.timeseries_fft"];
+    "gradients" [label="Magnetic gradients", tooltip="analysis.magnetic_gradient, analysis.magnetic_gradient_correlation, analysis.magnetic_gradient_wasserstein"];
+    "intermittency" [label="Elsasser / intermittency", tooltip="analysis.derived.elsasser, analysis.derived.pairs, analysis.elsasser, analysis.elsasser_increment_pdf_static, analysis.increment_pdf_wasserstein, analysis.structure_function"];
+    "reconstruction" [label="Reconstruction", tooltip="analysis.rbf_reconstruction, analysis.timesync"];
+  }
+  subgraph cluster_3 {
+    label="Output";
+    color="#d0d5dd"; style="rounded";
+    "visualization" [label="Visualization / output", tooltip="visualization"];
+  }
+  "cli" -> "dispatch" [tooltip="cli -> analyze"];
+  "cli" -> "generation" [tooltip="cli -> generate"];
+  "diagnostics" -> "visualization" [tooltip="analysis.timeseries_fft -> visualization"];
+  "dispatch" -> "config" [tooltip="analyze -> config"];
+  "dispatch" -> "diagnostics" [tooltip="analysis.registry -> analysis.diagnostics; analysis.registry -> analysis.static_decorrelation; analysis.registry -> analysis.timeseries_fft"];
+  "dispatch" -> "gradients" [tooltip="analysis.registry -> analysis.magnetic_gradient; analysis.registry -> analysis.magnetic_gradient_correlation"];
+  "dispatch" -> "intermittency" [tooltip="analysis.registry -> analysis.elsasser; analysis.registry -> analysis.elsasser_increment_pdf_static; analysis.registry -> analysis.structure_function"];
+  "dispatch" -> "reconstruction" [tooltip="analysis.registry -> analysis.rbf_reconstruction; analysis.registry -> analysis.timesync"];
+  "fields" -> "io" [tooltip="fields.simulation_sampled -> io.simulation_bp; fields.simulation_sampled -> io.simulation_npy"];
+  "generation" -> "config" [tooltip="generate -> config"];
+  "generation" -> "errors" [tooltip="generate -> errors.gaussian; generate -> errors.observatory; generate -> errors.offsets"];
+  "generation" -> "fields" [tooltip="generate -> fields.sine_sum"];
+  "generation" -> "io" [tooltip="generate -> io.cdf_positions; generate -> io.hdf5"];
+  "generation" -> "spacecraft" [tooltip="generate -> spacecraft.configuration"];
+  "generation" -> "visualization" [tooltip="generate -> visualization"];
+  "gradients" -> "visualization" [tooltip="analysis.magnetic_gradient -> visualization"];
+  "intermittency" -> "visualization" [tooltip="analysis.elsasser -> visualization"];
+  "reconstruction" -> "visualization" [tooltip="analysis.rbf_reconstruction -> visualization"];
+}

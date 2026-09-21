@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "ruff>=0.5"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10"]
 simulation-bp = ["adios2>=2.10"]
 
 [project.scripts]
