@@ -73,7 +73,9 @@ def read_cdf_positions(path: str | Path) -> tuple[np.ndarray, np.ndarray, list[s
     try:
         from cdflib import CDF, cdfepoch
     except ImportError as exc:  # pragma: no cover - dependency declared, but friendly failure
-        raise ImportError("Reading spacecraft CDFs requires the optional cdflib package") from exc
+        raise ImportError(
+            "Reading spacecraft CDFs requires cdflib, included in the base installation"
+        ) from exc
 
     epoch_parts: list[np.ndarray] = []
     position_parts: list[np.ndarray] = []

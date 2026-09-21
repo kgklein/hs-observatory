@@ -4,6 +4,9 @@
 This is intentionally separate from the production analysis.  It reads saved
 products and the source magnetic grid, but does not alter or constrain the
 multi-spacecraft estimator.
+
+Requires SciPy: install with ``python3 -m pip install -e ".[analysis]"``.
+For BP input, also include the ``simulation-bp`` extra.
 """
 
 from __future__ import annotations
