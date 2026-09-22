@@ -178,7 +178,7 @@
 <!-- errors -->
 <g id="node5" class="node">
 <title>errors</title>
-<g id="a_node5"><a xlink:title="errors.base, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck">
+<g id="a_node5"><a xlink:title="errors.base, errors.factory, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck">
 <path fill="#f7f8fa" stroke="#667085" d="M396.5,-446.94C396.5,-446.94 329.5,-446.94 329.5,-446.94 323.5,-446.94 317.5,-440.94 317.5,-434.94 317.5,-434.94 317.5,-422.94 317.5,-422.94 317.5,-416.94 323.5,-410.94 329.5,-410.94 329.5,-410.94 396.5,-410.94 396.5,-410.94 402.5,-410.94 408.5,-416.94 408.5,-422.94 408.5,-422.94 408.5,-434.94 408.5,-434.94 408.5,-440.94 402.5,-446.94 396.5,-446.94"/>
 <text text-anchor="middle" x="363" y="-426.14" font-family="Helvetica,sans-Serif" font-size="11.00">Error models</text>
 </a>
@@ -187,7 +187,7 @@
 <!-- generation&#45;&gt;errors -->
 <g id="edge11" class="edge">
 <title>generation&#45;&gt;errors</title>
-<g id="a_edge11"><a xlink:title="generate &#45;&gt; errors.gaussian; generate &#45;&gt; errors.observatory; generate &#45;&gt; errors.offsets">
+<g id="a_edge11"><a xlink:title="generate &#45;&gt; errors.factory; generate &#45;&gt; errors.observatory">
 <path fill="none" stroke="#667085" d="M196.25,-330.17C214.86,-349.5 246.58,-379.83 279,-398.94 288.73,-404.68 299.73,-409.6 310.48,-413.69"/>
 <polygon fill="#667085" stroke="#667085" points="309.7,-416.02 317.12,-416.14 311.4,-411.42 309.7,-416.02"/>
 </a>
@@ -196,7 +196,7 @@
 <!-- fields -->
 <g id="node6" class="node">
 <title>fields</title>
-<g id="a_node6"><a xlink:title="fields.base, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum">
+<g id="a_node6"><a xlink:title="fields.base, fields.factory, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum">
 <path fill="#f7f8fa" stroke="#667085" d="M378,-568.94C378,-568.94 348,-568.94 348,-568.94 342,-568.94 336,-562.94 336,-556.94 336,-556.94 336,-544.94 336,-544.94 336,-538.94 342,-532.94 348,-532.94 348,-532.94 378,-532.94 378,-532.94 384,-532.94 390,-538.94 390,-544.94 390,-544.94 390,-556.94 390,-556.94 390,-562.94 384,-568.94 378,-568.94"/>
 <text text-anchor="middle" x="363" y="-548.14" font-family="Helvetica,sans-Serif" font-size="11.00">Fields</text>
 </a>
@@ -205,7 +205,7 @@
 <!-- generation&#45;&gt;fields -->
 <g id="edge12" class="edge">
 <title>generation&#45;&gt;fields</title>
-<g id="a_edge12"><a xlink:title="generate &#45;&gt; fields.sine_sum">
+<g id="a_edge12"><a xlink:title="generate &#45;&gt; fields.factory">
 <path fill="none" stroke="#667085" d="M183.22,-330.12C192.36,-370.24 219.61,-467.08 279,-520.94 292.8,-533.46 312.23,-540.86 328.81,-545.17"/>
 <polygon fill="#667085" stroke="#667085" points="328.34,-547.58 335.72,-546.84 329.49,-542.81 328.34,-547.58"/>
 </a>

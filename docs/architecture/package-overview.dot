@@ -17,8 +17,8 @@ digraph package_overview {
     label="Generation and support";
     color="#d0d5dd"; style="rounded";
     "config" [label="Configuration", tooltip="config"];
-    "errors" [label="Error models", tooltip="errors.base, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck"];
-    "fields" [label="Fields", tooltip="fields.base, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum"];
+    "errors" [label="Error models", tooltip="errors.base, errors.factory, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck"];
+    "fields" [label="Fields", tooltip="fields.base, fields.factory, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum"];
     "io" [label="I/O", tooltip="io.cdf_positions, io.hdf5, io.simulation_bp, io.simulation_npy"];
     "spacecraft" [label="Spacecraft", tooltip="spacecraft.configuration"];
   }
@@ -45,8 +45,8 @@ digraph package_overview {
   "dispatch" -> "reconstruction" [tooltip="analysis.registry -> analysis.rbf_reconstruction; analysis.registry -> analysis.timesync"];
   "fields" -> "io" [tooltip="fields.simulation_sampled -> io.simulation_bp; fields.simulation_sampled -> io.simulation_npy"];
   "generation" -> "config" [tooltip="generate -> config"];
-  "generation" -> "errors" [tooltip="generate -> errors.gaussian; generate -> errors.observatory; generate -> errors.offsets"];
-  "generation" -> "fields" [tooltip="generate -> fields.sine_sum"];
+  "generation" -> "errors" [tooltip="generate -> errors.factory; generate -> errors.observatory"];
+  "generation" -> "fields" [tooltip="generate -> fields.factory"];
   "generation" -> "io" [tooltip="generate -> io.cdf_positions; generate -> io.hdf5"];
   "generation" -> "spacecraft" [tooltip="generate -> spacecraft.configuration"];
   "generation" -> "visualization" [tooltip="generate -> visualization"];

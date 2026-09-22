@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 
 from hs_observatory.config import load_generation_config
-from hs_observatory.errors.gaussian import error_model_from_config
-from hs_observatory.errors.offsets import (
+from hs_observatory.errors.factory import (
+    error_model_from_config,
     position_offset_model_from_config,
     time_offset_model_from_config,
 )
@@ -19,7 +19,7 @@ from hs_observatory.errors.observatory import (
     normalized_observatory_config,
     observatory_errors_enabled,
 )
-from hs_observatory.fields.sine_sum import field_from_config
+from hs_observatory.fields.factory import field_from_config
 from hs_observatory.io.cdf_positions import (
     FILL_VALUE_THRESHOLD,
     load_spacecraft_configuration,

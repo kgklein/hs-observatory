@@ -41,6 +41,18 @@ geometries to the measurement time grids.
 Ornstein–Uhlenbeck measurement errors, and the observatory requirement model.
 Sampling perturbations and measurement errors have distinct roles.
 
+The advanced import locations `fields.factory.field_from_config` and
+`errors.factory` select concrete models from configuration. The latter exposes
+`error_model_from_config`, `time_offset_model_from_config`, and
+`position_offset_model_from_config`. `fields.base` and `errors.base` define the
+common field and measurement-error interfaces; `errors.offsets` defines the
+coordinate-offset interface. Concrete modules implement the models.
+These factories are currently re-export facades: their implementations and old
+import paths in `fields.sine_sum`, `errors.gaussian`, and `errors.offsets` remain
+available. Consequently, the detailed graph still routes through those modules.
+The existing `hs_observatory.errors` convenience exports are also preserved;
+these selectors are not part of the small package-root API.
+
 **I/O.** `io` reads trajectory/simulation inputs and reads or writes observation
 HDF5 products. Analysis-specific modules also manage their own derived products.
 
