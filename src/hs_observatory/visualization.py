@@ -13,7 +13,7 @@ import matplotlib
 # Generation is commonly run on headless systems and batch nodes.
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.colors import BoundaryNorm, ListedColormap  # noqa: E402
+from matplotlib.colors import BoundaryNorm, ListedColormap, LogNorm  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 import numpy as np
 
@@ -1167,15 +1167,20 @@ def _selected_time_title_label(metadata: Mapping[str, Any] | None) -> str:
 def geometry_summary_paths(
     output_path: str | Path,
     metadata: Mapping[str, Any] | None = None,
+    *,
+    variant: str = "summary",
 ) -> tuple[Path, Path]:
-    """Return default PDF and PNG paths for the publication geometry summary."""
+    """Return PDF and PNG paths for a geometry summary variant."""
+
+    if variant not in {"summary", "polyhedra", "formation"}:
+        raise ValueError(f"Unknown geometry summary variant: {variant}")
 
     output = Path(output_path)
     tag = _selected_time_label(metadata)
     safe_tag = "".join(char if char.isalnum() else "-" for char in tag).strip("-")
     safe_tag = "-".join(part for part in safe_tag.split("-") if part) or "unknown-time"
     directory = output.parent / "geometry_overviews"
-    base = directory / f"{output.stem}_geometry_summary_{safe_tag}"
+    base = directory / f"{output.stem}_geometry_{variant}_{safe_tag}"
     return base.with_suffix(".pdf"), base.with_suffix(".png")
 
 
@@ -1608,10 +1613,13 @@ def _plot_baseline_components(
     ax.grid(alpha=0.18, linewidth=0.5, which="both")
 
 
-def _label_geometry_summary_panels(axes: Sequence[Any]) -> None:
+def _label_geometry_summary_panels(axes: Sequence[Any], *, grid_order: bool = False) -> None:
     ordered = sorted(
         axes,
-        key=lambda axis: (-axis.get_position().y0, axis.get_position().x0),
+        key=lambda axis: (
+            (axis.get_subplotspec().rowspan.start, axis.get_subplotspec().colspan.start)
+            if grid_order else (-axis.get_position().y0, axis.get_position().x0)
+        ),
     )
     for label, axis in zip("abcdefgh", ordered):
         axis.text(
@@ -1678,6 +1686,116 @@ def geometry_summary_diagnostics(
     }
 
 
+def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
+    """Project elongation and planarity, coloring positive sizes logarithmically."""
+
+    elongation = np.asarray([item["E"] for item in metrics], dtype=float)
+    planarity = np.asarray([item["P"] for item in metrics], dtype=float)
+    lengths = np.asarray([item["L"] for item in metrics], dtype=float)
+    positive = lengths > 0
+    if np.any(positive):
+        low, high = float(lengths[positive].min()), float(lengths[positive].max())
+        # A constant-size formation still needs a nonzero logarithmic color range.
+        if low == high:
+            low, high = low / np.sqrt(10), high * np.sqrt(10)
+        points = ax.scatter(
+            elongation[positive],
+            planarity[positive],
+            c=lengths[positive],
+            cmap="viridis",
+            norm=LogNorm(vmin=low, vmax=high),
+            s=48,
+            alpha=0.85,
+            edgecolors="none",
+        )
+        ax.figure.colorbar(points, ax=ax, pad=0.01, fraction=0.045).set_label("L (km)")
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No positive L values for logarithmic colors",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=16,
+        )
+    if np.any(~positive):
+        ax.scatter(
+            elongation[~positive],
+            planarity[~positive],
+            marker="x",
+            color="#777777",
+            label="L = 0 km",
+        )
+        ax.legend(loc="upper right", fontsize=16)
+    ax.set(
+        xlabel="Elongation E",
+        ylabel="Planarity P",
+        title="Polyhedral Shape",
+        xlim=(-0.02, 1.02),
+        ylim=(-0.02, 1.02),
+    )
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(alpha=0.2, linewidth=0.5)
+
+
+def _plot_summary_formation(ax, relative: np.ndarray, spacecraft_ids: Sequence[str]) -> None:
+    """Draw hub-relative GSE sampling volume, without an orbit inset."""
+
+    for point in relative[1:]:
+        ax.plot(*np.stack((relative[0], point)).T, color="#888888", lw=1.2, alpha=0.4)
+    # The hull is a visual aid only; the figure also works without optional SciPy
+    # or for a coplanar/coincident formation where no 3D hull exists.
+    try:
+        from scipy.spatial import ConvexHull, QhullError
+    except ImportError:
+        pass
+    else:
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+        try:
+            hull = ConvexHull(relative)
+        except QhullError:
+            pass
+        else:
+            ax.add_collection3d(
+                Poly3DCollection(
+                    relative[hull.simplices],
+                    facecolor="#56B4E9",
+                    edgecolor="#888888",
+                    linewidth=0.55,
+                    alpha=0.075,
+                )
+            )
+    for index, (point, spacecraft_id) in enumerate(zip(relative, spacecraft_ids)):
+        ax.scatter(
+            *point,
+            s=140 if index == 0 else 80,
+            color=spacecraft_color(spacecraft_id),
+            edgecolor="#202020",
+            linewidth=0.7,
+            depthshade=False,
+            label="Hub" if spacecraft_id == "H" else spacecraft_id,
+        )
+    span = np.ptp(relative, axis=0)
+    margin = np.maximum(0.08 * span, 20.0)
+    low, high = relative.min(axis=0) - margin, relative.max(axis=0) + margin
+    ax.set(
+        xlim=(low[0], high[0]),
+        ylim=(low[1], high[1]),
+        zlim=(low[2], high[2]),
+        xlabel=r"$\Delta X_{GSE}$ (km)",
+        ylabel=r"$\Delta Y_{GSE}$ (km)",
+        zlabel=r"$\Delta Z_{GSE}$ (km)",
+        title="Hub-relative HelioSwarm Formation",
+    )
+    ax.set_box_aspect(high - low)
+    ax.view_init(elev=22, azim=-58)
+    ax.tick_params(labelsize=18)
+    ax.xaxis.labelpad = ax.yaxis.labelpad = ax.zaxis.labelpad = 18
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.08), ncol=5, fontsize=18, frameon=False)
+
+
 def plot_geometry_summary(
     position: np.ndarray,
     spacecraft_ids: Sequence[str],
@@ -1687,8 +1805,12 @@ def plot_geometry_summary(
     context_trajectory: np.ndarray | None = None,
     moon_position: np.ndarray | None = None,
     hub_index: int = 0,
+    variant: str = "summary",
 ):
-    """Return a compact publication-style geometry summary figure."""
+    """Return the original summary, a polyhedra view, or a 3D formation view."""
+
+    if variant not in {"summary", "polyhedra", "formation"}:
+        raise ValueError(f"Unknown geometry summary variant: {variant}")
 
     sample = _single_sample_positions(position)
     trajectory_source = (
@@ -1731,7 +1853,7 @@ def plot_geometry_summary(
             "savefig.bbox": "tight",
         }
     ):
-        fig = plt.figure(figsize=(31.0, 16.0), constrained_layout=True)
+        fig = plt.figure(figsize=(24.0 if variant == "polyhedra" else 31.0, 16.0), constrained_layout=True)
         layout_engine = fig.get_layout_engine()
         if layout_engine is not None:
             layout_engine.set(
@@ -1741,18 +1863,26 @@ def plot_geometry_summary(
                 hspace=0.08,
                 wspace=0.035,
             )
-        grid = fig.add_gridspec(2, 4, width_ratios=(1.0, 1.12, 1.0, 1.18))
+        if variant == "polyhedra":
+            grid = fig.add_gridspec(2, 3, width_ratios=(1.0, 1.0, 1.18))
+        else:
+            grid = fig.add_gridspec(2, 4, width_ratios=(1.0, 1.12, 1.0, 1.18))
 
-        _plot_summary_relative_projection(
-            fig.add_subplot(grid[0, 0]),
-            relative,
-            spacecraft_ids,
-            0,
-            1,
-            r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
-        )
+        if variant != "formation":
+            _plot_summary_relative_projection(
+                fig.add_subplot(grid[0, 0]),
+                relative,
+                spacecraft_ids,
+                0,
+                1,
+                r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
+            )
 
-        context_ax = fig.add_subplot(grid[0, 3])
+        else:
+            formation_ax = fig.add_subplot(grid[:, :2], projection="3d")
+            _plot_summary_formation(formation_ax, relative, spacecraft_ids)
+
+        context_ax = fig.add_subplot(grid[0, 1 if variant == "polyhedra" else 3])
         _plot_context_projection(
             context_ax,
             trajectory,
@@ -1773,125 +1903,119 @@ def plot_geometry_summary(
         )
         #context_ax.set_title(r"Orbit Context:")
 
-        baseline_limits = _baseline_component_limits(baselines)
-        _plot_baseline_components(
-            fig.add_subplot(grid[0, 2]),
-            baselines,
-            0,
-            1,
-            r"$|\lambda_Y|$ vs $|\lambda_X|$",
-            baseline_limits,
-        )
+        if variant != "polyhedra":
+            baseline_limits = _baseline_component_limits(baselines)
+            lambda_y_x_ax = fig.add_subplot(grid[0, 2])
+            _plot_baseline_components(
+                lambda_y_x_ax,
+                baselines,
+                0,
+                1,
+                r"$|\lambda_Y|$ vs $|\lambda_X|$",
+                baseline_limits,
+            )
 
-        poly_ax = fig.add_subplot(grid[0, 1])
-        cmap = _discrete_polyhedron_cmap()
-        norm = BoundaryNorm(np.arange(3.5, 10.5, 1.0), cmap.N)
-        q_values = np.asarray([item["Q"] for item in metrics], dtype=float)
-        l_values = np.asarray([item["L"] for item in metrics], dtype=float)
-        sizes = np.asarray([item["n_spacecraft"] for item in metrics], dtype=float)
-        poly_ax.axvspan(
-            0.0,
-            REGULAR_POLYHEDRON_Q_LIMIT,
-            color="#90be6d",
-            alpha=0.14,
-            label="regular region",
-        )
-        scatter = poly_ax.scatter(
-            q_values,
-            np.maximum(l_values, 1.0e-9),
-            c=sizes,
-            cmap=cmap,
-            norm=norm,
-            s=48,
-            alpha=0.78,
-            edgecolors="none",
-        )
-        poly_ax.axvline(
-            REGULAR_POLYHEDRON_Q_LIMIT,
-            color="#555555",
-            linewidth=0.9,
-            linestyle="--",
-        )
-        poly_ax.set_yscale("log")
-        poly_ax.set_xlim(left=0.0)
-        poly_ax.set(
-            xlabel=r"$\sqrt{E^2 + P^2}$",
-            ylabel=r"$L$ (km)",
-            title="Polyhedral Configuration Summary",
-        )
-        poly_ax.grid(alpha=0.2, linewidth=0.5, which="both")
-        colorbar = fig.colorbar(
-            scatter,
-            ax=poly_ax,
-            ticks=np.arange(4, 10),
-            pad=0.01,
-            fraction=0.045,
-        )
-        colorbar.set_label("# spacecraft")
-        colorbar.ax.tick_params(labelsize=24)
+        if variant != "formation":
+            poly_ax = fig.add_subplot(grid[0, 2 if variant == "polyhedra" else 1])
+            cmap = _discrete_polyhedron_cmap()
+            norm = BoundaryNorm(np.arange(3.5, 10.5, 1.0), cmap.N)
+            q_values = np.asarray([item["Q"] for item in metrics], dtype=float)
+            l_values = np.asarray([item["L"] for item in metrics], dtype=float)
+            sizes = np.asarray([item["n_spacecraft"] for item in metrics], dtype=float)
+            poly_ax.axvspan(
+                0.0,
+                REGULAR_POLYHEDRON_Q_LIMIT,
+                color="#90be6d",
+                alpha=0.14,
+                label="regular region",
+            )
+            scatter = poly_ax.scatter(
+                q_values,
+                np.maximum(l_values, 1.0e-9),
+                c=sizes,
+                cmap=cmap,
+                norm=norm,
+                s=48,
+                alpha=0.78,
+                edgecolors="none",
+            )
+            poly_ax.axvline(
+                REGULAR_POLYHEDRON_Q_LIMIT,
+                color="#555555",
+                linewidth=0.9,
+                linestyle="--",
+            )
+            poly_ax.set_yscale("log")
+            poly_ax.set_xlim(left=0.0)
+            poly_ax.set(
+                xlabel=r"$\sqrt{E^2 + P^2}$",
+                ylabel=r"$L$ (km)",
+                title="Polyhedral Configuration Summary",
+            )
+            poly_ax.grid(alpha=0.2, linewidth=0.5, which="both")
+            colorbar = fig.colorbar(
+                scatter,
+                ax=poly_ax,
+                ticks=np.arange(4, 10),
+                pad=0.01,
+                fraction=0.045,
+            )
+            colorbar.set_label("# spacecraft")
+            colorbar.ax.tick_params(labelsize=24)
 
-        _plot_summary_relative_projection(
-            fig.add_subplot(grid[1, 0]),
-            relative,
-            spacecraft_ids,
-            0,
-            2,
-            r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
-        )
-        _plot_summary_relative_projection(
-            fig.add_subplot(grid[1, 1]),
-            relative,
-            spacecraft_ids,
-            1,
-            2,
-            r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
-        )
-        lambda_z_x_ax = fig.add_subplot(grid[1, 2])
-        _plot_baseline_components(
-            lambda_z_x_ax,
-            baselines,
-            0,
-            2,
-            r"$|\lambda_Z|$ vs $|\lambda_X|$",
-            baseline_limits,
-        )
-        lambda_z_y_ax = fig.add_subplot(grid[1, 3])
-        _plot_baseline_components(
-            lambda_z_y_ax,
-            baselines,
-            1,
-            2,
-            r"$|\lambda_Z|$ vs $|\lambda_Y|$",
-            baseline_limits,
-        )
-        #lambda_z_y_ax.text(
-        #    0.04,
-        #    0.96,
-        #    f"Kinetic: < {KINETIC_SCALE_KM:g} km\n"
-        #    f"Transition: {KINETIC_SCALE_KM:g}-{MHD_SCALE_KM:g} km\n"
-        #    f"MHD: > {MHD_SCALE_KM:g} km",
-        #    va="top",
-        #    ha="left",
-        #    fontsize=20.4,
-        #    color="#222222",
-        #    transform=lambda_z_y_ax.transAxes,
-        #    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.68, "pad": 2.0},
-        #)
-
-        _label_geometry_summary_panels(
-            [
-                context_ax,
-                poly_ax,
+        if variant != "formation":
+            _plot_summary_relative_projection(
+                fig.add_subplot(grid[1, 0]),
+                relative,
+                spacecraft_ids,
+                0,
+                2,
+                r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
+            )
+            _plot_summary_relative_projection(
+                fig.add_subplot(grid[1, 1]),
+                relative,
+                spacecraft_ids,
+                1,
+                2,
+                r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
+            )
+        if variant != "polyhedra":
+            lambda_z_x_ax = fig.add_subplot(grid[1, 2])
+            _plot_baseline_components(
                 lambda_z_x_ax,
+                baselines,
+                0,
+                2,
+                r"$|\lambda_Z|$ vs $|\lambda_X|$",
+                baseline_limits,
+            )
+            lambda_z_y_ax = fig.add_subplot(grid[1, 3])
+            _plot_baseline_components(
                 lambda_z_y_ax,
-                *[
-                    axis
-                    for axis in fig.axes
-                    if axis not in {context_ax, poly_ax, lambda_z_x_ax, lambda_z_y_ax}
-                    and axis.get_title()
-                ],
-            ]
-        )
+                baselines,
+                1,
+                2,
+                r"$|\lambda_Z|$ vs $|\lambda_Y|$",
+                baseline_limits,
+            )
+        else:
+            _plot_polyhedron_shape(fig.add_subplot(grid[1, 2]), metrics)
+
+        if variant == "formation":
+            # Keep the right-hand panel letters from the original summary.
+            for label, axis in zip(
+                ("a", "c", "d", "g", "h"),
+                (formation_ax, lambda_y_x_ax, context_ax, lambda_z_x_ax, lambda_z_y_ax),
+            ):
+                text = axis.text2D if axis is formation_ax else axis.text
+                text(0.035, 0.94, f"({label})", transform=axis.transAxes,
+                     ha="left", va="top", fontsize=24, fontweight="bold", color="#111111")
+        else:
+            _label_geometry_summary_panels(
+                [axis for axis in fig.axes if axis.get_subplotspec() is not None],
+                grid_order=variant == "polyhedra",
+            )
         fig.suptitle(
             f"HelioSwarm Design Reference Mission Geometry: {title_time}",
             x=0.055,
@@ -1965,27 +2089,34 @@ def save_geometry_summary(
     context_trajectory: np.ndarray | None = None,
     moon_position: np.ndarray | None = None,
 ) -> tuple[Path, Path, dict[str, Any]]:
-    """Write the publication-style geometry summary as PDF and PNG."""
+    """Write all three geometry views as PDF/PNG; return the original summary paths."""
 
-    pdf_path, png_path = geometry_summary_paths(output_path, metadata)
-    pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    png_path.parent.mkdir(parents=True, exist_ok=True)
     dpi = int(config.get("dpi", 150))
-    figure, diagnostics = plot_geometry_summary(
-        position,
-        spacecraft_ids,
-        time=time,
-        metadata=metadata,
-        context_trajectory=context_trajectory,
-        moon_position=moon_position,
-        hub_index=0,
-    )
-    figure.savefig(pdf_path)
-    figure.savefig(png_path, dpi=dpi)
-    plt.close(figure)
+    variant_paths = {}
+    for variant in ("summary", "polyhedra", "formation"):
+        pdf_path, png_path = geometry_summary_paths(output_path, metadata, variant=variant)
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        figure, diagnostics = plot_geometry_summary(
+            position,
+            spacecraft_ids,
+            time=time,
+            metadata=metadata,
+            context_trajectory=context_trajectory,
+            moon_position=moon_position,
+            hub_index=0,
+            variant=variant,
+        )
+        try:
+            figure.savefig(pdf_path)
+            figure.savefig(png_path, dpi=dpi)
+        finally:
+            plt.close(figure)
+        variant_paths[variant] = {"pdf": str(pdf_path), "png": str(png_path)}
+    pdf_path, png_path = geometry_summary_paths(output_path, metadata)
     diagnostics = dict(diagnostics)
     diagnostics["output_pdf_path"] = str(pdf_path)
     diagnostics["output_png_path"] = str(png_path)
+    diagnostics["variant_paths"] = variant_paths
     return pdf_path, png_path, diagnostics
 
 

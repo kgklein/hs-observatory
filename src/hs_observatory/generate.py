@@ -571,6 +571,9 @@ def generate_from_config(
             f"  output PDF path: {pdf_path}\n"
             f"  output PNG path: {png_path}"
         )
+        for variant in ("polyhedra", "formation"):
+            paths = geometry_diagnostics["variant_paths"][variant]
+            print(f"Geometry {variant}: {paths['pdf']}\n  {paths['png']}")
         configuration_pdf, configuration_png, configuration_diagnostics = save_3d_configuration(
             output_path=output,
             config=visualization_config,
