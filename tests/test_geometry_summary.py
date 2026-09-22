@@ -181,26 +181,36 @@ def test_geometry_summary_uses_requested_two_by_four_panel_order():
         time=spacecraft.time,
     )
 
-    top_axes = sorted(
-        [axis for axis in figure.axes if axis.get_title() and axis.get_position().y0 > 0.45],
-        key=lambda axis: axis.get_position().x0,
-    )
-    top_titles = [axis.get_title() for axis in top_axes]
+    # Locate panels by grid position, independently of titles and creation order.
+    panels = {}
+    for axis in figure.axes:
+        spec = axis.get_subplotspec()
+        if spec is None:  # The colorbar is not a panel in the subplot grid.
+            continue
+        assert spec.get_gridspec().get_geometry() == (2, 4)
+        assert len(spec.rowspan) == len(spec.colspan) == 1
+        position = (spec.rowspan.start, spec.colspan.start)
+        assert position not in panels
+        panels[position] = axis
+    assert set(panels) == {(row, column) for row in range(2) for column in range(4)}
+
+    top_titles = [panels[0, column].get_title() for column in range(4)]
     assert top_titles == [
         r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
         "Polyhedral Configuration Summary",
         r"$|\lambda_Y|$ vs $|\lambda_X|$",
-        "Orbit Context:",
+        "",  # The orbit-context panel intentionally has no title.
     ]
-    context_axis = top_axes[3]
+    context_axis = panels[0, 3]
     assert "$X_{GSE}$ ($R_E$)" in context_axis.get_xlabel()
     assert "$Y_{GSE}$ ($R_E$)" in context_axis.get_ylabel()
 
-    titles = [axis.get_title() for axis in figure.axes]
-    assert titles[5] == r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$"
-    assert titles[6] == r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$"
-    assert titles[7] == r"$|\lambda_Z|$ vs $|\lambda_X|$"
-    assert titles[8] == r"$|\lambda_Z|$ vs $|\lambda_Y|$"
+    assert [panels[1, column].get_title() for column in range(4)] == [
+        r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
+        r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
+        r"$|\lambda_Z|$ vs $|\lambda_X|$",
+        r"$|\lambda_Z|$ vs $|\lambda_Y|$",
+    ]
     plt.close(figure)
 
 
