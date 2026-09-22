@@ -1160,7 +1160,8 @@ def _selected_time_title_label(metadata: Mapping[str, Any] | None) -> str:
     if label == "unknown-time":
         return label
     try:
-        return str(np.datetime64(label, "s"))
+        dt = np.datetime64(label)
+        return np.datetime_as_string(dt, unit="s")
     except ValueError:
         return label.split(".")[0]
 
@@ -1562,6 +1563,8 @@ def _plot_baseline_components(
     y_index: int,
     title: str,
     limits: tuple[float, float],
+    *,
+    baseline_colors: np.ndarray | None = None,
 ) -> None:
     labels = ("X", "Y", "Z")
     values = np.maximum(np.abs(components), 1.0e-9)
@@ -1592,9 +1595,9 @@ def _plot_baseline_components(
         values[:, x_index],
         values[:, y_index],
         s=64,
-        c="#252525",
+        c="#252525" if baseline_colors is None else baseline_colors,
         alpha=0.82,
-        edgecolors="white",
+        edgecolors="white" if baseline_colors is None else "#333333",
         linewidths=0.25,
         zorder=3,
     )
@@ -1819,11 +1822,25 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
     ax.grid(alpha=0.2, linewidth=0.5)
 
 
-def _plot_summary_formation(ax, relative: np.ndarray, spacecraft_ids: Sequence[str]) -> None:
+def _plot_summary_formation(
+    ax,
+    relative: np.ndarray,
+    spacecraft_ids: Sequence[str],
+    baseline_pairs: Sequence[tuple[int, int]],
+    baseline_colors: np.ndarray,
+) -> None:
     """Draw hub-relative GSE sampling volume, without an orbit inset."""
 
-    for point in relative[1:]:
-        ax.plot(*np.stack((relative[0], point)).T, color="#888888", lw=1.2, alpha=0.4)
+    for (i, j), color in zip(baseline_pairs, baseline_colors):
+        ax.plot(
+            *relative[[i, j]].T,
+            color=color,
+            lw=0.8,
+            alpha=0.55,
+            zorder=1,
+        )
+    #for point in relative[1:]:
+    #    ax.plot(*np.stack((relative[0], point)).T, color="#888888", lw=1.2, alpha=0.4)
     # The hull is a visual aid only; the figure also works without optional SciPy
     # or for a coplanar/coincident formation where no 3D hull exists.
     try:
@@ -1883,8 +1900,8 @@ def _style_publication_geometry(fig, variant, relative, metadata):
     from matplotlib.patches import Patch
 
     fig.suptitle("HelioSwarm Design Reference Geometry", x=0.055, y=0.985, ha="left", fontsize=27)
-    epoch = _selected_time_label(metadata)
-    fig.text(0.055, 0.947, f"Epoch: {epoch} UTC", fontsize=24, color="#555555")
+    epoch = _selected_time_title_label(metadata)
+    fig.text(0.055, 0.94, f"Epoch: {epoch} UTC", fontsize=24, color="#555555")
     extent = max(float(np.max(np.abs(relative))) * 1.12, 1.0)
     ticks = MaxNLocator(nbins=4, symmetric=True).tick_values(-extent, extent)
     ticks = ticks[(ticks >= -extent) & (ticks <= extent)]
@@ -1981,6 +1998,18 @@ def plot_geometry_summary(
     metrics = polyhedron_metrics(sample)
     diagnostics = geometry_summary_diagnostics(sample, metadata=metadata, hub_index=hub_index)
     relative = sample - sample[hub_index]
+    baseline_colors = None
+    if variant == "formation":
+        from cmcrameri import cm
+
+        # Keep the unique_baselines ordering for both lines and component points.
+        baseline_pairs = list(combinations(range(len(relative)), 2))
+        baseline_vectors = np.asarray([relative[j] - relative[i] for i, j in baseline_pairs])
+        baseline_magnitudes = np.linalg.norm(baseline_vectors, axis=1)
+        positive_lengths = baseline_magnitudes[baseline_magnitudes > 0.0]
+        baseline_cmap = cm.batlow
+        baseline_norm = LogNorm(vmin=positive_lengths.min(), vmax=positive_lengths.max())
+        baseline_colors = baseline_cmap(baseline_norm(baseline_magnitudes))
     mesocenter = np.mean(sample, axis=0)
     title_time = _selected_time_title_label(metadata)
 
@@ -2023,7 +2052,9 @@ def plot_geometry_summary(
 
         else:
             formation_ax = fig.add_subplot(grid[:, :2], projection="3d")
-            _plot_summary_formation(formation_ax, relative, spacecraft_ids)
+            _plot_summary_formation(
+                formation_ax, relative, spacecraft_ids, baseline_pairs, baseline_colors
+            )
 
         context_ax = fig.add_subplot(grid[0, 1 if variant == "polyhedra" else 3])
         _plot_context_projection(
@@ -2056,6 +2087,7 @@ def plot_geometry_summary(
                 1,
                 r"$|\lambda_Y|$ vs $|\lambda_X|$",
                 baseline_limits,
+                baseline_colors=baseline_colors,
             )
 
         if variant != "formation":
@@ -2132,6 +2164,7 @@ def plot_geometry_summary(
                 2,
                 r"$|\lambda_Z|$ vs $|\lambda_X|$",
                 baseline_limits,
+                baseline_colors=baseline_colors,
             )
             lambda_z_y_ax = fig.add_subplot(grid[1, 3])
             _plot_baseline_components(
@@ -2141,6 +2174,7 @@ def plot_geometry_summary(
                 2,
                 r"$|\lambda_Z|$ vs $|\lambda_Y|$",
                 baseline_limits,
+                baseline_colors=baseline_colors,
             )
         else:
             _plot_polyhedron_shape(fig.add_subplot(grid[1, 2]), metrics)
@@ -2167,6 +2201,17 @@ def plot_geometry_summary(
         )
     if variant != "summary":
         _style_publication_geometry(fig, variant, relative, metadata)
+        if variant == "formation":
+            # Use spare header space without resizing any of the existing panels.
+            colorbar_ax = fig.add_axes((0.52, 0.955, 0.15, 0.012))
+            colorbar = fig.colorbar(
+                plt.cm.ScalarMappable(norm=baseline_norm, cmap=baseline_cmap),
+                cax=colorbar_ax,
+                orientation="horizontal",
+            )
+            colorbar.set_label(r"$|\lambda|$ (km)", fontsize=16)
+            colorbar.ax.xaxis.set_label_position("top")
+            colorbar.ax.tick_params(labelsize=14)
         if variant == "polyhedra":
             selected = _selected_plot_polyhedra(metrics)
             _highlight_plot_polyhedra(poly_ax, selected)
