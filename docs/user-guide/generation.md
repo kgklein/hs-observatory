@@ -20,6 +20,22 @@ describes additional field and error configurations.
    truth, observations, configuration metadata, and configured error products.
    Optional visualization settings produce time-series and geometry figures.
 
+When visualization is enabled, `geometry_overviews/` contains three time-tagged
+geometry summaries, each saved as PDF and PNG:
+
+- `*_geometry_summary_*`: the original eight-panel summary.
+- `*_geometry_polyhedra_*`: a two-row, three-column view with coordinate
+  projections, orbit context, the existing size/shape summary, and elongation
+  versus planarity colored by logarithmic size `L` (km). The `L` colorbar is
+  independent of the spacecraft-count colorbar.
+- `*_geometry_formation_*`: a hub-relative 3D formation spanning the left half,
+  with HS spacecraft colors and Hub-to-Node spokes. The lambda and orbit panels
+  remain on the right; there is no orbit inset in the 3D panel. A faint convex
+  hull is added when SciPy is available and the formation is nondegenerate.
+
+For Python plotting, `hs_observatory.visualization.plot_geometry_summary` accepts
+`variant="summary"` (the default), `"polyhedra"`, or `"formation"`.
+
 Coordinate errors affect where the field is sampled; measurement errors act on
 the resulting values. The nominal coordinates remain available for downstream
 analysis. Observed arrays retain a Monte Carlo dimension even for one realization.

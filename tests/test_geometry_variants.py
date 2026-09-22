@@ -87,8 +87,8 @@ def test_formation_colors_coordinates_and_preserved_right_panels():
             # Equal-aspect orbit limits adapt to panel size; lambda limits do not.
             if key != (0, 3):
                 assert axes[key].get_ylim() == old[key].get_ylim()
-            assert axes[key].get_xlabel() == old[key].get_xlabel()
-            assert axes[key].get_ylabel() == old[key].get_ylabel()
+            assert axes[key].get_xlabel().replace(r"\mathrm{GSE}", "GSE") == old[key].get_xlabel()
+            assert axes[key].get_ylabel().replace(r"\mathrm{GSE}", "GSE") == old[key].get_ylabel()
             for new_points, old_points in zip(axes[key].collections, old[key].collections):
                 np.testing.assert_allclose(new_points.get_offsets(), old_points.get_offsets())
         figure.canvas.draw()
@@ -134,3 +134,155 @@ def test_save_writes_all_variants_and_preserves_original_return(tmp_path):
         for path in geometry_summary_paths(output, metadata, variant=variant):
             assert path.is_file() and path.stat().st_size > 0
     assert len(list((tmp_path / "geometry_overviews").iterdir())) == 6
+
+
+def test_publication_selection_matches_gradient_analysis():
+    from hs_observatory.analysis.magnetic_gradient import select_configurations
+    from hs_observatory.visualization import _selected_plot_polyhedra
+
+    # Deterministic nondegenerate configuration with regular tetrahedra.
+    points = np.random.default_rng(17).normal(size=(9, 3)) * 300
+    catalog = polyhedron_metrics(points)
+    chosen = _selected_plot_polyhedra(catalog)
+    analysis = select_configurations(
+        points,
+        enabled={
+            "small": True,
+            "best_multi": True,
+            "all_nine": True,
+            "intermediate": False,
+            "large": False,
+        },
+    )
+    for label, key in (
+        ("smallest regular", "small"),
+        ("most regular N>4", "best_multi"),
+        ("all N=9", "all_nine"),
+    ):
+        assert chosen[label]["indices"] == tuple(analysis[key]["indices"])
+    assert chosen["smallest regular"]["Q"] <= 0.6
+    assert 4 < chosen["most regular N>4"]["n_spacecraft"] < 9
+
+
+@pytest.mark.parametrize("variant", ["formation", "polyhedra"])
+def test_publication_aspect_boundaries_and_highlights(variant):
+    spacecraft = synthetic_configuration(np.array([0.0, 1.0]))
+    figure, diagnostics = plot_geometry_summary(
+        spacecraft.position, spacecraft.spacecraft_ids, variant=variant
+    )
+    try:
+        axes = panels(figure)
+        assert "2030" not in figure._suptitle.get_text()
+        assert figure._suptitle.get_text() == "HelioSwarm Design Reference Geometry"
+        epoch_text = next(text for text in figure.texts if text.get_text().startswith("Epoch:"))
+        assert epoch_text.get_fontsize() == figure._suptitle.get_fontsize() - 3
+        context = axes[0, 1 if variant == "polyhedra" else 3]
+        assert context.get_aspect() == 1 and context.get_adjustable() == "box"
+        if variant == "formation":
+            formation = axes[0, 0]
+            spans = np.array(
+                [
+                    np.ptp(formation.get_xlim()),
+                    np.ptp(formation.get_ylim()),
+                    np.ptp(formation.get_zlim()),
+                ]
+            )
+            ratio = formation.get_box_aspect() / spans
+            np.testing.assert_allclose(ratio, np.full(3, ratio[0]))
+            limits = []
+            for key in ((0, 2), (1, 2), (1, 3)):
+                ax = axes[key]
+                assert ax.get_aspect() == 1
+                assert ax.get_adjustable() == "box"
+                assert ax.get_xscale() == ax.get_yscale() == "log"
+                limits.extend([ax.get_xlim(), ax.get_ylim()])
+                for boundary in (100, 1200):
+                    assert any(
+                        np.array_equal(line.get_xdata(), [boundary, boundary]) for line in ax.lines
+                    )
+                    assert any(
+                        np.array_equal(line.get_ydata(), [boundary, boundary]) for line in ax.lines
+                    )
+            assert all(limit == limits[0] for limit in limits)
+        else:
+            physical = [axes[k] for k in ((0, 0), (1, 0), (1, 1))]
+            for ax in physical:
+                assert ax.get_aspect() == 1
+                assert ax.get_xlim() == ax.get_ylim() == physical[0].get_xlim()
+                np.testing.assert_array_equal(ax.get_xticks(), physical[0].get_xticks())
+                np.testing.assert_array_equal(ax.get_yticks(), physical[0].get_xticks())
+            shape = axes[1, 2]
+            assert "regular region" not in [
+                text.get_text() for text in axes[0, 2].get_legend().get_texts()
+            ]
+            assert shape.get_aspect() == axes[0, 2].get_aspect() == "auto"
+            try:
+                from cmcrameri import cm
+            except ImportError:
+                assert shape.collections[0].cmap.name == "cividis"
+            else:
+                assert shape.collections[0].cmap is cm.lajolla
+            for axis in (shape, axes[0, 2]):
+                np.testing.assert_array_equal(axis.collections[0].get_sizes(), [33])
+            arc = shape.lines[0]
+            np.testing.assert_allclose(
+                np.square(arc.get_xdata()) + np.square(arc.get_ydata()), 0.6**2
+            )
+            for arc, radius in zip(shape.lines[1:], (0.4, 0.8)):
+                np.testing.assert_allclose(
+                    np.square(arc.get_xdata()) + np.square(arc.get_ydata()), radius**2
+                )
+                assert any(
+                    np.array_equal(line.get_xdata(), [radius, radius]) for line in axes[0, 2].lines
+                )
+            assert len(shape.lines) == 3
+            for label, record in diagnostics["selected_polyhedra"].items():
+                for axis, expected in (
+                    (shape, [record["E"], record["P"]]),
+                    (axes[0, 2], [record["Q"], max(record["L"], 1e-9)]),
+                ):
+                    marker = next(c for c in axis.collections if c.get_label() == label)
+                    np.testing.assert_allclose(marker.get_offsets(), [expected])
+                    np.testing.assert_array_equal(marker.get_sizes(), [285])
+    finally:
+        plt.close(figure)
+
+
+def test_length_colormap_falls_back_without_cmcrameri(monkeypatch):
+    from hs_observatory.visualization import _polyhedron_length_cmap
+
+    original_import = builtins.__import__
+
+    def without_cmcrameri(name, *args, **kwargs):
+        if name == "cmcrameri":
+            raise ImportError("Unavailable for fallback test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", without_cmcrameri)
+    assert _polyhedron_length_cmap().name == "cividis"
+
+
+def test_quality_shading_uses_disjoint_bands_with_decreasing_opacity():
+    from matplotlib.patches import Wedge
+    from hs_observatory.visualization import _shade_polyhedron_quality
+
+    figure, axes = plt.subplots(1, 2)
+    try:
+        for axis, shape, base in zip(axes, (False, True), (0.14, 0.06)):
+            _shade_polyhedron_quality(axis, shape=shape, base_alpha=base)
+            assert len(axis.patches) == 3
+            np.testing.assert_allclose(
+                [p.get_alpha() for p in axis.patches], np.array([1.5, 1, 0.5]) * base
+            )
+            for patch, low, high in zip(axis.patches, (0, 0.4, 0.6), (0.4, 0.6, 0.8)):
+                np.testing.assert_allclose(patch.get_facecolor()[:3], colors.to_rgb("#009E73"))
+                if shape:
+                    assert isinstance(patch, Wedge)
+                    assert patch.r == high
+                    assert patch.width == high - low
+                    assert (patch.theta1, patch.theta2) == (0, 90)
+                else:
+                    assert patch.get_x() == low
+                    assert patch.get_width() == high - low
+    finally:
+        plt.close(figure)

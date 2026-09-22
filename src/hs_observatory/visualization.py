@@ -1117,10 +1117,11 @@ def classify_gse_region(position_km: np.ndarray) -> str:
     return "Solar Wind"
 
 
+# Okabe–Ito region colors, shared by all orbit-context panels.
 REGION_COLORS = {
-    "Solar Wind": "#d73027",
-    "Connected Foreshock": "#1a9850",
-    "Magnetosphere / Magnetosheath": "#4575b4",
+    "Solar Wind": "#D55E00",
+    "Connected Foreshock": "#009E73",
+    "Magnetosphere / Magnetosheath": "#0072B2",
 }
 
 
@@ -1686,6 +1687,76 @@ def geometry_summary_diagnostics(
     }
 
 
+POLYHEDRON_POINT_AREA = 33  # 1.5 times the previous 22 pt².
+POLYHEDRON_HIGHLIGHT_AREA = 285  # 1.5 times the previous 190 pt².
+POLYHEDRON_EXTRA_Q_GUIDES = (0.4, 0.8)
+POLYHEDRON_Q_SHADE_COLOR = "#009E73"
+
+
+def _shade_polyhedron_quality(ax, *, shape: bool, base_alpha: float) -> None:
+    """Shade disjoint quality bands so their opacities do not accumulate."""
+    from matplotlib.patches import Wedge
+
+    for low, high, multiplier in ((0.0, 0.4, 1.5), (0.4, 0.6, 1.0), (0.6, 0.8, 0.5)):
+        style = dict(facecolor=POLYHEDRON_Q_SHADE_COLOR, edgecolor="none",
+                     alpha=base_alpha * multiplier, zorder=0)
+        if shape:
+            ax.add_patch(Wedge((0, 0), high, 0, 90, width=high - low, **style))
+        else:
+            ax.axvspan(low, high, **style)
+
+
+def _polyhedron_length_cmap():
+    """Use Crameri's sequential lajolla map, retaining the optional fallback."""
+    try:
+        from cmcrameri import cm
+    except ImportError:
+        return plt.get_cmap("cividis")
+    return cm.bam
+
+
+def _selected_plot_polyhedra(metrics: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    """Match gradient small/best_multi/all_nine choices using the plot catalog."""
+
+    selected = {}
+    regular = [
+        m for m in metrics if m["n_spacecraft"] == 4 and m["Q"] <= REGULAR_POLYHEDRON_Q_LIMIT
+    ]
+    if regular:
+        selected["smallest regular"] = min(regular, key=lambda m: (m["L"], m["Q"], m["indices"]))
+
+    def multi_key(m):
+        eigenvalues = np.square([m["a"], m["b"], m["c"]])
+        tolerance = np.finfo(float).eps * max(m["a"], 1.0) ** 2 * 32
+        condition = eigenvalues[0] / eigenvalues[2] if np.all(eigenvalues > tolerance) else np.inf
+        return m["Q"], condition, m["L"], m["indices"]
+
+    multi = [m for m in metrics if 4 < m["n_spacecraft"] < 9]
+    if multi:
+        selected["most regular N>4"] = min(multi, key=multi_key)
+    all_nine = [m for m in metrics if m["n_spacecraft"] == 9]
+    if all_nine:
+        selected["all N=9"] = all_nine[0]
+    return selected
+
+
+def _highlight_plot_polyhedra(ax, selected, *, shape=False):
+    markers = {"smallest regular": "o", "most regular N>4": "s", "all N=9": "D"}
+    for label, record in selected.items():
+        x, y = (record["E"], record["P"]) if shape else (record["Q"], max(record["L"], 1e-9))
+        ax.scatter(
+            x,
+            y,
+            s=POLYHEDRON_HIGHLIGHT_AREA,
+            marker=markers[label],
+            facecolors="none",
+            edgecolors="#151515",
+            linewidths=1.8,
+            zorder=6,
+            label=label,
+        )
+
+
 def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
     """Project elongation and planarity, coloring positive sizes logarithmically."""
 
@@ -1702,13 +1773,13 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
             elongation[positive],
             planarity[positive],
             c=lengths[positive],
-            cmap="viridis",
+            cmap=_polyhedron_length_cmap(),
             norm=LogNorm(vmin=low, vmax=high),
-            s=48,
-            alpha=0.85,
+            s=POLYHEDRON_POINT_AREA,
+            alpha=0.5,
             edgecolors="none",
         )
-        ax.figure.colorbar(points, ax=ax, pad=0.01, fraction=0.045).set_label("L (km)")
+        ax.figure.colorbar(points, ax=ax, pad=0.01, fraction=0.03).set_label("L (km)")
     else:
         ax.text(
             0.5,
@@ -1735,7 +1806,16 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
         xlim=(-0.02, 1.02),
         ylim=(-0.02, 1.02),
     )
-    ax.set_aspect("equal", adjustable="box")
+    theta = np.linspace(0, np.pi / 2, 181)
+    e = REGULAR_POLYHEDRON_Q_LIMIT * np.cos(theta)
+    p = REGULAR_POLYHEDRON_Q_LIMIT * np.sin(theta)
+    _shade_polyhedron_quality(ax, shape=True, base_alpha=0.06)
+    ax.plot(e, p, "--", color="#555555", lw=1.1)
+    for radius in POLYHEDRON_EXTRA_Q_GUIDES:
+        ax.plot(radius * np.cos(theta), radius * np.sin(theta),
+                linestyle=":", color="#777777", lw=1.0, zorder=2)
+    _highlight_plot_polyhedra(ax, _selected_plot_polyhedra(metrics), shape=True)
+    ax.set_aspect("auto")
     ax.grid(alpha=0.2, linewidth=0.5)
 
 
@@ -1787,13 +1867,76 @@ def _plot_summary_formation(ax, relative: np.ndarray, spacecraft_ids: Sequence[s
         xlabel=r"$\Delta X_{GSE}$ (km)",
         ylabel=r"$\Delta Y_{GSE}$ (km)",
         zlabel=r"$\Delta Z_{GSE}$ (km)",
-        title="Hub-relative HelioSwarm Formation",
+        title="Hub-relative formation",
     )
     ax.set_box_aspect(high - low)
+    ax.set_proj_type("ortho")
     ax.view_init(elev=22, azim=-58)
     ax.tick_params(labelsize=18)
     ax.xaxis.labelpad = ax.yaxis.labelpad = ax.zaxis.labelpad = 18
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.08), ncol=5, fontsize=18, frameon=False)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.015), ncol=5, fontsize=18, frameon=False)
+
+
+def _style_publication_geometry(fig, variant, relative, metadata):
+    """Apply physical aspect, common scales, and typography to existing panels."""
+    from matplotlib.ticker import MaxNLocator
+    from matplotlib.patches import Patch
+
+    fig.suptitle("HelioSwarm Design Reference Geometry", x=0.055, y=0.985, ha="left", fontsize=27)
+    epoch = _selected_time_label(metadata)
+    fig.text(0.055, 0.947, f"Epoch: {epoch} UTC", fontsize=24, color="#555555")
+    extent = max(float(np.max(np.abs(relative))) * 1.12, 1.0)
+    ticks = MaxNLocator(nbins=4, symmetric=True).tick_values(-extent, extent)
+    ticks = ticks[(ticks >= -extent) & (ticks <= extent)]
+    limit = extent
+    axes = {
+        (spec.rowspan.start, spec.colspan.start): ax
+        for ax in fig.axes
+        if (spec := ax.get_subplotspec()) is not None
+    }
+    context = axes[0, 1 if variant == "polyhedra" else 3]
+    context.set_aspect("equal", adjustable="box")
+    if variant == "polyhedra":
+        for key in ((0, 0), (1, 0), (1, 1)):
+            ax = axes[key]
+            ax.set_xticks(ticks)
+            ax.set_yticks(ticks)
+            ax.set(xlim=(-limit, limit), ylim=(-limit, limit))
+            ax.set_aspect("equal", adjustable="box")
+    else:
+        for key in ((0, 2), (1, 2), (1, 3)):
+            ax = axes[key]
+            ax.set_aspect("equal", adjustable="box")
+            for patch in ax.patches:
+                patch.set_alpha(0.08)
+            for line in ax.lines:
+                line.set_color("#777777")
+                line.set_linewidth(0.9)
+        axes[0, 2].legend(
+            handles=[
+                Patch(facecolor=LAMBDA_SCALE_COLORS[key], alpha=0.45, label=label)
+                for key, label in (
+                    ("kinetic", "ion <100 km"),
+                    ("transition", "transition 100–1200 km"),
+                    ("mhd", "MHD >1200 km"),
+                )
+            ],
+            loc="upper left",
+            bbox_to_anchor=(0.035, 0.85),
+            fontsize=15,
+            frameon=False,
+        )
+    for ax in fig.axes:
+        ax.set_title(ax.get_title().replace("GSE", r"\mathrm{GSE}"), fontsize=22)
+        ax.tick_params(labelsize=18)
+        for getter, setter in ((ax.get_xlabel, ax.set_xlabel), (ax.get_ylabel, ax.set_ylabel)):
+            setter(getter().replace("GSE", r"\mathrm{GSE}"), fontsize=22)
+        if ax.name == "3d":
+            ax.set_zlabel(ax.get_zlabel().replace("GSE", r"\mathrm{GSE}"), fontsize=22)
+        for text in ax.texts:
+            if text.get_text() in {f"({c})" for c in "abcdefgh"}:
+                text.set_position((0.035, 0.94))
+                text.set_fontsize(22)
 
 
 def plot_geometry_summary(
@@ -1922,13 +2065,13 @@ def plot_geometry_summary(
             q_values = np.asarray([item["Q"] for item in metrics], dtype=float)
             l_values = np.asarray([item["L"] for item in metrics], dtype=float)
             sizes = np.asarray([item["n_spacecraft"] for item in metrics], dtype=float)
-            poly_ax.axvspan(
-                0.0,
-                REGULAR_POLYHEDRON_Q_LIMIT,
-                color="#90be6d",
-                alpha=0.14,
-                label="regular region",
-            )
+            if variant == "polyhedra":
+                _shade_polyhedron_quality(poly_ax, shape=False, base_alpha=0.14)
+            else:
+                poly_ax.axvspan(
+                    0.0, REGULAR_POLYHEDRON_Q_LIMIT, color="#90be6d",
+                    alpha=0.14, label="regular region",
+                )
             scatter = poly_ax.scatter(
                 q_values,
                 np.maximum(l_values, 1.0e-9),
@@ -2003,9 +2146,9 @@ def plot_geometry_summary(
             _plot_polyhedron_shape(fig.add_subplot(grid[1, 2]), metrics)
 
         if variant == "formation":
-            # Keep the right-hand panel letters from the original summary.
+            # Letter the five publication panels consecutively.
             for label, axis in zip(
-                ("a", "c", "d", "g", "h"),
+                ("a", "b", "c", "d", "e"),
                 (formation_ax, lambda_y_x_ax, context_ax, lambda_z_x_ax, lambda_z_y_ax),
             ):
                 text = axis.text2D if axis is formation_ax else axis.text
@@ -2022,6 +2165,28 @@ def plot_geometry_summary(
             y=0.965,
             ha="left",
         )
+    if variant != "summary":
+        _style_publication_geometry(fig, variant, relative, metadata)
+        if variant == "polyhedra":
+            selected = _selected_plot_polyhedra(metrics)
+            _highlight_plot_polyhedra(poly_ax, selected)
+            scatter.set_sizes([POLYHEDRON_POINT_AREA])
+            scatter.set_alpha(0.38)
+            for boundary in POLYHEDRON_EXTRA_Q_GUIDES:
+                poly_ax.axvline(boundary, linestyle=":", color="#777777", lw=1.0, zorder=2)
+            poly_ax.legend(loc="lower right", fontsize=16, frameon=True,
+                           framealpha=0.9, edgecolor="none", handletextpad=0.4)
+            poly_ax.text(REGULAR_POLYHEDRON_Q_LIMIT - 0.04, 0.05, r"regular $Q\leq0.6$",
+                         transform=poly_ax.get_xaxis_transform(), ha="right", va="bottom",
+                         fontsize=14, color="#555555", rotation=90)
+            if "smallest regular" not in selected:
+                poly_ax.text(0.03, 0.03, "No regular N=4 subset", transform=poly_ax.transAxes,
+                             fontsize=14, color="#555555")
+            diagnostics = dict(diagnostics)
+            diagnostics["selected_polyhedra"] = {
+                name: {key: item[key] for key in ("indices", "n_spacecraft", "E", "P", "Q", "L")}
+                for name, item in selected.items()
+            }
     return fig, diagnostics
 
 
