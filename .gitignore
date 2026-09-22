@@ -1,45 +1,40 @@
-# Virtual environments
-.venv/
-venv/
-
 # Python bytecode
 __pycache__/
 *.py[cod]
 
-# Packaging artifacts
-build/
-dist/
-*.egg-info/
-.eggs/
+# Local virtual environments (keep environment specification files trackable)
+/.venv/
+/venv/
+/env/
 
-# Test and lint caches
+# Packaging artifacts
+/build/
+/dist/
+*.egg-info/
+/.eggs/
+
+# Test, lint, and coverage artifacts
 .pytest_cache/
 .ruff_cache/
 .coverage
-htmlcov/
-site/
+.coverage.*
+/coverage.xml
+/htmlcov/
 
-# Generated observations and figures
-outputs/
+# MkDocs build output; docs/architecture/*.dot and *.svg stay version-controlled
+/site/
+
+# Generated runtime products (curated reference data belongs outside these paths)
+/outputs/
+/figs/
+/logs/
+
+# Local HelioSwarm mission inputs; do not ignore other data/ content
+/data/helioswarm_cdf/
+
+# Logs and disposable editor/OS artifacts
 *.log
-
-# Local HelioSwarm mission data
-data/helioswarm_cdf/
-
-#helper scripts
-*.sh
-!scripts/increment_pdf_wasserstein_publication.sh
-!scripts/run_malara_prod_generation_batch.sh
-!scripts/run_sim_prod_generation_batch.sh
-!scripts/run_sim_prod_magnetic_gradient_batch.sh
-!scripts/plot_sim_prod_400_magnetic_gradient.sh
-!scripts/plot_sim_prod_400_magnetic_gradient_error_decomposition.sh
-!scripts/plot_sim_prod_4xx_magnetic_gradient_combined.sh
-!scripts/run_sim_prod_400_magnetic_gradient_correlation.sh
-!scripts/plot_sim_prod_400_magnetic_gradient_correlation.sh
-!scripts/plot_malara_prod_combined_sf_publication.sh
-
-analysis/*yaml~
-generation/*yaml~
-figs/
-logs/
+*~
+*.swp
+*.swo
+.DS_Store
