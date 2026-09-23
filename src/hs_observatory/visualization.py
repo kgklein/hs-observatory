@@ -611,6 +611,97 @@ def plot_figure2_timeseries(
     return output
 
 
+def plot_intermittency_timeseries(
+    malara_path: str | Path,
+    output_path: str | Path,
+    *,
+    member_index: int = 0,
+    input_units: str = "repo",
+    velocity_frame: str = "plasma",
+    start_time_s: float = 0.0,
+    stop_time_s: float = 300.0,
+    dpi: int = 300,
+) -> tuple[Path, Path]:
+    """Save a Malara-only 4-by-2 figure, with measured panels below truth.
+
+    Interval bounds are seconds from the earliest native time-grid start.
+    Elsasser normalization and mean subtraction use the full stored interval,
+    as in Figure 2; measured quantities use one MC member without averaging.
+    """
+
+    if not np.isfinite([start_time_s, stop_time_s]).all() or stop_time_s <= start_time_s:
+        raise ValueError("Finite interval bounds must satisfy stop_time_s > start_time_s")
+    if velocity_frame not in {"plasma", "spacecraft"}:
+        raise ValueError("velocity_frame must be 'plasma' or 'spacecraft'")
+    data = _read_figure2_column(
+        malara_path,
+        member_index=member_index,
+        input_units=input_units,
+        velocity_frame=velocity_frame,
+    )
+    origin = min(float(data["time"][name][0]) for name in ("n", "v", "B"))
+    t0 = origin + start_time_s
+    t1 = origin + stop_time_s
+    specs = (
+        (0, 0, "v", r"$v_x$ (km s$^{-1}$)"),
+        (0, 1, "B", r"$B_x$ (nT)"),
+        (2, 0, "n", r"$n$ (cm$^{-3}$)"),
+        (2, 1, "z_plus", r"$z_x^+$ (km s$^{-1}$)"),
+    )
+    with plt.rc_context({"font.size": 12, "axes.labelsize": 13, "axes.linewidth": 0.7}):
+        figure, axes = plt.subplots(
+            4, 2, figsize=(13.0, 9.0), sharex=True, constrained_layout=True
+        )
+        figure.get_layout_engine().set(h_pad=0.025, w_pad=0.04, hspace=0.025, wspace=0.04)
+        try:
+            for row, col, quantity, label in specs:
+                pair_values = []
+                for offset, (kind, prefix) in enumerate((("truth", "True"),
+                                                       ("observed", "Measured"))):
+                    if quantity == "z_plus":
+                        time = data[f"{kind}_z_time"]
+                        values = data[f"{kind}_z_plus"][:, :, 0]
+                    else:
+                        time = data["time"][quantity]
+                        values = data[kind][quantity]
+                        if quantity != "n":
+                            values = values[:, :, 0]
+                    mask = (time >= t0) & (time <= t1)
+                    if not np.any(mask):
+                        raise ValueError(f"Selected interval contains no {quantity} samples")
+                    selected = values[mask]
+                    pair_values.append(selected)
+                    axis = axes[row + offset, col]
+                    for index, spacecraft_id in enumerate(data["spacecraft_ids"]):
+                        axis.plot(
+                            time[mask] - t0,
+                            selected[:, index],
+                            color=spacecraft_color(spacecraft_id),
+                            linewidth=0.7,
+                        )
+                    axis.set_ylabel(f"{prefix} {label}")
+                    axis.grid(alpha=0.18, linewidth=0.5)
+                    panel = "abcdefgh"[2 * (row + offset) + col]
+                    axis.text(
+                        0.015, 0.9, f"({panel})", transform=axis.transAxes,
+                        fontsize=11, fontweight="bold", va="top",
+                    )
+                limits = _component_ylim(*pair_values)
+                axes[row, col].set_ylim(limits)
+                axes[row + 1, col].set_ylim(limits)
+            axes[0, 0].set_xlim(0.0, stop_time_s - start_time_s)
+            for axis in axes[-1]:
+                axis.set_xlabel(r"$t - t_0$ (s)")
+            output = Path(output_path)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            paths = (output.with_suffix(".pdf"), output.with_suffix(".png"))
+            for path in paths:
+                figure.savefig(path, dpi=dpi)
+        finally:
+            plt.close(figure)
+    return paths
+
+
 def plot_velocity_alfven_timeseries(
     time: Mapping[str, np.ndarray],
     values: Mapping[str, np.ndarray],
