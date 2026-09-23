@@ -32,6 +32,7 @@ def _load_builtins() -> None:
         structure_function,
         timesync,
         timeseries_fft,
+        timing_calibrate,
     )
 
 

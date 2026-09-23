@@ -19,7 +19,7 @@ def analyze_from_config(config_path: str | Path) -> Path:
         if not isinstance(section, dict):
             raise ValueError(f"{method_class.config_section} configuration must be a mapping")
         options.update(section)
-    if method_class.name == "magnetic_gradient":
+    if method_class.name in {"magnetic_gradient", "timing-calibrate"}:
         options.setdefault("_analysis_config_yaml", loaded.yaml_text)
         options.setdefault("_analysis_config_path", str(loaded.path))
     method = method_class(options)

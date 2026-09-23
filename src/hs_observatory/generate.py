@@ -331,6 +331,12 @@ def generate_from_config(
     time_offset_model = time_offset_model_from_config(time_config)
     position_offset_model = position_offset_model_from_config(position_config)
     time_offset = time_offset_model.draw(rng, n_mc, n_spacecraft)  # (mc, spacecraft), seconds
+    reference_spacecraft = (time_config or {}).get("reference_spacecraft")
+    if reference_spacecraft is not None:
+        spacecraft_ids = tuple(spacecraft["n"].spacecraft_ids)
+        if reference_spacecraft not in spacecraft_ids:
+            raise ValueError("timing.reference_spacecraft must name an existing spacecraft")
+        time_offset[:, spacecraft_ids.index(reference_spacecraft)] = 0.0
     position_offset = position_offset_model.draw(
         rng, n_mc, n_spacecraft
     )  # (mc, spacecraft, xyz), km
