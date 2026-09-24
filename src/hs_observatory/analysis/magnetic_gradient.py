@@ -205,6 +205,39 @@ def estimate_gradient_least_squares(
     )
 
 
+def gradient_response_coefficients(
+    positions: np.ndarray, **settings: Any
+) -> np.ndarray:
+    """Build reusable linear gradient responses using the existing estimator.
+
+    Returns ``(geometry_time, spacecraft, derivative_axis)`` coefficients;
+    ``geometry_time`` is one when relative geometry is static. Contract with
+    ``B(time, spacecraft, component)`` using ``tnj,tni->tij``. Invalid geometry
+    produces NaNs, following :func:`estimate_gradient_least_squares`.
+    """
+
+    points = np.asarray(positions, dtype=float)
+    if points.ndim != 3 or points.shape[1] < 4 or points.shape[2] != 3 or not len(points):
+        raise ValueError("positions must have shape (time >= 1, spacecraft >= 4, 3)")
+    samples = points[:1] if geometry_is_static(points) else points
+    response = np.full(samples.shape, np.nan)
+    for time_index, sample in enumerate(samples):
+        for member in range(sample.shape[0]):
+            basis = np.zeros_like(sample)
+            basis[member, 0] = 1.0
+            estimate = estimate_gradient_least_squares(sample, basis, **settings)
+            response[time_index, member] = estimate.gradient[0]
+    return response
+
+
+def apply_gradient_response(response: np.ndarray, field: np.ndarray) -> np.ndarray:
+    """Evaluate cached estimator responses on a new magnetic-field series."""
+
+    values = np.asarray(field, dtype=float)
+    # Remove the uniform field exactly, as the estimator's pair differences do.
+    return np.einsum("tnj,tni->tij", response, values - values[:, :1])
+
+
 def _invalid_estimate(
     positions: np.ndarray,
     field: np.ndarray,

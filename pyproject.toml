@@ -32,6 +32,7 @@ hsobs-plot-structure-function-overlay = "hs_observatory.cli:plot_structure_funct
 hsobs-plot-increment-pdf = "hs_observatory.cli:plot_increment_pdf_publication_main"
 hsobs-plot-increment-pdf-wasserstein = "hs_observatory.cli:plot_increment_pdf_wasserstein_main"
 hsobs-plot-magnetic-gradient = "hs_observatory.cli:plot_magnetic_gradient_main"
+hsobs-plot-timing-calibrate = "hs_observatory.cli:plot_timing_calibrate_main"
 hsobs-plot-magnetic-gradient-wasserstein = "hs_observatory.cli:plot_magnetic_gradient_wasserstein_main"
 hsobs-plot-magnetic-gradient-combined = "hs_observatory.cli:plot_magnetic_gradient_combined_main"
 hsobs-plot-magnetic-gradient-correlation = "hs_observatory.cli:plot_magnetic_gradient_correlation_main"

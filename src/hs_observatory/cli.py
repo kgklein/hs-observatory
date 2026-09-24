@@ -491,3 +491,41 @@ def plot_magnetic_gradient_correlation_main(argv: list[str] | None = None) -> in
     for name, output in outputs.items():
         print(f"{name}={output}")
     return 0
+
+
+def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
+    """Plot a saved timing-calibration HDF5 product."""
+
+    from hs_observatory.analysis.timing_calibrate import (
+        plot_timing_calibration_product,
+        plot_timing_calibration_timeseries,
+    )
+
+    parser = argparse.ArgumentParser(description="Plot HelioSwarm timing calibration diagnostics")
+    parser.add_argument("product", help="timing-calibration analysis HDF5 file")
+    parser.add_argument("--output", required=True, help="output figure path")
+    parser.add_argument("--mc-index", type=int, default=0, help="representative MC realization")
+    parser.add_argument(
+        "--timeseries-component", choices=("x", "y", "z", "magnitude", "all"), default="x",
+        help="magnetic-field quantity in the additional eight-Node time-series figure (default: x)",
+    )
+    parser.add_argument("--start-time", type=float, help="first time-series sample to plot, in seconds")
+    parser.add_argument("--stop-time", type=float, help="last time-series sample to plot, in seconds")
+    parser.add_argument("--dpi", type=int, default=300)
+    args = parser.parse_args(argv)
+    print(plot_timing_calibration_product(
+        args.product, args.output, mc_index=args.mc_index, dpi=args.dpi,
+        start_time_s=args.start_time, stop_time_s=args.stop_time,
+    ))
+    output = Path(args.output)
+    timeseries_output = output.with_name(f"{output.stem}_timeseries{output.suffix}")
+    print(plot_timing_calibration_timeseries(
+        args.product, timeseries_output, mc_index=args.mc_index,
+        component=args.timeseries_component, dpi=args.dpi,
+        start_time_s=args.start_time, stop_time_s=args.stop_time,
+    ))
+    from hs_observatory.analysis.timing_influence import plot_timing_influence
+
+    for influence_output in plot_timing_influence(args.product, args.output, dpi=args.dpi):
+        print(influence_output)
+    return 0

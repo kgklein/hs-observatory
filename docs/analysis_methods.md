@@ -27,6 +27,7 @@ static_decorrelation
 structure_function
 timeseries_fft
 timesync
+timing-calibrate
 ```
 
 ## `diagnostics`
@@ -455,3 +456,17 @@ structure_function:
       fit_range: total
       dpi: 300
 ```
+
+## `timing-calibrate`
+
+Fits eight constant Node timing corrections with a fixed Hub clock using the
+existing magnetic-gradient estimator and an augmented linear least-squares solve.
+
+- Config section: `timing_calibrate`.
+- Inputs: synthetic timing-only observations with zero Hub offsets.
+- Output: HDF5 with all MC fields, divergences, fit diagnostics, and recovery statistics.
+- Example: `analysis/sim-cali-timing_timing_calibrate.yaml`.
+- Plot saved products with `hsobs-plot-timing-calibrate`.
+
+See [Timing calibration](timing_calibration.md) for signs, weights, configuration,
+regeneration instructions, and the output schema.
