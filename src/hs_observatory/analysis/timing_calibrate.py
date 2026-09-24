@@ -76,6 +76,23 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
     if influence and use_ideal:
         raise ValueError("Polyhedron influence requires use_ideal_divergence: false")
     settings["polyhedron_influence"] = influence
+    method = config.get("calibration_method", "polyhedron")
+    if method not in {"polyhedron", "all_nine_divergence", "all_nine_df_affine"}:
+        raise ValueError("Unknown timing calibration_method")
+    settings["calibration_method"] = method
+    if method != "polyhedron":
+        if use_ideal or influence:
+            raise ValueError("Affine projection forbids use_ideal_divergence and polyhedron_influence")
+        if any(config.get(key) is not None for key in
+               ("polyhedra", "configuration_selection", "polyhedron_filter")):
+            raise ValueError("All-nine projection does not support polyhedron selection/filtering")
+        sigma_B = config.get("sigma_B_nT")
+        if (isinstance(sigma_B, bool) or not isinstance(sigma_B, (int, float))
+                or not np.isfinite(sigma_B) or sigma_B <= 0
+                or sigma_B > np.sqrt(np.finfo(float).max)
+                or sigma_B < np.sqrt(np.nextafter(0., 1.))):
+            raise ValueError("Affine projection requires finite positive sigma_B_nT")
+        settings["sigma_B_nT"] = float(sigma_B)
     if not settings["store_all_realizations"]:
         raise ValueError("timing-calibrate requires monte_carlo.store_all_realizations: true")
     if settings["time_sync"]["allow_extrapolation"]:
@@ -367,18 +384,28 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
     sigma_t = float(config.get("sigma_t_s", getattr(model, "sigma_s", np.nan)))
     if not np.isfinite(sigma_t) or sigma_t <= 0:
         raise ValueError("Supply positive sigma_t_s or a positive generation timing uncertainty")
-    selected = select_polyhedra(positions[0], ids, config)
-    if not selected:
-        raise ValueError("At least one polyhedron must be selected")
-    candidate_count = len(selected)
-    selected, conditions = _filter_polyhedra(positions, selected, settings["polyhedron_filter"])
-    responses = [gradient_response_coefficients(positions[:, indices], **settings["gradient"])
-                 for indices in selected.values()]
-    ideal_divergence = np.column_stack([
-        divergence_series(response, ideal[:, indices])
-        for indices, response in zip(selected.values(), responses)
-    ])
-    raw, variance = divergence_variance(ideal_divergence, floor)
+    projection = None
+    if settings["calibration_method"] != "polyhedron":
+        from hs_observatory.analysis.timing_affine import affine_projection_bases
+
+        projection = affine_projection_bases(positions)
+        selected, conditions, responses = {}, {}, []
+        candidate_count = 0
+        ideal_divergence = np.empty((len(time), 0))
+        raw = variance = np.empty(0)
+    else:
+        selected = select_polyhedra(positions[0], ids, config)
+        if not selected:
+            raise ValueError("At least one polyhedron must be selected")
+        candidate_count = len(selected)
+        selected, conditions = _filter_polyhedra(positions, selected, settings["polyhedron_filter"])
+        responses = [gradient_response_coefficients(positions[:, indices], **settings["gradient"])
+                     for indices in selected.values()]
+        ideal_divergence = np.column_stack([
+            divergence_series(response, ideal[:, indices])
+            for indices, response in zip(selected.values(), responses)
+        ])
+        raw, variance = divergence_variance(ideal_divergence, floor)
     nodes = np.asarray([i for i, name in enumerate(ids) if name != "H"])
     result = {
         "source": source, "time": time, "positions": positions, "ideal_B": ideal,
@@ -412,6 +439,16 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             },
         },
     }
+    if projection is not None:
+        result["projection"] = projection
+        result["metadata"].update(
+            schema_version="2", calibration_method=settings["calibration_method"],
+            sigma_B_nT=settings["sigma_B_nT"],
+            chi2_target=settings["calibration_method"],
+            residual_space="common scalar whitening: B / sigma_B_nT",
+        )
+        result["metadata"].pop("normalized_divergence_rms_target")
+        result["metadata"].pop("polyhedron_filter")
     if settings["polyhedron_influence"]:
         from hs_observatory.analysis.timing_influence import compute_timing_influence
 
@@ -422,6 +459,15 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
 def _realizations(result: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
     with h5py.File(result["source"], "r") as handle:
         for mc in range(result["n_mc"]):
+            if "projection" in result:
+                from hs_observatory.analysis.timing_affine import calibrate_affine_realization
+
+                yield calibrate_affine_realization(
+                    result["time"], result["positions"], handle["observed/B"][mc],
+                    result["node_indices"], result["sigma_t"], result["projection"],
+                    result["settings"]["calibration_method"], result["settings"]["sigma_B_nT"],
+                )
+                continue
             yield calibrate_realization(
                 result["time"], result["positions"], handle["observed/B"][mc],
                 list(result["selected"].values()), result["responses"], result["node_indices"],
@@ -505,6 +551,22 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
             from hs_observatory.analysis.timing_influence import write_timing_influence
 
             write_timing_influence(handle, result)
+        if "projection" in result:
+            from hs_observatory.analysis.timing_affine import project_field
+
+            projection = handle.create_group("projection")
+            projection.attrs.update(
+                axes="geometry sample, measurement component, residual coordinate",
+                static_geometry=len(result["projection"]["df_basis"]) == 1,
+                affine_rank=12, df_rank=11, non_affine_rank=15, divergence_rank=1,
+                df_residual_rank=16,
+            )
+            for key, value in result["projection"].items():
+                _store(projection, key, value, settings)
+            for component in ("non_affine", "divergence"):
+                _store(projection, f"ideal_{component}_residual",
+                       project_field(result["projection"][f"{component}_basis"], result["ideal_B"]),
+                       settings, "nT")
         timing = handle.create_group("timing")
         _store(timing, "injected_offset_s", result["offsets"], settings, "s")
         diagnostics = handle.create_group("diagnostics")
@@ -512,6 +574,13 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
             for key in ("correction_s", "recovered_offset_s", "covariance_s2"):
                 _store_mc(timing, key, realization[key], mc, result["n_mc"], settings,
                           "s^2" if key == "covariance_s2" else "s")
+            _store_mc(timing, "recovery_error_s",
+                      realization["recovered_offset_s"] - result["offsets"][mc],
+                      mc, result["n_mc"], settings, "s")
+            if "projection_residuals" in realization:
+                for key, value in realization["projection_residuals"].items():
+                    _store_mc(projection, key, value, mc, result["n_mc"], settings,
+                              "nT" if "residual" in key else "1")
             for name, key, units in (("measured", "measured_B", "nT"),
                                      ("corrected", "corrected_B", "nT"),
                                      ("corrected_valid", "corrected_B_valid", "1")):
@@ -529,7 +598,8 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
                 if key in {"jacobian", "weighted_jacobian"}:
                     subgroup = diagnostics.require_group(key)
                     for diagnostic, item in value.items():
-                        units = "1/s" if key == "weighted_jacobian" else "nT/(km s)"
+                        units = ("1/s" if key == "weighted_jacobian" else
+                                 "nT/s" if "projection" in result else "nT/(km s)")
                         _store_mc(subgroup, diagnostic, item, mc, result["n_mc"], settings,
                                   units if diagnostic == "singular_values" else "1")
                 elif np.isscalar(value) or key == "augmented_singular_values":
@@ -547,8 +617,10 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
                              ("rmse_s", np.sqrt(np.mean(error**2, axis=0))),
                              ("std_recovered_offset_s", recovered.std(axis=0))):
             _store(summary, name, values, settings, "s")
-        before = diagnostics["normalized_divergence_rms_before"][...]
-        after = diagnostics["normalized_divergence_rms_after"][...]
+        rms_key = ("normalized_residual_rms" if "projection" in result
+                   else "normalized_divergence_rms")
+        before = diagnostics[f"{rms_key}_before"][...]
+        after = diagnostics[f"{rms_key}_after"][...]
         reduction = np.full_like(before, np.nan)
         np.divide(before - after, before, out=reduction, where=before > 0)
         _store(summary, "fractional_rms_reduction", reduction, settings)
@@ -599,6 +671,14 @@ def plot_timing_calibration_product(
     start_time_s: float | None = None, stop_time_s: float | None = None,
 ) -> Path:
     """Plot a compact diagnostic figure using only the saved analysis product."""
+
+    with h5py.File(product_path, "r") as handle:
+        is_projection = "projection" in handle
+    if is_projection:
+        from hs_observatory.analysis.timing_affine import plot_affine_product
+
+        return plot_affine_product(product_path, output_path, mc_index=mc_index, dpi=dpi,
+                                   start_time_s=start_time_s, stop_time_s=stop_time_s)
 
     import matplotlib.pyplot as plt
 

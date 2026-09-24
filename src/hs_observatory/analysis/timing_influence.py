@@ -156,6 +156,12 @@ def compute_timing_influence(result: Mapping[str, Any]) -> dict[str, Any]:
     influence = decompose_timing_influence(result["ideal_divergence"], jacobian,
                                           result["variance"], result["sigma_t"])
     del jacobian
+    rms_offset_s = float(np.sqrt(np.mean(influence["predicted_correction_s"]**2)))
+    print(
+        f"Timing influence RMS recovered offset (across Nodes; Hub excluded): "
+        f"{rms_offset_s:.6g} s ({rms_offset_s * 1000:.6g} ms)",
+        flush=True,
+    )
     geometry, summary = influence_geometry(result)
     influence["geometry"] = geometry
     influence["polyhedra"] = summary
@@ -243,6 +249,28 @@ def plot_timing_influence(
         finally:
             plt.close(fig)
         outputs.append(path)
+
+    conditions = summaries["condition_number"]
+    valid_conditions = np.isfinite(conditions) & (conditions > 0)
+    finite_conditions = conditions[valid_conditions]
+    fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
+    if finite_conditions.size:
+        lower, upper = finite_conditions.min(), finite_conditions.max()
+        if lower == upper:
+            lower, upper = lower / np.sqrt(10), upper * np.sqrt(10)
+        bins = np.geomspace(lower, upper, 31)
+        ax.hist(finite_conditions, bins=bins, edgecolor="black", linewidth=.5)
+        ax.set_xscale("log")
+    ax.set(
+        xlabel="cond(R) (median over time)", ylabel="Number of polyhedra",
+        title=f"Condition numbers of retained polyhedra (N={len(conditions)})",
+    )
+    omitted = int(np.count_nonzero(~valid_conditions))
+    if omitted:
+        ax.text(.98, .98, f"Nonfinite or nonpositive: {omitted}",
+                transform=ax.transAxes, ha="right", va="top")
+    ax.grid(axis="y", alpha=.2)
+    save(fig, "condition_numbers")
 
     order = np.argsort(summaries["number_of_spacecraft"], kind="stable")
     n_order = summaries["number_of_spacecraft"][order]

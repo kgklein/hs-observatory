@@ -512,6 +512,10 @@ def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-time", type=float, help="first time-series sample to plot, in seconds")
     parser.add_argument("--stop-time", type=float, help="last time-series sample to plot, in seconds")
     parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument(
+        "--compare-products", nargs="+", default=[], metavar="HDF5",
+        help="additional timing products with identical inputs; write a method comparison figure",
+    )
     args = parser.parse_args(argv)
     print(plot_timing_calibration_product(
         args.product, args.output, mc_index=args.mc_index, dpi=args.dpi,
@@ -528,4 +532,11 @@ def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
 
     for influence_output in plot_timing_influence(args.product, args.output, dpi=args.dpi):
         print(influence_output)
+    if args.compare_products:
+        from hs_observatory.analysis.timing_affine import plot_timing_method_comparison
+
+        comparison_output = output.with_name(f"{output.stem}_comparison{output.suffix}")
+        print(plot_timing_method_comparison(
+            [args.product, *args.compare_products], comparison_output, dpi=args.dpi,
+        ))
     return 0
