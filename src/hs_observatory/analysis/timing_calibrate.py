@@ -25,6 +25,8 @@ from hs_observatory.analysis.magnetic_gradient import (
     _write_metadata,
     align_spacecraft_samples,
     apply_gradient_response,
+    geometry_diagnostics,
+    geometry_is_static,
     gradient_curl_divergence,
     gradient_response_coefficients,
     select_configurations,
@@ -44,6 +46,26 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         if name in selection and isinstance(selection[name], bool):
             selection[name] = {"enabled": selection[name]}
     settings = gradient_settings({**config, "configuration_selection": selection})
+    polyhedron_filter = config.get("polyhedron_filter")
+    if polyhedron_filter is None:
+        polyhedron_filter = {}
+    if not isinstance(polyhedron_filter, Mapping):
+        raise ValueError("polyhedron_filter must be a mapping or null")
+    allowed_n = polyhedron_filter.get("allowed_n")
+    if allowed_n is not None and (
+        not isinstance(allowed_n, list)
+        or any(type(n) is not int or not 4 <= n <= 9 for n in allowed_n)
+    ):
+        raise ValueError("polyhedron_filter.allowed_n must be a list of integers from 4 to 9 or null")
+    maximum = polyhedron_filter.get("max_condition_number")
+    if maximum is not None and (
+        isinstance(maximum, bool) or not isinstance(maximum, (int, float))
+        or not np.isfinite(maximum) or maximum <= 0
+    ):
+        raise ValueError("polyhedron_filter.max_condition_number must be finite and positive or null")
+    settings["polyhedron_filter"] = {
+        "allowed_n": allowed_n, "max_condition_number": maximum,
+    }
     use_ideal = config.get("use_ideal_divergence", False)
     if not isinstance(use_ideal, bool):
         raise ValueError("use_ideal_divergence must be a boolean")
@@ -88,6 +110,31 @@ def select_polyhedra(
     else:
         subsets = [group for size in range(4, 10) for group in combinations(range(9), size)]
     return {"_".join(spacecraft_ids[i] for i in group): np.asarray(group) for group in subsets}
+
+
+def _filter_polyhedra(
+    positions: np.ndarray, candidates: Mapping[str, np.ndarray], options: Mapping[str, Any],
+) -> tuple[dict[str, np.ndarray], dict[str, float]]:
+    """Intersect candidates using the same representative geometry as timing influence."""
+
+    selected, conditions = {}, {}
+    allowed_n = options["allowed_n"]
+    maximum = options["max_condition_number"]
+    for name, indices in candidates.items():
+        if allowed_n is not None and len(indices) not in allowed_n:
+            continue
+        points = positions[:, indices]
+        samples = points[:1] if geometry_is_static(points) else points
+        condition = float(np.median([
+            geometry_diagnostics(sample).condition_number for sample in samples
+        ]))
+        if maximum is not None and not condition <= maximum:
+            continue
+        selected[name] = indices
+        conditions[name] = condition
+    if not selected:
+        raise ValueError("polyhedron_filter retained no polyhedra from the candidate selection")
+    return selected, conditions
 
 
 def divergence_series(response: np.ndarray, field: np.ndarray) -> np.ndarray:
@@ -323,6 +370,8 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
     selected = select_polyhedra(positions[0], ids, config)
     if not selected:
         raise ValueError("At least one polyhedron must be selected")
+    candidate_count = len(selected)
+    selected, conditions = _filter_polyhedra(positions, selected, settings["polyhedron_filter"])
     responses = [gradient_response_coefficients(positions[:, indices], **settings["gradient"])
                  for indices in selected.values()]
     ideal_divergence = np.column_stack([
@@ -334,6 +383,7 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
     result = {
         "source": source, "time": time, "positions": positions, "ideal_B": ideal,
         "spacecraft_ids": ids, "node_indices": nodes, "selected": selected,
+        "condition_numbers": conditions,
         "responses": responses, "ideal_divergence": ideal_divergence,
         "raw_variance": raw, "variance": variance, "sigma_t": sigma_t,
         "offsets": offsets[:, nodes], "n_mc": observed_shape[0], "settings": settings,
@@ -354,6 +404,12 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             "covariance": "SVD of augmented design via QR; no residual variance rescaling",
             "comparison": "before/after use identical comparison_valid rows; fit uses fit_valid",
             "settings": settings,
+            "polyhedron_filter": {
+                **settings["polyhedron_filter"],
+                "candidate_count": candidate_count, "retained_count": len(selected),
+                "condition_number_convention": "first sample for static relative geometry; "
+                                               "median over analysis time otherwise",
+            },
         },
     }
     if settings["polyhedron_influence"]:
@@ -437,6 +493,7 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
         for column, (name, indices) in enumerate(result["selected"].items()):
             group = configurations.create_group(name)
             group.attrs["number_of_spacecraft"] = len(indices)
+            _store(group, "condition_number", result["condition_numbers"][name], settings)
             _store(group, "spacecraft_indices", indices, settings)
             group.create_dataset("spacecraft_ids", data=np.asarray(
                 [result["spacecraft_ids"][i] for i in indices], dtype=h5py.string_dtype()))

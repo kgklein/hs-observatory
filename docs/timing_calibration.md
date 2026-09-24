@@ -82,6 +82,47 @@ Optional `polyhedra` is a list of unique spacecraft-ID lists. Alternatively,
 The two selection modes are mutually exclusive. The `gradient` and `storage`
 settings follow magnetic-gradient conventions. All MC realizations are retained.
 
+Optional `polyhedron_filter` further restricts the selected candidates before a
+fresh timing fit. For example, use only the 126 tetrahedra:
+
+```yaml
+timing_calibrate:
+  polyhedron_filter:
+    allowed_n: [4]
+```
+
+Or require both a spacecraft count and a volumetric-tensor condition-number cut:
+
+```yaml
+timing_calibrate:
+  polyhedron_filter:
+    allowed_n: [6, 7, 8, 9]
+    max_condition_number: 100
+```
+
+Each entry is optional: absent/null `allowed_n` permits all sizes 4–9, and
+absent/null `max_condition_number` applies no condition cut. An absent/null
+filter preserves the existing selection. Filters intersect explicit `polyhedra`
+or legacy `configuration_selection` candidates, preserving their IDs and order.
+The threshold is inclusive (`condition_number <= max_condition_number`). Sizes
+must be integers from 4 to 9; the threshold must be finite and positive. Empty
+results raise an error.
+
+Conditions come from the existing `geometry_diagnostics()` volumetric tensor.
+Static relative geometry uses its first sample; moving geometry uses the median
+condition number over all analysis samples, as in the influence diagnostic.
+Without a condition cut, singular geometries remain eligible. The gradient
+estimator's existing validity rules still apply.
+
+Rerun analysis to apply a filter to an existing product. All fit diagnostics and
+normal figures then reflect the fresh fit using the retained configurations;
+filtering does not sum or subset an earlier influence decomposition. The JSON
+`metadata.polyhedron_filter` attribute records requested controls (including
+nulls), `candidate_count`, `retained_count`, and the geometry convention.
+`configurations`' `order` attribute records retained IDs; each configuration
+stores its existing `number_of_spacecraft` attribute and a scalar
+`condition_number` dataset.
+
 The product contains:
 
 - `metadata`: original generation/analysis YAML, version, commit, signs, settings,

@@ -51,7 +51,8 @@ def test_influence_sum_identities_and_existing_solver(rank_deficient):
         assert aggregate["counts"].sum() == 12
 
 
-def test_zero_offset_influence_hdf5_and_existing_geometry(tmp_path):
+@pytest.mark.parametrize("allowed_n, retained", [(None, 3), ([5, 9], 2)])
+def test_zero_offset_influence_hdf5_and_existing_geometry(tmp_path, allowed_n, retained):
     time = np.linspace(0, 1, 12)
     formation = synthetic_configuration(time)
     positions = formation.position.swapaxes(0, 1)
@@ -71,6 +72,7 @@ def test_zero_offset_influence_hdf5_and_existing_geometry(tmp_path):
         metadata={"config_yaml": yaml.safe_dump({"errors": {"time": {"model": "none"}}})},
     )
     options = {"sigma_t_s": .0125, "diagnostics": {"polyhedron_influence": True},
+               "polyhedron_filter": {"allowed_n": allowed_n},
                "polyhedra": [["H", "N1", "N2", "N3"],
                              ["H", "N1", "N2", "N3", "N4"], list(formation.spacecraft_ids)]}
     output = tmp_path / "influence.h5"
@@ -81,7 +83,8 @@ def test_zero_offset_influence_hdf5_and_existing_geometry(tmp_path):
     analyze_from_config(config)
     with h5py.File(output) as handle:
         group = handle["timing_influence"]
-        assert group["g_polyhedron"].shape == (8, 3)
+        assert group["g_polyhedron"].shape == (8, retained)
+        assert list(group["polyhedron_id"].asstr()[...]) == list(handle["configurations"].attrs["order"])
         assert group["g_polyhedron"].attrs["units"] == "1/s"
         assert group["polyhedron_correction_s"].attrs["units"] == "s"
         np.testing.assert_allclose(group["predicted_correction_s"][...],
@@ -89,10 +92,12 @@ def test_zero_offset_influence_hdf5_and_existing_geometry(tmp_path):
         for column, name in enumerate(group["polyhedron_id"].asstr()[...]):
             entry = handle[f"configurations/{name}"]
             indices = entry["spacecraft_indices"][...]
+            assert allowed_n is None or len(indices) in allowed_n
             geometry = entry["influence_geometry"]
             expected = estimate_gradient_least_squares(positions[0, indices], field[0, indices])
             np.testing.assert_allclose(geometry["volumetric_tensor"][0], expected.volumetric_tensor)
             np.testing.assert_allclose(geometry["condition_number"][0], expected.condition_number)
+            assert entry["condition_number"][()] == group["polyhedra/condition_number"][column]
             np.testing.assert_allclose(geometry["characteristic_size"][0], 2*np.sqrt(expected.eigenvalues[0]))
             assert group["polyhedra/sigma_d"][column] == pytest.approx(np.sqrt(entry["sigma_d_squared"][()]))
             if len(indices) > 4:

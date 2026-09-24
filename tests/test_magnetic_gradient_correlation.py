@@ -307,6 +307,7 @@ def test_hdf5_product_and_all_plots_are_source_independent(tmp_path):
         figure, axes = plt.subplots(2, 4)
         _draw_heatmap_grid(figure, axes, handle)
         assert all(image.get_clim() == (-1.0, 1.0) for axis in axes.ravel() for image in axis.images)
+        assert axes[0, 0].images[0].cmap.name == "coolwarm_r"
         assert [tick.get_text() for tick in axes[0, 0].get_yticklabels()] == [
             "$B_x$",
             "$B_y$",
@@ -338,6 +339,21 @@ def test_hdf5_product_and_all_plots_are_source_independent(tmp_path):
         ),
     )
     assert all(output.stat().st_size > 0 for output in outputs)
+    requested_cmaps: list[str] = []
+    original_get_cmap = plt.get_cmap
+
+    def recording_get_cmap(name, *args, **kwargs):
+        requested_cmaps.append(name)
+        return original_get_cmap(name, *args, **kwargs)
+
+    plt.get_cmap = recording_get_cmap
+    try:
+        plot_magnetic_gradient_measured_vs_ideal_heatmaps(
+            product, tmp_path / "measured_heatmaps_check.png", dpi=60
+        )
+    finally:
+        plt.get_cmap = original_get_cmap
+    assert "coolwarm_r" in requested_cmaps
     with pytest.raises(ValueError, match="require color_limits"):
         plot_magnetic_gradient_correlation_heatmaps(
             product,

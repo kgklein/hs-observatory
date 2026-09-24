@@ -1,6 +1,7 @@
 """Timing-only calibration contracts and small synthetic integration fixtures."""
 
 from itertools import combinations
+import json
 
 import h5py
 import numpy as np
@@ -11,9 +12,12 @@ from hs_observatory.analysis.magnetic_gradient import (
     align_spacecraft_samples,
     apply_gradient_response,
     estimate_gradient_least_squares,
+    geometry_diagnostics,
     gradient_response_coefficients,
 )
 from hs_observatory.analysis.timing_calibrate import (
+    _filter_polyhedra,
+    _settings,
     calibrate_realization,
     compute_timing_calibration,
     divergence_variance,
@@ -32,6 +36,175 @@ from hs_observatory.spacecraft.configuration import synthetic_configuration
 
 
 IDS = ["H", *(f"N{i}" for i in range(1, 9))]
+
+
+@pytest.mark.parametrize("options", [None, {}, {"allowed_n": None},
+                                   {"max_condition_number": None},
+                                   {"allowed_n": None, "max_condition_number": None}])
+def test_filter_no_cut_preserves_candidates(options):
+    points = np.random.default_rng(20).normal(size=(9, 3))
+    candidates = select_polyhedra(points, IDS, {})
+    settings = _settings({"polyhedron_filter": options})
+    selected, conditions = _filter_polyhedra(points[None], candidates, settings["polyhedron_filter"])
+    assert list(selected) == list(candidates)
+    assert len(selected) == 382
+    for name in selected:
+        np.testing.assert_array_equal(selected[name], candidates[name])
+        assert conditions[name] == geometry_diagnostics(points[selected[name]]).condition_number
+
+
+@pytest.mark.parametrize("sizes, count", [([4], 126), ([9], 1), ([4, 4], 126)])
+def test_filter_spacecraft_counts(sizes, count):
+    points = np.random.default_rng(20).normal(size=(9, 3))
+    candidates = select_polyhedra(points, IDS, {})
+    selected, _ = _filter_polyhedra(points[None], candidates, {
+        "allowed_n": sizes, "max_condition_number": None,
+    })
+    assert len(selected) == count
+    assert all(len(indices) in sizes for indices in selected.values())
+    if sizes == [9]:
+        np.testing.assert_array_equal(next(iter(selected.values())), np.arange(9))
+
+
+@pytest.mark.parametrize("sizes", [None, [6, 7, 8, 9]])
+def test_filter_condition_and_combined_cuts(sizes):
+    points = np.random.default_rng(20).normal(size=(9, 3))
+    candidates = select_polyhedra(points, IDS, {})
+    expected = {name: geometry_diagnostics(points[indices]).condition_number
+                for name, indices in candidates.items()}
+    # Select an actual condition to exercise inclusive equality at the boundary.
+    boundary = next(name for name, indices in candidates.items() if len(indices) == 6)
+    threshold = expected[boundary]
+    selected, conditions = _filter_polyhedra(points[None], candidates, {
+        "allowed_n": sizes, "max_condition_number": threshold,
+    })
+    assert list(selected) == [name for name, indices in candidates.items()
+                              if (sizes is None or len(indices) in sizes)
+                              and expected[name] <= threshold]
+    assert boundary in selected
+    assert 0 < len(selected) < len(candidates)
+    assert all(value <= threshold for value in conditions.values())
+
+
+def test_filter_moving_and_translated_geometry():
+    points = np.random.default_rng(20).normal(size=(9, 3))
+    candidates = {"all_nine": np.arange(9)}
+    moving = np.stack([points * [scale, 1, 1] for scale in (1, 2, 10)])
+    expected = np.median([geometry_diagnostics(sample).condition_number for sample in moving])
+    assert expected != geometry_diagnostics(moving[0]).condition_number
+    _, conditions = _filter_polyhedra(moving, candidates, {
+        "allowed_n": None, "max_condition_number": expected,
+    })
+    assert conditions["all_nine"] == expected
+    with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
+        _filter_polyhedra(moving, candidates, {
+            "allowed_n": None, "max_condition_number": np.nextafter(expected, 0),
+        })
+    translated = points[None] + np.arange(3)[:, None, None]
+    _, conditions = _filter_polyhedra(translated, candidates, {
+        "allowed_n": None, "max_condition_number": None,
+    })
+    assert conditions["all_nine"] == geometry_diagnostics(points).condition_number
+    flat = np.zeros((1, 9, 3))
+    _, conditions = _filter_polyhedra(flat, candidates, {
+        "allowed_n": None, "max_condition_number": None,
+    })
+    assert conditions["all_nine"] == np.inf
+    with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
+        _filter_polyhedra(flat, candidates, {"allowed_n": None, "max_condition_number": 100})
+
+
+@pytest.mark.parametrize("options", [
+    False, [], {"allowed_n": 4}, {"allowed_n": [True]}, {"allowed_n": [4.0]},
+    {"allowed_n": [3]}, {"allowed_n": [10]}, {"allowed_n": ["4"]},
+    *[{"max_condition_number": value} for value in (True, "100", 0, -1, np.inf, np.nan)],
+])
+def test_filter_invalid_settings(options):
+    with pytest.raises(ValueError, match="polyhedron_filter"):
+        _settings({"polyhedron_filter": options})
+
+
+@pytest.mark.parametrize("options", [{"allowed_n": []}, {"max_condition_number": 0.5}])
+def test_filter_empty_before_response_construction(tmp_path, synthetic, monkeypatch, options):
+    source = _observation(tmp_path, synthetic)
+
+    def unexpected_response(*args, **kwargs):
+        pytest.fail("Responses must not be constructed for an empty selection")
+
+    monkeypatch.setattr("hs_observatory.analysis.timing_calibrate.gradient_response_coefficients",
+                        unexpected_response)
+    with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
+        compute_timing_calibration(source, {"polyhedron_filter": options})
+
+
+def test_filter_intersects_existing_selection(tmp_path, synthetic):
+    source = _observation(tmp_path, synthetic)
+    explicit = {"polyhedra": [IDS[:4], IDS], "polyhedron_filter": {"allowed_n": [9]}}
+    result = compute_timing_calibration(source, explicit)
+    assert list(result["selected"]) == ["_".join(IDS)]
+    assert result["metadata"]["polyhedron_filter"]["candidate_count"] == 2
+    legacy = {"configuration_selection": {
+        "small": False, "intermediate": False, "large": False, "all_nine": True,
+    }, "polyhedron_filter": {"allowed_n": [9]}}
+    result = compute_timing_calibration(source, legacy)
+    assert list(result["selected"]) == ["all_nine"]
+    legacy["polyhedron_filter"] = {"allowed_n": [4]}
+    with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
+        compute_timing_calibration(source, legacy)
+
+
+@pytest.mark.parametrize("options", [None, {}, {"allowed_n": None, "max_condition_number": None}])
+def test_no_filter_preserves_numerical_fit(tmp_path, synthetic, options):
+    source = _observation(tmp_path, synthetic)
+    time, positions, ideal, _, measured, polyhedra, responses = synthetic
+    result = compute_timing_calibration(source, {
+        "sigma_d_floor": 1e-6, "polyhedron_filter": options,
+    })
+    original_divergence = np.column_stack([
+        divergence_series(response, ideal[:, indices])
+        for indices, response in zip(polyhedra, responses)
+    ])
+    _, variance = divergence_variance(original_divergence, 1e-6)
+    original = calibrate_realization(time, positions, measured, polyhedra, responses,
+                                     np.arange(1, 9), variance, .01)
+    actual = calibrate_realization(time, positions, measured, list(result["selected"].values()),
+                                   result["responses"], result["node_indices"],
+                                   result["variance"], result["sigma_t"])
+    for key in ("correction_s", "covariance_s2", "fit_valid"):
+        np.testing.assert_array_equal(actual[key], original[key])
+
+
+def test_filtered_product_matches_fresh_explicit_fit(tmp_path, synthetic):
+    source = _observation(tmp_path, synthetic)
+    options = {"allowed_n": [8, 9, 9], "max_condition_number": 100}
+    filtered = compute_timing_calibration(source, {
+        "sigma_d_floor": 1e-6, "polyhedron_filter": options,
+    })
+    explicit = compute_timing_calibration(source, {
+        "sigma_d_floor": 1e-6,
+        "polyhedra": [[IDS[i] for i in indices] for indices in filtered["selected"].values()],
+    })
+    output = write_timing_calibration_product(filtered, tmp_path / "filtered.h5")
+    reference = write_timing_calibration_product(explicit, tmp_path / "explicit.h5")
+    with h5py.File(output) as actual, h5py.File(reference) as expected:
+        for name in ("correction_s", "covariance_s2"):
+            np.testing.assert_array_equal(actual[f"timing/{name}"], expected[f"timing/{name}"])
+        metadata = json.loads(actual["metadata"].attrs["polyhedron_filter"])
+        assert metadata["allowed_n"] == options["allowed_n"]
+        assert metadata["max_condition_number"] == 100
+        assert metadata["candidate_count"] == 382
+        assert metadata["retained_count"] == len(filtered["selected"])
+        assert list(actual["configurations"].attrs["order"]) == list(filtered["selected"])
+        for name, indices in filtered["selected"].items():
+            group = actual[f"configurations/{name}"]
+            assert group.attrs["number_of_spacecraft"] == len(indices)
+            assert group["condition_number"][()] == filtered["condition_numbers"][name]
+            assert group["condition_number"].attrs["units"] == "1"
+        unset = json.loads(expected["metadata"].attrs["polyhedron_filter"])
+        assert unset["allowed_n"] is None and unset["max_condition_number"] is None
+    source.unlink()
+    plot = plot_timing_calibration_product(output, tmp_path / "filtered.png", dpi=40)
+    assert plot.stat().st_size > 1000
 
 
 def _field(time):

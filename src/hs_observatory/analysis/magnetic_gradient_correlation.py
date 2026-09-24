@@ -967,7 +967,7 @@ def _draw_heatmap_grid(
 ) -> None:
     if tuple(float(value) for value in color_limits) != (-1.0, 1.0):
         raise ValueError("Pearson correlation heat maps require color_limits [-1, 1]")
-    colormap = plt.get_cmap("coolwarm").copy()
+    colormap = plt.get_cmap("coolwarm_r").copy()
     colormap.set_bad("#dedede")
     normalization = Normalize(vmin=-1.0, vmax=1.0)
     image = None
@@ -1069,7 +1069,7 @@ def plot_magnetic_gradient_measured_vs_ideal_heatmaps(
             [[figure.add_subplot(grid[0, column]) for column in range(4)]]
         )
         summary_axis = figure.add_subplot(grid[1, :])
-        colormap = plt.get_cmap("coolwarm").copy()
+        colormap = plt.get_cmap("coolwarm_r").copy()
         colormap.set_bad("#dedede")
         normalization = Normalize(vmin=-1.0, vmax=1.0)
         image = None
