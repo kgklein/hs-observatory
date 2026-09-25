@@ -48,10 +48,10 @@ correction c is applied as `B_corrected(t) = B_measured(t + c)`, so the reported
 recovered injected offset is **-c**. Bias, RMSE, and the 1:1 recovery plot compare
 -c with tau. Injected offsets are used for diagnostics, never to build the fit.
 
-One fixed divergence variance per polyhedron is the ideal time-series mean of
+By default, one fixed divergence variance per polyhedron is the ideal time-series mean of
 `d**2`, without subtracting its mean. `timing_calibrate.sigma_d_floor` defaults to
 `1e-12` nT/km and floors the standard deviation. Both raw and floored squared
-values are saved. No additional temporal or geometry weights are applied.
+values are saved. No additional temporal or geometry weights are applied in this mode.
 
 The common prior `sigma_t_s` defaults to the embedded generation uncertainty
 (12.5 ms / 3 in this case), and can be explicitly overridden. The augmented
@@ -455,3 +455,120 @@ condition number alongside quadratic residual powers and time series. The existi
 
 See [the quadratic investigation](timing_quadratic_investigation.md) for validation
 and the zero-injected-error nonlinear-field results.
+
+
+## Instrument-noise divergence normalization
+
+The default remains `divergence_normalization: ideal_divergence`. For the
+polyhedron method, select the flight-accessible weighting as follows (paths are
+relative to the analysis YAML):
+
+```yaml
+timing_calibrate:
+  divergence_normalization: instrument_noise
+  instrument_noise:
+    spectrum_file: ../configs/helioswarm_mag_scm_noise.yaml
+    interpretation: per_component
+    below_range: flat
+    above_range: error
+    variance_floor_nT2_per_km2: 0.0
+    processing:
+      sampling: ideal_antialias
+      averaging_duration_s: 0.0
+```
+
+The editable spectrum is an approximate digitization of the anticipated merged
+MAG+SCM noise floor, **not final instrument specifications**. The working
+assumption is a per-component ASD, pending MAG-team confirmation. Setting
+`interpretation: vector_total` treats its square as the total power in three
+isotropic components and divides component PSD by three.
+
+ASD is interpolated in log-log space, then squared to obtain one-sided PSD in
+nT²/Hz. Integration of `PSD * |H|² df` gives per-component variance in nT²;
+its square root is `sigma_B_nT`. Uniform input cadence sets Nyquist. The lower
+limit is DC, never inverse record duration. Both range policies default to
+`error`; `flat` explicitly extends the endpoint ASD. In particular, the example
+assumes constant ASD below 0.0007 Hz. It does not claim a measured DC noise floor.
+Above 20 Hz, either extend the model, explicitly choose `above_range: flat`, or
+supply a response that eliminates the unsupported frequencies.
+
+`sampling: ideal_antialias` explicitly declares that input samples have no
+aliased out-of-band power. This implementation does not infer the instrument
+anti-alias response. Nonuniform sampling is rejected. An optional
+`averaging_duration_s` models continuous boxcar averaging with
+`|H|² = sinc(f * duration)²`. Optional `transfer_power: [[f_Hz, power], ...]`
+multiplies that response, interpolating power linearly; it must cover DC through
+Nyquist with nonnegative power. These describe processing **already applied to
+the input**, and require `applied_to_input: true` when provided. No filter is
+applied by the noise calculation. Discrete averaging or other filters should
+supply their actual squared response through `transfer_power`. A high-pass
+response permits unsupported low frequencies only where its power is exactly
+zero; attenuation alone does not remove the need for a noise model.
+
+For each retained polyhedron, the existing volumetric tensor supplies
+`sigma_d² = sigma_B² * Tr(R^-1) / N` in (nT/km)². Time-dependent geometry produces
+one variance per time and polyhedron. Singular geometry has infinite variance
+and is excluded from fit rows. The optional explicit variance floor is applied
+with `max(raw_variance, floor)` and is never inferred from synthetic divergence.
+This assumes independent spacecraft noise and isotropic, uncorrelated components.
+Temporal correlations introduced by filtering and correlations among overlapping
+polyhedra are not added to the least-squares covariance model.
+
+The least-squares solver is unchanged; time-dependent weights are adapted into
+its existing row format. Existing selection, geometry filters, MC realizations,
+ideal-reference option, and plots remain available. Projection calibration
+methods retain their existing normalization. The synthetic analysis pipeline
+still requires truth for diagnostics and weight comparison; instrument weights
+and the absolute-divergence fit do not use its values. Selecting
+`use_ideal_divergence: true` remains a truth-assisted experiment.
+
+Products save the original spectrum YAML, component ASD and PSD, integration
+nodes and quadrature weights, integration limits, response, cadence, range
+policies, processing assumptions, sigma_B, and per-polyhedron raw/floored
+variance and sigma_d. Objective fractions before/after are in `diagnostics`;
+existing per-Node bias and RMSE remain in `mc_summary`. The plotting CLI adds
+`_noise_weights`, showing the implemented spectrum, instrument versus ideal
+weights (median inverse variance for moving geometry), and objective fractions.
+`--compare-products` also compares timing recovery with the existing method.
+
+### Reproducible paired experiments
+
+```sh
+.venv/bin/python analysis/timing_noise_experiment.py
+```
+
+This runs zero-offset and nonzero-offset experiments on a seeded solenoidal
+Fourier surrogate, using identical source samples, geometry, selection, priors,
+and injected offsets for both normalizations. Each case has four realizations;
+the zero case repeats identical measurements. Cadence is 32 Hz, ten 8/9-member
+polyhedra are retained, and the timing prior is 4 ms. The source contains no
+random instrument noise: this isolates the effect of changing normalization,
+not a noise-performance forecast. Finite-volume divergence may be nonzero even
+for this solenoidal field; no spatial-curvature correction is introduced.
+
+HDF5 sources, analysis products, exact options, overview/time-series/weight and
+comparison figures, and per-case bias/RMSE summaries are written under
+`outputs/timing_noise_experiment/`. These generated files are git-ignored.
+
+The seeded run on 2026-09-24 yielded sigma_B = 0.01856635 nT per component,
+integrated over 0–16 Hz. Pooled timing-recovery RMSE across realizations and Nodes:
+
+| Injected timing | Ideal-divergence normalization | Instrument-noise normalization |
+| --- | ---: | ---: |
+| Zero | 17.866 ms | 82.477 ms |
+| Nonzero (4 ms draw standard deviation) | 18.828 ms | 82.598 ms |
+
+These are an implementation comparison, not a demonstration of improved timing
+accuracy. Nonzero discrete divergence produces zero-error bias; instrument
+weights are much larger here and increase that bias. The corrected objective is
+about 95.7% divergence in the zero-error ideal-normalization run and 99.978% in
+the instrument-normalization run. The remaining contribution is the timing
+prior. Recovery errors this large also limit the first-order timing model's
+accuracy. No curvature model or change to correlated-polyhedron treatment was
+used to improve these results. Per-Node signed biases and RMSEs are retained in
+`summary.yaml` and each product's `mc_summary`.
+
+Validation: 90 focused timing tests passed (noise, legacy polyhedron, affine,
+quadratic, and influence suites). Six diagnostic warnings report increases in
+resampled corrected chi-square; they are not test failures. The new experiment
+script passed its targeted Ruff check.
