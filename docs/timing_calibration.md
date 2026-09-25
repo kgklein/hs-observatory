@@ -247,7 +247,9 @@ also call the plotting command to produce these images.
 ### All-nine affine projection methods
 
 `timing_calibrate.calibration_method` selects `polyhedron` (the unchanged default),
-`all_nine_divergence`, or `all_nine_df_affine`. The two projection methods use all
+`all_nine_divergence`, `all_nine_df_affine`, or
+[`all_nine_df_quadratic`](#exact-divergence-free-quadratic-projection).
+The two affine projection methods use all
 nine spacecraft directly, without the 382 overlapping polyhedron residuals.
 They share the existing augmented least-squares solver, MC streaming, Hub clock
 reference, interpolation, timing covariance, and bias/RMSE summaries.
@@ -339,18 +341,19 @@ these weights. It does not account for affine-model error or temporal correlatio
 ### Comparing calibration methods
 
 Matched example configurations use `outputs/sim-cali-len01.h5` and the same timing
-prior. Adjust their common source and the two projection residual scales together
+prior. Adjust their common source and all three projection residual scales together
 for another experiment:
 
 ```sh
-for method in polyhedron divergence df-affine; do
+for method in polyhedron divergence df-affine df-quadratic; do
     hsobs-analyze "analysis/sim-cali-compare-${method}.yaml"
 done
 python -m hs_observatory.cli_timing_calibrate \
-  outputs/sim-cali-compare-df-affine.h5 \
-  --output outputs/sim-cali-compare-df-affine.png \
+  outputs/sim-cali-compare-df-quadratic.h5 \
+  --output outputs/sim-cali-compare-df-quadratic.png \
   --compare-products outputs/sim-cali-compare-polyhedron.h5 \
-                     outputs/sim-cali-compare-divergence.h5
+                     outputs/sim-cali-compare-divergence.h5 \
+                     outputs/sim-cali-compare-df-affine.h5
 ```
 
 The normal plotting command automatically selects projection diagnostics for new
@@ -367,3 +370,88 @@ methods: the former keeps its original ideal-divergence weights. Spectrum
 magnitudes likewise depend on those weights. Before/after objective comparisons
 within each product exclude the same invalid endpoints, but endpoint masks can
 differ between methods. Timing recovery compares the same complete input interval.
+
+### Exact divergence-free quadratic projection
+
+The fourth method, `all_nine_df_quadratic`, extends the same projection calibration
+path to an exact divergence-free quadratic polynomial. It introduces no quadratic
+coefficient regularization. The timing prior is unchanged.
+
+```yaml
+timing_calibrate:
+  calibration_method: all_nine_df_quadratic
+  sigma_t_s: 0.0125
+  sigma_B_nT: 0.1
+  quadratic_condition_number_max: 1.0e10  # default; reject larger design conditions
+```
+
+The matched example is `analysis/sim-cali-compare-df-quadratic.yaml`. As for the
+affine methods, `sigma_B_nT` is required, and ideal-reference objectives and
+polyhedron selection/influence options are prohibited. Use identical magnetic
+normalization for all three projection methods; the legacy polyhedron method
+retains its original weights.
+
+Center positions on the observatory barycenter and define
+`x = (r - r_bar) / L`, with the repository length
+`L = 2 sqrt(max eigenvalue(R))`. The unconstrained coefficient vector has 30 entries:
+three B0 entries, nine G entries, and six symmetric H entries per field component.
+H ordering is `xx, xy, xz, yy, yz, zz`. Its six quadratic design columns are
+`x²/2, xy, xz, y²/2, yz, z²/2`, respecting the factor of one-half in
+
+\[
+ B_i = B_{i0} + G_{ij}x_j + \tfrac12 H_{ijk}x_jx_k.
+\]
+
+Four independent linear constraints impose
+
+\[
+ \sum_i G_{ii}=0,\qquad \sum_i H_{iik}=0\quad(k=1,2,3).
+\]
+
+An orthonormal null-space basis of these constraints maps 26 free parameters into
+the 30 coefficients. Multiplying the sampled unconstrained design by this basis
+gives `M_quad` of shape 27 × 26. Common coordinate scaling preserves all four zero
+constraints. The reported condition number refers to this scaled design and its
+orthonormal constrained parameter basis.
+
+For rank 26, a full SVD supplies the single orthogonal residual column `q`:
+`q.T @ M_quad = 0` and `q.T @ q = 1`. The implementation verifies both identities
+and evaluates `q.T @ y` directly; it does not construct `q @ q.T`. Design rank uses
+`eps * 27 * largest_singular_value`. Rank loss or a condition number exceeding
+`quadratic_condition_number_max` raises an error reporting the geometry sample,
+effective rank, condition number, and threshold. Static relative geometry is
+factored once using the existing geometry convention. For changing geometry,
+every sample is checked. Zero observatory extent is also rejected.
+
+The objective is
+
+\[
+ \chi^2(c)=\sum_t\frac{[q(t)^T(y(t)+D(t)c)]^2}{\sigma_B^2}
+           +\sum_\alpha\frac{c_\alpha^2}{\sigma_t^2},\qquad c_H=0.
+\]
+
+The existing augmented least-squares solver estimates eight Node corrections;
+recovered offsets remain `-c`. Only measured fields determine the data term and
+its time derivatives. The shared interpolation independently recomputes corrected
+quadratic residuals at nominal common-time geometry. Before/after actual powers
+use the same surviving samples, as in the affine implementation.
+
+Quadratic products use the existing timing, magnetic-field, MC-summary, and
+Jacobian/covariance groups. Their `projection` group contains:
+
+- `quadratic_basis`: `(geometry_sample, 27, 1)` unit residual direction.
+- `quadratic_singular_values`: `(geometry_sample, 26)` scaled design spectrum.
+- `quadratic_condition_number` and `quadratic_rank`: per-geometry diagnostics.
+- `ideal_quadratic_residual`: diagnostic truth residual, `(time, 1)`, in nT.
+- `quadratic_residual_before` and `quadratic_residual_after`: `(MC, time, 1)`, in nT.
+- `fit_valid` and `comparison_valid`: the existing fit-row/common-time masks.
+
+`diagnostics/quadratic_chi2_{before,after}` equals the actual `data_chi2_*` term;
+`chi2_*` also includes the timing prior. The usual linear-objective diagnostics,
+normalized residual RMS, data-only timing spectra/ranks, and recovery errors are
+retained. The standard diagnostic plot adds the quadratic design spectrum and
+condition number alongside quadratic residual powers and time series. The existing
+`--compare-products` option accepts all four methods without another flag.
+
+See [the quadratic investigation](timing_quadratic_investigation.md) for validation
+and the zero-injected-error nonlinear-field results.

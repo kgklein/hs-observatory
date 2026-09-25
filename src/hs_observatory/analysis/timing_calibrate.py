@@ -77,12 +77,13 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("Polyhedron influence requires use_ideal_divergence: false")
     settings["polyhedron_influence"] = influence
     method = config.get("calibration_method", "polyhedron")
-    if method not in {"polyhedron", "all_nine_divergence", "all_nine_df_affine"}:
+    if method not in {"polyhedron", "all_nine_divergence", "all_nine_df_affine",
+                      "all_nine_df_quadratic"}:
         raise ValueError("Unknown timing calibration_method")
     settings["calibration_method"] = method
     if method != "polyhedron":
         if use_ideal or influence:
-            raise ValueError("Affine projection forbids use_ideal_divergence and polyhedron_influence")
+            raise ValueError("Polynomial projection forbids use_ideal_divergence and polyhedron_influence")
         if any(config.get(key) is not None for key in
                ("polyhedra", "configuration_selection", "polyhedron_filter")):
             raise ValueError("All-nine projection does not support polyhedron selection/filtering")
@@ -91,8 +92,14 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
                 or not np.isfinite(sigma_B) or sigma_B <= 0
                 or sigma_B > np.sqrt(np.finfo(float).max)
                 or sigma_B < np.sqrt(np.nextafter(0., 1.))):
-            raise ValueError("Affine projection requires finite positive sigma_B_nT")
+            raise ValueError("Polynomial projection requires finite positive sigma_B_nT")
         settings["sigma_B_nT"] = float(sigma_B)
+        if method == "all_nine_df_quadratic":
+            maximum = config.get("quadratic_condition_number_max", 1e10)
+            if (isinstance(maximum, bool) or not isinstance(maximum, (int, float))
+                    or not np.isfinite(maximum) or maximum < 1):
+                raise ValueError("quadratic_condition_number_max must be finite and at least one")
+            settings["quadratic_condition_number_max"] = float(maximum)
     if not settings["store_all_realizations"]:
         raise ValueError("timing-calibrate requires monte_carlo.store_all_realizations: true")
     if settings["time_sync"]["allow_extrapolation"]:
@@ -388,7 +395,14 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
     if settings["calibration_method"] != "polyhedron":
         from hs_observatory.analysis.timing_affine import affine_projection_bases
 
-        projection = affine_projection_bases(positions)
+        if settings["calibration_method"] == "all_nine_df_quadratic":
+            from hs_observatory.analysis.timing_affine import quadratic_projection_bases
+
+            projection = quadratic_projection_bases(
+                positions, condition_number_max=settings["quadratic_condition_number_max"],
+            )
+        else:
+            projection = affine_projection_bases(positions)
         selected, conditions, responses = {}, {}, []
         candidate_count = 0
         ideal_divergence = np.empty((len(time), 0))
@@ -552,18 +566,26 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
 
             write_timing_influence(handle, result)
         if "projection" in result:
-            from hs_observatory.analysis.timing_affine import project_field
+            from hs_observatory.analysis.timing_affine import project_field, projection_components
 
             projection = handle.create_group("projection")
+            components = projection_components(result["projection"])
+            quadratic = components == ("quadratic",)
             projection.attrs.update(
                 axes="geometry sample, measurement component, residual coordinate",
-                static_geometry=len(result["projection"]["df_basis"]) == 1,
-                affine_rank=12, df_rank=11, non_affine_rank=15, divergence_rank=1,
-                df_residual_rank=16,
+                static_geometry=len(result["projection"][
+                    "quadratic_basis" if quadratic else "df_basis"]) == 1,
             )
+            if quadratic:
+                projection.attrs.update(quadratic_design_rank=26, quadratic_residual_rank=1,
+                                        quadratic_condition_number_max=
+                                        settings["quadratic_condition_number_max"])
+            else:
+                projection.attrs.update(affine_rank=12, df_rank=11, non_affine_rank=15,
+                                        divergence_rank=1, df_residual_rank=16)
             for key, value in result["projection"].items():
                 _store(projection, key, value, settings)
-            for component in ("non_affine", "divergence"):
+            for component in components:
                 _store(projection, f"ideal_{component}_residual",
                        project_field(result["projection"][f"{component}_basis"], result["ideal_B"]),
                        settings, "nT")

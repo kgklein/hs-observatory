@@ -1,4 +1,4 @@
-"""All-nine affine residual bases for the shared timing-calibration pipeline."""
+"""All-nine polynomial residual bases for the shared timing-calibration pipeline."""
 
 from __future__ import annotations
 
@@ -61,6 +61,85 @@ def affine_projection_bases(positions: np.ndarray) -> dict[str, np.ndarray]:
     return {key: np.asarray(value) for key, value in records.items()}
 
 
+def quadratic_parameter_basis() -> np.ndarray:
+    """Map 26 independent coefficients to B0(3), G(9), symmetric H(18).
+
+    H pairs are xx, xy, xz, yy, yz, zz for each field component. Coefficients
+    refer to uniformly scaled coordinates; the four zero constraints retain
+    their form under this scaling.
+    """
+    pairs = ((0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2))
+    constraints = np.zeros((4, 30))
+    constraints[0, [3, 7, 11]] = 1
+    for k in range(3):
+        for i in range(3):
+            pair = pairs.index(tuple(sorted((i, k))))
+            constraints[k + 1, 12 + 6*i + pair] = 1
+    _, singular, right = np.linalg.svd(constraints, full_matrices=True)
+    if np.count_nonzero(singular > 1e-12) != 4:
+        raise ValueError("Quadratic divergence constraints must have rank four")
+    return right[4:].T
+
+
+def quadratic_design_matrix(positions: np.ndarray) -> np.ndarray:
+    """Return the exact divergence-free 27 x 26 design in scaled coordinates."""
+    points = np.asarray(positions, dtype=float)
+    if points.shape != (9, 3) or not np.isfinite(points).all():
+        raise ValueError("Quadratic positions must have shape (9, 3) and be finite")
+    geometry = geometry_diagnostics(points)
+    if geometry.characteristic_size <= 0:
+        raise ValueError("Quadratic design requires a positive observatory length")
+    x = (points - geometry.barycenter) / geometry.characteristic_size
+    quadratic = np.column_stack((.5*x[:, 0]**2, x[:, 0]*x[:, 1], x[:, 0]*x[:, 2],
+                                  .5*x[:, 1]**2, x[:, 1]*x[:, 2], .5*x[:, 2]**2))
+    design = np.zeros((9, 3, 30))
+    design[:, :, :3] = np.eye(3)
+    for i in range(3):
+        design[:, i, 3 + 3*i:6 + 3*i] = x
+        design[:, i, 12 + 6*i:18 + 6*i] = quadratic
+    return design.reshape(27, 30) @ quadratic_parameter_basis()
+
+
+def quadratic_projection_bases(positions: np.ndarray, *,
+                               condition_number_max: float = 1e10) -> dict[str, np.ndarray]:
+    """Cache a single residual direction for static relative geometry.
+
+    Reject rank loss or severe design conditioning; never discard extra singular
+    modes or regularize quadratic coefficients to manufacture a rank-one fit.
+    """
+    points = np.asarray(positions, dtype=float)
+    if points.ndim != 3 or points.shape[1:] != (9, 3) or not np.isfinite(points).all():
+        raise ValueError("Quadratic positions must have shape (time, 9, 3) and be finite")
+    if not np.isfinite(condition_number_max) or condition_number_max < 1:
+        raise ValueError("quadratic_condition_number_max must be finite and at least one")
+    samples = points[:1] if geometry_is_static(points) else points
+    records = {key: [] for key in ("quadratic_basis", "quadratic_singular_values",
+                                  "quadratic_condition_number", "quadratic_rank")}
+    for index, sample in enumerate(samples):
+        design = quadratic_design_matrix(sample)
+        left, singular, _ = np.linalg.svd(design, full_matrices=True)
+        tolerance = np.finfo(float).eps * 27 * singular[0]
+        rank = int(np.count_nonzero(singular > tolerance))
+        condition = float(singular[0] / singular[-1]) if rank == 26 else np.inf
+        if rank != 26 or condition > condition_number_max:
+            raise ValueError(
+                f"Quadratic design at geometry sample {index}: rank={rank}/26, "
+                f"condition_number={condition:.6g}, limit={condition_number_max:.6g}"
+            )
+        q = left[:, 26:]
+        if (not np.allclose(q.T @ q, np.eye(1), atol=1e-12, rtol=0)
+                or not np.allclose(q.T @ design, 0, atol=1e-12*singular[0], rtol=0)):
+            raise ValueError(f"Quadratic basis orthogonality failed at geometry sample {index}")
+        for key, value in zip(records, (q, singular, condition, rank)):
+            records[key].append(value)
+    return {key: np.asarray(value) for key, value in records.items()}
+
+
+def projection_components(bases):
+    """Residual components stored for the selected polynomial model."""
+    return ("quadratic",) if "quadratic_basis" in bases else ("non_affine", "divergence")
+
+
 def project_field(basis: np.ndarray, field: np.ndarray) -> np.ndarray:
     """Residual coordinates; their squared norm is the projector residual power."""
     return np.einsum("tqr,tq->tr", basis, field.reshape(len(field), 27))
@@ -71,7 +150,9 @@ def calibrate_affine_realization(time, positions, measured, node_indices, sigma_
     """Use the shared solver and interpolation, fitting measured data only."""
     from hs_observatory.analysis.timing_calibrate import solve_timing
 
-    basis = bases["divergence_basis" if method == "all_nine_divergence" else "df_basis"]
+    basis_key = {"all_nine_divergence": "divergence_basis",
+                 "all_nine_df_affine": "df_basis", "all_nine_df_quadratic": "quadratic_basis"}[method]
+    basis = bases[basis_key]
     before = project_field(basis, measured)
     derivative = np.gradient(measured, time, axis=0, edge_order=1)
     sampling = np.zeros((len(time), 9, 3, len(node_indices)))
@@ -91,12 +172,13 @@ def calibrate_affine_realization(time, positions, measured, node_indices, sigma_
         raise ValueError("No common valid rows remain after timing correction")
     residuals = {}
     for label, field in (("before", measured), ("after", aligned.field)):
-        for component in ("non_affine", "divergence"):
+        for component in projection_components(bases):
             coordinates = project_field(bases[f"{component}_basis"], field)
             residuals[f"{component}_residual_{label}"] = coordinates
             result[f"{component}_chi2_{label}"] = float(
                 np.sum((coordinates[common] / sigma_B)**2))
-        data = result[f"divergence_chi2_{label}"]
+        target = "quadratic" if method == "all_nine_df_quadratic" else "divergence"
+        data = result[f"{target}_chi2_{label}"]
         if method == "all_nine_df_affine":
             data += result[f"non_affine_chi2_{label}"]
         result[f"data_chi2_{label}"] = data
@@ -142,8 +224,12 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
         diagnostics = {key: value[...] for key, value in handle["diagnostics"].items()
                        if isinstance(value, h5py.Dataset)}
         singular = handle["diagnostics/weighted_jacobian/singular_values"][mc_index]
+        components = projection_components(handle["projection"])
+        if components == ("quadratic",):
+            design_singular = handle["projection/quadratic_singular_values"][...]
+            design_condition = handle["projection/quadratic_condition_number"][...]
         curves = {}
-        for component in ("non_affine", "divergence"):
+        for component in components:
             curves[component] = [handle[f"projection/ideal_{component}_residual"][...],
                                  handle[f"projection/{component}_residual_before"][mc_index],
                                  handle[f"projection/{component}_residual_after"][mc_index]]
@@ -167,7 +253,7 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
     if np.any(singular > 0):
         axes[1, 1].set_yscale("log")
     axes[1, 1].set(xlabel="Singular-value index", ylabel="Weighted Jacobian [1/s]")
-    for column, component in enumerate(("non_affine", "divergence")):
+    for column, component in enumerate(components):
         for label in ("before", "after"):
             axes[2, column].plot(diagnostics[f"{component}_chi2_{label}"], "o-", label=label)
         axes[2, column].set(xlabel="MC realization", ylabel="Residual power / σB²",
@@ -178,6 +264,13 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
         axes[3, column].set(xlabel="Time [s]", ylabel="Residual norm [nT]",
                             title=f"MC {mc_index}")
         axes[3, column].legend()
+    if components == ("quadratic",):
+        axes[2, 1].semilogy(np.arange(1, 27), np.median(design_singular, axis=0), "o-")
+        axes[2, 1].set(xlabel="Design singular-value index", ylabel="Scaled design singular value",
+                        title="Median quadratic design spectrum")
+        condition = np.broadcast_to(design_condition, time.shape)
+        axes[3, 1].semilogy(time[mask], condition[mask])
+        axes[3, 1].set(xlabel="Time [s]", ylabel="Quadratic design condition number")
     for ax in axes.flat:
         ax.grid(alpha=.2)
     output = Path(output_path)
