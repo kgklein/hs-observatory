@@ -88,4 +88,8 @@ def field_from_config(config: dict[str, Any]) -> FieldModel:
         from hs_observatory.fields.simulation_sampled import SimulationSampledField
 
         return SimulationSampledField(config)
+    if model == "shock":
+        from hs_observatory.fields.shock import ShockField
+
+        return ShockField(config)
     raise ValueError(f"Unknown field model: {model}")

@@ -277,6 +277,9 @@ def generate_from_config(
     time = _time_axes(config["time"])
     spacecraft = _spacecraft_on_time_axes(config["spacecraft"], time)
     field = field_from_config(config["field"])
+    set_nominal_configuration = getattr(field, "set_nominal_configuration", None)
+    if callable(set_nominal_configuration):
+        set_nominal_configuration(time["n"], spacecraft["n"].position)
     set_mapping_reference = getattr(field, "set_coordinate_mapping_reference", None)
     if callable(set_mapping_reference):
         hub_spacecraft = int(getattr(field, "hub_spacecraft", 0))

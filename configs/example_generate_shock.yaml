@@ -1,0 +1,67 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-06-01T00:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [1.0, 0.0, 0.25]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 40.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: shock
+  shock:
+    normal_gse: [1.0, 0.0, 0.0]
+    velocity_gse_km_s: [-150.0, 0.0, 0.0]
+    reference_time: start
+    distance_from_mesocenter_km: 3000.0
+    thickness_km: 500.0
+    upstream:
+      density_cm3: 5.0
+      velocity_km_s: [450.0, 0.0, 0.0]
+      magnetic_field_nt: [0.0, 5.0, 0.0]
+      total_pressure_npa: 0.02
+    gamma: 1.666666666666667
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n:
+      model: gaussian_relative
+      sigma: 0.05
+    v:
+      model: gaussian_vector_component
+      sigma: [2.0, 2.0, 2.0]
+    B:
+      model: gaussian_absolute
+      sigma: [0.05, 0.05, 0.05]
+
+output:
+  path: outputs/synthetic_observations_shock.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  truth_velocity_frame: spacecraft
+  observed_enabled: true
+  mc_index: 0
+  truth_path: outputs/synthetic_observations_shock_truth.png
+  geometry_path: outputs/synthetic_observations_shock_geometry.png
+  observed_path: outputs/synthetic_observations_shock_observed_mc000.png
+  observed_geometry_path: outputs/synthetic_observations_shock_geometry_observed_mc000.png
+  dpi: 150

@@ -38,6 +38,7 @@ def test_sine_sum_construction():
         ("malara_turbulence", "malara", "MalaraTurbulenceField"),
         ("plume_single_mode", "plume_single_mode", "PlumeSingleModeField"),
         ("simulation_sampled", "simulation_sampled", "SimulationSampledField"),
+        ("shock", "shock", "ShockField"),
     ],
 )
 def test_field_routes_forward_configuration(model, module_name, class_name):

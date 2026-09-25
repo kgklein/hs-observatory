@@ -215,6 +215,65 @@ hsobs-generate configs/example_generate_plume_single_mode.yaml \
 
 The effective plotted frame is stored as `truth_visualization_velocity_frame` in HDF5 metadata.
 
+## Propagating planar MHD shocks
+
+The `shock` field model generates a planar fast shock whose uniform endpoints
+satisfy the arbitrary-obliquity, single-fluid ideal-MHD Rankine--Hugoniot
+conditions. Run the included perpendicular example with:
+
+```bash
+hsobs-generate configs/example_generate_shock.yaml
+```
+
+```yaml
+field:
+  model: shock
+  shock:
+    normal_gse: [1.0, 0.0, 0.0]
+    velocity_gse_km_s: [-150.0, 0.0, 0.0]
+    reference_time: start
+    distance_from_mesocenter_km: 3000.0
+    thickness_km: 500.0
+    upstream:
+      density_cm3: 5.0
+      velocity_km_s: [450.0, 0.0, 0.0]
+      magnetic_field_nt: [0.0, 5.0, 0.0]
+      total_pressure_npa: 0.02
+    gamma: 1.666666666666667
+```
+
+Shock geometry, propagation, and upstream vectors are GSE. The supplied normal
+is normalized and points from upstream (`xi < 0`) to downstream (`xi > 0`). At
+the configured reference time, the initial plane is a signed distance `d0`
+from the arithmetic-mean nominal formation mesocenter, and subsequently
+
+```text
+xi = n_hat dot (r - r_mc(t0)) - d0 - n_hat dot V_S (t - t0).
+```
+
+Only the normal component of `V_S` propagates an infinite plane, so a nonzero
+tangential component is rejected. `reference_time` may be `start` or a numeric
+time in seconds within the generated interval. The mesocenter is computed once
+from the nominal configuration and is unchanged by Monte Carlo coordinate
+errors.
+
+The upstream velocity is plasma-frame GSE velocity. The jump is solved after
+subtracting `V_S`, and the downstream state is transformed back once; the
+ordinary generation pipeline later performs any configured spacecraft-frame
+conversion. The solver requires positive density and total proton-electron
+thermal pressure, positive thickness, `gamma > 1`, positive upstream normal
+flow, and one unambiguous compressive fast-shock solution. Degenerate,
+nonphysical, or numerically singular jumps are rejected. Inputs, the calculated
+downstream state, Mach numbers, compression, fixed mesocenter, and normalized
+jump residuals are serialized in `field_metadata`.
+
+`thickness_km` is the exact 10%-to-90% width of
+`F = 0.5[1+tanh(2.197224577 xi/thickness_km)]`. Density, velocity, and magnetic
+field are interpolated with this same function. Normal magnetic field is
+continuous, so the planar interpolation has analytic `div(B) = 0`. The smooth
+interior is a synthetic observation model; only its endpoints are asserted to
+be physical ideal-MHD states.
+
 ## Coordinate and measurement errors
 
 Time and position uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series. The same offsets apply to `n`, `v`, and `B`. Each observation is evaluated from the field at
