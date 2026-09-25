@@ -1,7 +1,7 @@
 spacecraft:
   source: cdf
   cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
-  configuration_time: "2030-06-01T00:00:00"
+  configuration_time: "2030-08-25T12:00:00"
   fallback_synthetic: true
   velocity_km_s: [1.0, 0.0, 0.25]
 
@@ -17,14 +17,14 @@ field:
   model: shock
   shock:
     normal_gse: [1.0, 0.0, 0.0]
-    velocity_gse_km_s: [-150.0, 0.0, 0.0]
+    velocity_gse_km_s: [-100.0, 0.0, 0.0]
     reference_time: start
-    distance_from_mesocenter_km: 3000.0
-    thickness_km: 500.0
+    distance_from_mesocenter_km: 2500.0
+    thickness_km: 20.0
     upstream:
       density_cm3: 5.0
-      velocity_km_s: [450.0, 0.0, 0.0]
-      magnetic_field_nt: [0.0, 5.0, 0.0]
+      velocity_km_s: [420.0, 10.0, 25.0]
+      magnetic_field_nt: [0.5, 5.0, 1.0]
       total_pressure_npa: 0.02
     gamma: 1.666666666666667
 

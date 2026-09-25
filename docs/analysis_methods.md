@@ -1,5 +1,53 @@
 # Analysis Methods
 
+## Shock timing
+
+The `shock_timing` method reconstructs a planar shock's propagation normal,
+positive normal speed, slowness vector, and reference crossing time from every
+observed Monte Carlo realization. It searches `n`, `Vx`, `Vy`, `Vz`, `Bx`,
+`By`, and `Bz` without consulting truth, fits significant positive or negative
+tanh profiles, and supports independent observable fits, a native-cadence
+combined fit, or both.
+
+For each fit it solves every available four-spacecraft combination plus global
+OLS and inverse-crossing-time-variance WLS. Nominal positions are interpolated
+at measured crossing times. Missing or ambiguous crossings, invalid weights,
+insufficient spacecraft, rank deficiency, and poor geometry remain explicit
+status codes. Nine valid spacecraft yield 126 separately summarized
+tetrahedra.
+
+```bash
+hsobs-analyze configs/example_analyze_shock_timing.yaml
+```
+
+The HDF5 product contains detection diagnostics and channel masks,
+reconstructed parameters and residuals, optional per-realization truth errors,
+per-method and per-tetrahedron 16th/median/84th percentiles, paired-success
+counts, and failure records. Four PDF/PNG products show profile fits,
+reconstruction accuracy, geometry/reliability, and the best/worst tetrahedral
+geometry. Accuracy panels report MC RMSE on logarithmic axes, with whiskers
+showing the 16th–84th percentile range of absolute realization-level errors;
+the four-spacecraft series include the best, median, worst, and minimum-`Q`
+Hub-containing tetrahedra. The reliability panel uses a logarithmic axis for
+median angular error and compares it separately with design condition number
+and configuration size `L`. Its joint-geometry panel plots `L` against the
+scaled design condition number with marker area encoding median angular error.
+The
+tetrahedral view uses the combined fit when available, highlights the
+empirical best and worst angular-error-RMSE subsets plus the minimum-`Q`
+tetrahedron containing the Hub in the established mesocentric 3-D
+projections, and places their size/shape (`L`, `E`, and `P`) diagnostics
+alongside it.
+
+Synthetic validation uses the generator plane equation and moving nominal
+trajectories. The propagation normal is `sign(n_hat dot V_S) n_hat`, distinct
+from the upstream-to-downstream generator normal. Without shock metadata, core
+reconstruction and residual diagnostics remain available and truth groups are
+omitted. Limitations include the planar constant-speed approximation,
+heuristic detection thresholds, approximate fit-derived timing uncertainties,
+and no analytical covariance propagation. Correlated tetrahedra are never
+pooled as independent Monte Carlo samples.
+
 `hsobs-analyze` reads a YAML file with top-level `input`, `analysis`, and
 `output` sections. The selected method is `analysis.method`; method-specific
 controls usually live in a top-level section named after the method or its
@@ -23,6 +71,7 @@ elsasser_increment_pdf_static
 magnetic_gradient
 magnetic_gradient_correlation
 rbf_reconstruction
+shock_timing
 static_decorrelation
 structure_function
 timeseries_fft

@@ -1,0 +1,47 @@
+analysis:
+  method: shock_timing
+
+input:
+  path: outputs/synthetic_observations_shock.h5
+
+output:
+  path: outputs/shock_timing.h5
+
+shock_timing:
+  modes: both
+  observables: auto
+  truth_validation: auto
+
+  detection:
+    min_jump_significance: 5.0
+    candidate_window_s: 1.0
+    transition_guard_s: 0.25
+    quiet_window_s: 2.0
+    min_quiet_samples: 8
+    min_side_samples: 16
+
+  fitting:
+    fit_half_window_s: 3.0
+    min_width_cadence_fraction: 0.25
+    max_width_s: 2.0
+    max_normalized_rms: 3.0
+    max_nfev: 2000
+
+  timing:
+    max_condition_number: 1.0e8
+    rcond: null
+    uncertainty_floor_s: 0.001
+    uncertainty_floor_cadence_fraction: 0.25
+
+  storage:
+    compression: gzip
+    compression_level: 4
+
+  plot:
+    enabled: true
+    detection_base: outputs/shock_timing_detection
+    accuracy_base: outputs/shock_timing_accuracy
+    geometry_base: outputs/shock_timing_geometry_reliability
+    tetrahedra_geometry_base: outputs/shock_timing_tetrahedra_geometry
+    representative_mc_index: 0
+    dpi: 150

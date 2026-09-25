@@ -28,6 +28,7 @@ def _load_builtins() -> None:
         magnetic_gradient,
         magnetic_gradient_correlation,
         rbf_reconstruction,
+        shock_timing,
         static_decorrelation,
         structure_function,
         timesync,

@@ -274,6 +274,36 @@ continuous, so the planar interpolation has analytic `div(B) = 0`. The smooth
 interior is a synthetic observation model; only its endpoints are asserted to
 be physical ideal-MHD states.
 
+### Shock-timing analysis
+
+`shock_timing` detects shock crossings independently in density, velocity
+components, and magnetic-field components, or jointly fits accepted channels
+at each spacecraft. It compares every conventional four-spacecraft timing
+solution with global OLS and crossing-uncertainty-weighted WLS solutions:
+
+```bash
+hsobs-analyze configs/example_analyze_shock_timing.yaml
+```
+
+The model is `t_i = t_ref + q dot (r_i-r_ref)`, with slowness
+`q = n_prop/V_sh`. Detection and inversion use observed values and nominal
+positions only; injected errors and generated truth are never used in either.
+When compatible shock metadata exist, a separate validation layer reports
+actual normal, speed, slowness, reference-time, and arrival-time errors. The
+generator normal points upstream-to-downstream, while `n_prop` points along
+propagation and can therefore have the opposite sign.
+
+The HDF5 result retains per-MC detections, contributors, all named tetrahedra,
+OLS/WLS solutions, residuals, status codes, per-combination percentiles, paired
+success counts, optional truth errors, and the identities of the empirical
+best/worst tetrahedra. Detection, log-RMSE accuracy, geometry/reliability, and
+mesocentric best/worst-tetrahedra figures are written as PDF and PNG. The last
+figure combines 3-D formation projections and highlighted baselines with
+`E`/`P` and `L` shape panels. The method assumes one planar constant-speed
+transition; thresholds and fit-derived timing errors are diagnostic
+approximations, and correlated four-point solutions are not independent
+samples.
+
 ## Coordinate and measurement errors
 
 Time and position uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series. The same offsets apply to `n`, `v`, and `B`. Each observation is evaluated from the field at
