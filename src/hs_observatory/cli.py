@@ -532,6 +532,10 @@ def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
 
     for influence_output in plot_timing_influence(args.product, args.output, dpi=args.dpi):
         print(influence_output)
+    from hs_observatory.analysis.timing_noise import plot_noise_weights
+
+    for noise_output in plot_noise_weights(args.product, args.output, dpi=args.dpi):
+        print(noise_output)
     if args.compare_products:
         from hs_observatory.analysis.timing_affine import plot_timing_method_comparison
 

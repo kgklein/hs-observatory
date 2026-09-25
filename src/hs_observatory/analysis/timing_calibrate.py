@@ -81,6 +81,12 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
                       "all_nine_df_quadratic"}:
         raise ValueError("Unknown timing calibration_method")
     settings["calibration_method"] = method
+    normalization = config.get("divergence_normalization", "ideal_divergence")
+    if normalization not in {"ideal_divergence", "instrument_noise"}:
+        raise ValueError("divergence_normalization must be ideal_divergence or instrument_noise")
+    if normalization == "instrument_noise" and method != "polyhedron":
+        raise ValueError("Divergence normalization applies to the polyhedron method only")
+    settings["divergence_normalization"] = normalization
     if method != "polyhedron":
         if use_ideal or influence:
             raise ValueError("Polynomial projection forbids use_ideal_divergence and polyhedron_influence")
@@ -272,6 +278,21 @@ def solve_timing(
     }
 
 
+def solve_timing_with_variance(divergence, jacobian, variance, sigma_t, *, ideal_divergence=None):
+    """Adapt time-dependent row variances to the unchanged least-squares solver."""
+    if np.ndim(variance) == 1:
+        return solve_timing(divergence, jacobian, variance, sigma_t,
+                            ideal_divergence=ideal_divergence)
+    grid = np.broadcast_to(variance, divergence.shape)
+    result = solve_timing(
+        divergence.reshape(1, -1), jacobian.reshape(1, -1, jacobian.shape[-1]),
+        grid.ravel(), sigma_t,
+        ideal_divergence=None if ideal_divergence is None else ideal_divergence.reshape(1, -1),
+    )
+    result["fit_valid"] = result["fit_valid"].reshape(divergence.shape)
+    return result
+
+
 def calibrate_realization(
     time: np.ndarray,
     positions: np.ndarray,
@@ -291,7 +312,8 @@ def calibrate_realization(
         for indices, response in zip(polyhedra, responses)
     ])
     jacobian = timing_jacobian(time, measured, polyhedra, responses, node_indices)
-    result = solve_timing(before, jacobian, variance, sigma_t, ideal_divergence=ideal_divergence)
+    result = solve_timing_with_variance(before, jacobian, variance, sigma_t,
+                                        ideal_divergence=ideal_divergence)
     del jacobian
     offsets = np.zeros(9)
     offsets[node_indices] = -result["correction_s"]
@@ -305,14 +327,18 @@ def calibrate_realization(
         raise ValueError("No common valid rows remain after timing correction")
     for label, divergence in (("before", before), ("after", after)):
         normalized_squared = np.zeros_like(divergence)
-        np.divide(divergence**2, variance[None, :], out=normalized_squared, where=valid)
+        np.divide(divergence**2, variance, out=normalized_squared, where=valid)
         contribution = float(normalized_squared.sum())
         objective = contribution
         if ideal_divergence is not None:
             residual = divergence - ideal_divergence
-            objective = float(np.sum((residual**2 / variance[None, :])[valid]))
+            objective = float(np.sum((residual**2 / variance)[valid]))
         result[f"divergence_chi2_{label}"] = objective
         result[f"chi2_{label}"] = objective + result[f"prior_chi2_{label}"]
+        total = result[f"chi2_{label}"]
+        result[f"divergence_objective_fraction_{label}"] = objective / total if total > 0 else np.nan
+        result[f"prior_objective_fraction_{label}"] = (
+            result[f"prior_chi2_{label}"] / total if total > 0 else np.nan)
         result[f"normalized_divergence_rms_{label}"] = np.sqrt(contribution / valid.sum())
         per_polyhedron = np.full(len(polyhedra), np.nan)
         np.divide(normalized_squared.sum(axis=0), valid.sum(axis=0),
@@ -392,6 +418,7 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
     if not np.isfinite(sigma_t) or sigma_t <= 0:
         raise ValueError("Supply positive sigma_t_s or a positive generation timing uncertainty")
     projection = None
+    noise = None
     if settings["calibration_method"] != "polyhedron":
         from hs_observatory.analysis.timing_affine import affine_projection_bases
 
@@ -420,6 +447,12 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             for indices, response in zip(selected.values(), responses)
         ])
         raw, variance = divergence_variance(ideal_divergence, floor)
+        ideal_reference_variance = variance
+        if settings["divergence_normalization"] == "instrument_noise":
+            from hs_observatory.analysis.timing_noise import prepare_noise
+
+            noise, raw, variance = prepare_noise(time, positions, list(selected.values()), config)
+            noise["ideal_reference_variance"] = ideal_reference_variance
     nodes = np.asarray([i for i, name in enumerate(ids) if name != "H"])
     result = {
         "source": source, "time": time, "positions": positions, "ideal_B": ideal,
@@ -453,6 +486,13 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             },
         },
     }
+    if noise is not None:
+        result["noise"] = noise
+        result["metadata"].update(
+            divergence_normalization="instrument_noise",
+            sigma_B_nT=noise["sigma_B_nT"], schema_version="2",
+        )
+        result["metadata"].pop("sigma_d_floor_nT_per_km")
     if projection is not None:
         result["projection"] = projection
         result["metadata"].update(
@@ -560,7 +600,13 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
             _store(group, "ideal_divergence", result["ideal_divergence"][:, column], settings, "nT/km")
             for key, values in (("sigma_d_squared_raw", result["raw_variance"]),
                                 ("sigma_d_squared", result["variance"])):
-                _store(group, key, values[column], settings, "(nT/km)^2")
+                _store(group, key, values[..., column], settings, "(nT/km)^2")
+            if "noise" in result:
+                _store(group, "sigma_d", np.sqrt(result["variance"][..., column]), settings, "nT/km")
+        if "noise" in result:
+            from hs_observatory.analysis.timing_noise import write_noise
+
+            write_noise(handle, result)
         if "influence" in result:
             from hs_observatory.analysis.timing_influence import write_timing_influence
 
@@ -730,7 +776,7 @@ def plot_timing_calibration_product(
             group = configurations[name]
             examples.append((
                 ", ".join(group["spacecraft_ids"].asstr()[...]),
-                float(np.sqrt(group["sigma_d_squared"][()])),
+                float(np.median(np.sqrt(group["sigma_d_squared"][()]))),
                 [group["ideal_divergence"][...][time_mask],
                  group["measured_divergence"][mc_index][time_mask],
                  group["corrected_divergence"][mc_index][time_mask]],

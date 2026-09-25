@@ -317,8 +317,9 @@ def plot_timing_method_comparison(product_paths, output_path, *, dpi=300):
                     if scales and attrs["sigma_B_nT"] != scales[0]:
                         raise ValueError("Projection comparison requires identical sigma_B_nT")
                 records.append({
-                    "method": attrs.get("calibration_method", "polyhedron"),
-                    "sigma_B": attrs.get("sigma_B_nT"),
+                    "method": (attrs.get("calibration_method", "polyhedron")
+                               + (" / instrument noise" if "instrument_noise" in handle else "")),
+                    "sigma_B": attrs.get("sigma_B_nT") if "projection" in handle else None,
                     "bias": handle["mc_summary/bias_s"][...] * 1000,
                     "rmse": handle["mc_summary/rmse_s"][...] * 1000,
                     "rms": np.sqrt(np.mean(handle["timing/recovered_offset_s"][...]**2, axis=1))*1000,

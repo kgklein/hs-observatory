@@ -16,7 +16,7 @@ from hs_observatory.analysis.magnetic_gradient import (
 )
 from hs_observatory.analysis.timing_calibrate import (
     _store,
-    solve_timing,
+    solve_timing_with_variance,
     timing_jacobian,
 )
 
@@ -30,7 +30,7 @@ def decompose_timing_influence(
     correction. Solve the normal operator through an SVD of the augmented QR
     factor, avoiding an explicit inverse and an SVD of the squared-condition H.
     """
-    fit = solve_timing(ideal_divergence, jacobian, variance, sigma_t)
+    fit = solve_timing_with_variance(ideal_divergence, jacobian, variance, sigma_t)
     valid = fit["fit_valid"]
     sigma = np.broadcast_to(np.sqrt(variance), ideal_divergence.shape)[valid]
     weighted_j = jacobian[valid] / sigma[:, None]
@@ -40,10 +40,14 @@ def decompose_timing_influence(
     for polyhedron in range(ideal_divergence.shape[1]):
         mask = valid[:, polyhedron]
         if np.any(mask):
-            g_polyhedron[:, polyhedron] = (
-                jacobian[mask, polyhedron].T @ ideal_divergence[mask, polyhedron]
-                / variance[polyhedron]
-            )
+            if np.ndim(variance) == 1:
+                g_polyhedron[:, polyhedron] = (
+                    jacobian[mask, polyhedron].T @ ideal_divergence[mask, polyhedron]
+                    / variance[polyhedron]
+                )
+            else:
+                g_polyhedron[:, polyhedron] = jacobian[mask, polyhedron].T @ (
+                    ideal_divergence[mask, polyhedron] / variance[mask, polyhedron])
     n_parameters = jacobian.shape[-1]
     hessian = weighted_j.T @ weighted_j + np.eye(n_parameters) / sigma_t**2
     design = np.vstack((weighted_j, np.eye(n_parameters) / sigma_t))
@@ -120,7 +124,8 @@ def influence_geometry(result: Mapping[str, Any]) -> tuple[dict[str, Any], dict[
         "characteristic_size_km": np.asarray(scales),
         "condition_number": np.asarray(conditions),
         "affine_rms_residual_nT": np.asarray(residuals),
-        "sigma_d": np.sqrt(result["variance"]),
+        "sigma_d": (np.sqrt(result["variance"]) if np.ndim(result["variance"]) == 1
+                    else np.median(np.sqrt(result["variance"]), axis=0)),
     }
 
 
