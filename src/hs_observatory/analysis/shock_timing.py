@@ -255,7 +255,12 @@ def detect_transition(
     maximum_width = fitting_settings["max_width_s"]
     try:
         from scipy.optimize import least_squares
+    except ImportError as exc:
+        raise ImportError(
+            "Shock timing requires SciPy. Install it with: python -m pip install scipy"
+        ) from exc
 
+    try:
         initial = np.array([
             upstream0, downstream0, candidate_time,
             min(max(2.0 * cadence, minimum_width), maximum_width),
@@ -270,7 +275,7 @@ def detect_transition(
             initial, bounds=(lower, upper), loss="linear", x_scale="jac",
             max_nfev=fitting_settings["max_nfev"],
         )
-    except (ImportError, ValueError, RuntimeError, FloatingPointError):
+    except (ValueError, RuntimeError, FloatingPointError):
         return TransitionDetection(DETECTION_STATUS["profile_fit_failed"], noise=noise)
     if not fit.success or fit.jac.shape[1] != 4 or np.linalg.matrix_rank(fit.jac) < 4:
         return TransitionDetection(DETECTION_STATUS["profile_fit_failed"], noise=noise)
@@ -313,7 +318,12 @@ def fit_combined_transition(
         return TransitionDetection(DETECTION_STATUS["no_detectable_shock"])
     try:
         from scipy.optimize import least_squares
+    except ImportError as exc:
+        raise ImportError(
+            "Shock timing requires SciPy. Install it with: python -m pip install scipy"
+        ) from exc
 
+    try:
         centers = np.array([item[2].crossing_time for item in accepted])
         widths = np.array([item[2].width for item in accepted])
         parameters = []
@@ -379,7 +389,7 @@ def fit_combined_transition(
             significance=float(min(item[2].significance for item in accepted)),
             normalized_rms=rms,
         )
-    except (ImportError, ValueError, RuntimeError, FloatingPointError):
+    except (ValueError, RuntimeError, FloatingPointError):
         return TransitionDetection(DETECTION_STATUS["profile_fit_failed"])
 
 
