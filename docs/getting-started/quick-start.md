@@ -56,10 +56,20 @@ helpers and registry internals are implementation details, not stability promise
 ## Choose an analysis
 
 Analysis YAML selects a method using `analysis.method`. See
-[Analysis Methods](../analysis_methods.md) for the method-specific settings and
+[Analysis Methods](../user-guide/analysis.md) for the method-specific settings and
 example configuration names. Check each example's input/output paths and any
 required simulation data before running it.
 
 Read [Generating Synthetic Observations](../user-guide/generation.md) to change
-field or sampling choices, and the [Observatory Error Model](../observatory_error_model.md)
+field or sampling choices, and the [Observatory Error Model](../reference/errors.md)
 for the requirement-driven error path.
+## Inspect provenance and continue
+
+The CDF fallback makes this example runnable without mission files, but a local
+CDF directory can change the geometry. Inspect `metadata.spacecraft_source` and
+its fallback reason. Native sample counts for the supplied 0–300 s interval are
+2401 for n/v and 9601 for B; the MC dimension is 10. Diagnostics report 36 distinct
+spacecraft pairs for nine-spacecraft geometry.
+
+Read the [verification record and complete example manifest](../examples/index.md#starter-workflow),
+then [visualization](../user-guide/visualization.md) or [analysis selection](../user-guide/analysis.md).

@@ -221,6 +221,7 @@ OVERVIEW_LABELS = {
     "io": "I/O", "dispatch": "Analysis dispatch",
     "intermittency": "Elsasser / intermittency", "gradients": "Magnetic gradients",
     "reconstruction": "Reconstruction", "diagnostics": "Other diagnostics",
+    "timing": "Timing calibration", "shock": "Shock timing",
     "visualization": "Visualization / output",
 }
 OVERVIEW_RELATIONSHIPS = (
@@ -231,6 +232,8 @@ OVERVIEW_RELATIONSHIPS = (
     ("fields", "io"), ("dispatch", "config"),
     ("dispatch", "intermittency"), ("dispatch", "gradients"),
     ("dispatch", "reconstruction"), ("dispatch", "diagnostics"),
+    ("dispatch", "timing"), ("dispatch", "shock"),
+    ("timing", "gradients"), ("shock", "visualization"),
     ("intermittency", "visualization"), ("gradients", "visualization"),
     ("reconstruction", "visualization"), ("diagnostics", "visualization"),
 )
@@ -253,6 +256,10 @@ def overview_group(name: str) -> str | None:
         return "intermittency"
     if name.startswith("analysis.magnetic_gradient"):
         return "gradients"
+    if name.startswith("analysis.timing_"):
+        return "timing"
+    if name == "analysis.shock_timing":
+        return "shock"
     if name in {"analysis.rbf_reconstruction", "analysis.timesync"}:
         return "reconstruction"
     if name in {"analysis.diagnostics", "analysis.static_decorrelation", "analysis.timeseries_fft"}:
@@ -289,7 +296,8 @@ def make_overview_dot(members: dict, witnesses: dict) -> str:
     clusters = {
         "Entry points": ("cli", "generation", "dispatch"),
         "Generation and support": ("config", "spacecraft", "fields", "errors", "io"),
-        "Scientific analyses": ("intermittency", "gradients", "reconstruction", "diagnostics"),
+        "Scientific analyses": ("intermittency", "gradients", "reconstruction", "diagnostics",
+                                "timing", "shock"),
         "Output": ("visualization",),
     }
     for index, (label, groups) in enumerate(clusters.items()):

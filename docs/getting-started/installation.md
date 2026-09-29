@@ -1,7 +1,14 @@
 # Installation
 
 HS Observatory requires **Python 3.10 or newer**. The established workflow is an
-editable installation from a local checkout. From the repository root:
+editable installation from a local checkout. Obtain a checkout (repository access is required while private):
+
+```bash
+git clone https://github.com/kgklein/hs-observatory.git
+cd hs-observatory
+```
+
+From the repository root:
 
 ```bash
 python3 -m venv .venv
@@ -19,16 +26,19 @@ need to install documentation tools to generate or analyze observations.
 
 ## Optional dependencies
 
-For continuous SciPy-based RBF length-scale optimization and optional Crameri
-scientific colormaps:
+For the full quick-start figures (current geometry code imports cmcrameri),
+shock-timing fits and continuous SciPy-based RBF length-scale optimization:
 
 ```bash
 python3 -m pip install -e ".[analysis]"
 ```
 
-Core analyses work without this extra: explicit RBF cross-validation uses a
-logarithmic grid search without SciPy, and plotting uses Matplotlib colormap
-fallbacks without cmcrameri. The standalone
+Many analyses work without this extra, but shock timing requires SciPy. Explicit RBF cross-validation uses a
+logarithmic grid search without SciPy, and several plotters use Matplotlib colormap
+fallbacks without cmcrameri. However, default generation geometry plotting
+currently imports cmcrameri unconditionally, so install this extra before the
+quick start. Base-only generation can write HDF5 and then fail during plotting;
+this is a known implementation/dependency discrepancy, not a completed run. The standalone
 `scripts/audit_magnetic_gradient_divergence.py` requires SciPy and therefore
 needs this extra; BP inputs additionally require `simulation-bp`.
 
@@ -63,3 +73,10 @@ python3 -m pip install -e ".[docs]"
 See [Documentation Development](../developer/documentation.md) for serving,
 strict builds, and the optional system Graphviz executable used for diagrams.
 Then follow the [Quick Start](quick-start.md).
+## Environment checks
+
+Use `python -m pip` inside the activated environment and check `hsobs-generate --help`.
+If commands are missing, verify activation and editable installation. BP examples
+require both ADIOS2 and the source files; installing an extra does not download
+mission, PLUME or simulation data. See the [example manifest](../examples/index.md).
+The [configuration reference](../reference/configuration.md) explains path resolution.

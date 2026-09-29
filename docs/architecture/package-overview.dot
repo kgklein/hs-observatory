@@ -18,7 +18,7 @@ digraph package_overview {
     color="#d0d5dd"; style="rounded";
     "config" [label="Configuration", tooltip="config"];
     "errors" [label="Error models", tooltip="errors.base, errors.factory, errors.gaussian, errors.observatory, errors.offsets, errors.ornstein_uhlenbeck"];
-    "fields" [label="Fields", tooltip="fields.base, fields.factory, fields.malara, fields.plume_single_mode, fields.simulation_sampled, fields.sine_sum"];
+    "fields" [label="Fields", tooltip="fields.base, fields.factory, fields.malara, fields.plume_single_mode, fields.shock, fields.simulation_sampled, fields.sine_sum"];
     "io" [label="I/O", tooltip="io.cdf_positions, io.hdf5, io.simulation_bp, io.simulation_npy"];
     "spacecraft" [label="Spacecraft", tooltip="spacecraft.configuration"];
   }
@@ -29,6 +29,8 @@ digraph package_overview {
     "gradients" [label="Magnetic gradients", tooltip="analysis.magnetic_gradient, analysis.magnetic_gradient_correlation, analysis.magnetic_gradient_wasserstein"];
     "intermittency" [label="Elsasser / intermittency", tooltip="analysis.derived.elsasser, analysis.derived.pairs, analysis.elsasser, analysis.elsasser_increment_pdf_static, analysis.increment_pdf_wasserstein, analysis.structure_function"];
     "reconstruction" [label="Reconstruction", tooltip="analysis.rbf_reconstruction, analysis.timesync"];
+    "shock" [label="Shock timing", tooltip="analysis.shock_timing"];
+    "timing" [label="Timing calibration", tooltip="analysis.timing_affine, analysis.timing_calibrate, analysis.timing_influence, analysis.timing_noise"];
   }
   subgraph cluster_3 {
     label="Output";
@@ -43,6 +45,8 @@ digraph package_overview {
   "dispatch" -> "gradients" [tooltip="analysis.registry -> analysis.magnetic_gradient; analysis.registry -> analysis.magnetic_gradient_correlation"];
   "dispatch" -> "intermittency" [tooltip="analysis.registry -> analysis.elsasser; analysis.registry -> analysis.elsasser_increment_pdf_static; analysis.registry -> analysis.structure_function"];
   "dispatch" -> "reconstruction" [tooltip="analysis.registry -> analysis.rbf_reconstruction; analysis.registry -> analysis.timesync"];
+  "dispatch" -> "shock" [tooltip="analysis.registry -> analysis.shock_timing"];
+  "dispatch" -> "timing" [tooltip="analysis.registry -> analysis.timing_calibrate"];
   "fields" -> "io" [tooltip="fields.simulation_sampled -> io.simulation_bp; fields.simulation_sampled -> io.simulation_npy"];
   "generation" -> "config" [tooltip="generate -> config"];
   "generation" -> "errors" [tooltip="generate -> errors.factory; generate -> errors.observatory"];
@@ -53,4 +57,6 @@ digraph package_overview {
   "gradients" -> "visualization" [tooltip="analysis.magnetic_gradient -> visualization"];
   "intermittency" -> "visualization" [tooltip="analysis.elsasser -> visualization"];
   "reconstruction" -> "visualization" [tooltip="analysis.rbf_reconstruction -> visualization"];
+  "shock" -> "visualization" [tooltip="analysis.shock_timing -> visualization"];
+  "timing" -> "gradients" [tooltip="analysis.timing_affine -> analysis.magnetic_gradient; analysis.timing_calibrate -> analysis.magnetic_gradient; analysis.timing_influence -> analysis.magnetic_gradient; analysis.timing_noise -> analysis.magnetic_gradient"];
 }
