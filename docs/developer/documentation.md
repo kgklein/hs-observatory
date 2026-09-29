@@ -4,18 +4,38 @@ The site uses MkDocs and Material for MkDocs. Existing scientific reference page
 stay in `docs/`; the root README is a concise landing page; DESIGN remains the repository
 design authority. Workflow guides link canonical scientific references. No API-autogeneration plugin is required.
 
-## Local commands
+## Preview the site locally
 
-From the repository root in an activated Python environment:
+From the repository root, create a Python environment if you do not already have
+one (`python3 -m venv .venv`), then run:
 
 ```bash
-python3 -m pip install -e ".[docs]"
-python3 scripts/generate_architecture_graph.py
-python3 -m unittest discover -s tests -p test_architecture_graph.py
-mkdocs serve
+source .venv/bin/activate
+python -m pip install -e '.[docs]'
+python -m mkdocs serve --dev-addr 127.0.0.1:8000
 ```
 
-Follow the URL printed by `mkdocs serve`. For a release-style check:
+Open <http://127.0.0.1:8000/hs-observatory/> in your browser, or follow the URL
+printed in the terminal. The `/hs-observatory/` prefix comes from `site_url` in
+`mkdocs.yml`. Keep the terminal command running while browsing. Saved edits
+reload automatically; press **Ctrl+C** to stop the server. On later visits, activate
+the environment and run the serve command again; reinstalling is unnecessary.
+
+If port 8000 is busy, use `--dev-addr 127.0.0.1:8001` and open the printed URL.
+If the command runs on a remote machine, forward its port 8000 to your computer
+before opening the URL in your local browser.
+
+## Build and diagram checks
+
+The checked-in diagrams are sufficient for a local preview. To regenerate and
+check the architecture diagrams, run:
+
+```bash
+python3 scripts/generate_architecture_graph.py
+python3 -m unittest discover -s tests -p test_architecture_graph.py
+```
+
+For a release-style check:
 
 ```bash
 mkdocs build --strict

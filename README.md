@@ -55,7 +55,24 @@ The [documentation home](docs/index.md) links scientific references and research
 notes. Developers can start with [extension and validation guidance](docs/developer/index.md)
 and the [architecture](docs/architecture/index.md). The intended public site is
 [HS Observatory](https://kgklein.github.io/hs-observatory/); this change does not
-publish it. [Local preview instructions](docs/developer/documentation.md) are available.
+publish it.
+
+### Preview the site locally
+
+From the repository root, using the `.venv` created above:
+
+```bash
+source .venv/bin/activate
+python -m pip install -e '.[docs]'
+python -m mkdocs serve --dev-addr 127.0.0.1:8000
+```
+
+Open <http://127.0.0.1:8000/hs-observatory/> in your browser (or follow the URL
+printed in the terminal). Keep the command running while browsing; saved
+documentation edits reload automatically. Press **Ctrl+C** to stop the preview.
+The install command is only needed when setting up the documentation dependencies.
+See [documentation development](docs/developer/documentation.md#preview-the-site-locally)
+for more preview options and build checks.
 
 ## Citation, contributions and license
 

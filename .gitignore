@@ -39,3 +39,7 @@ __pycache__/
 *.swo
 .DS_Store
 *.sh
+
+#The individual generation and analysis scripts
+analysis/*.yaml
+generation/*.yaml
