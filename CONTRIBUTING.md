@@ -1,32 +1,31 @@
 # Contributing to HS Observatory
 
-Contributions to HS Observatory are welcome. This project is scientific
-software, so changes should preserve both software correctness and the
-scientific meaning of the calculations.
+Contributions to HS Observatory are welcome and encouraged. 
+This project is scientific software, 
+    so changes should preserve both software correctness and 
+    the scientific meaning of the calculations.
 
 ## Getting started
 
-Clone the repository and install it in editable mode with the development
-dependencies:
+Clone the repository and install it with the development dependencies:
 
 ```bash
 git clone https://github.com/kgklein/hs-observatory.git
 cd hs-observatory
 python3 -m pip install -e ".[dev]"
 ```
-Optional dependencies are described in the
-installation documentation.
+Optional dependencies are described in the installation documentation.
 
 ## Before making a change
 
-For substantial changes, especially changes to scientific algorithms,
-configuration formats, or output products, please open an issue first so that
-the intended approach can be discussed.
+For substantial changes, *especially changes to scientific algorithms*
+or configuration formats,
+open an issue so that the intended approach can be discussed.
 
-Small bug fixes, documentation improvements, and test additions may be
-submitted directly as pull requests.
+Small bug fixes, documentation improvements, and test additions 
+    should be submitted directly as pull requests.
 
-Development checks
+### Development checks
 
 Before submitting a pull request, please run:
 
@@ -46,8 +45,7 @@ The same checks are run automatically by GitHub Actions.
 
 ## Scientific changes
 
-Changes to numerical or scientific calculations should include tests whenever
-practical.
+Changes to numerical or scientific calculations should include tests whenever practical.
 
 Useful tests include:
 
@@ -65,7 +63,7 @@ If a change intentionally alters numerical results, describe:
 - whether existing configurations or derived products are affected.
 
 Please do not loosen numerical tolerances solely to make a failing test pass
-without explaining the underlying numerical reason.
+    without explaining the underlying numerical reason.
 
 ## Code organization
 
@@ -89,19 +87,19 @@ https://kgklein.github.io/hs-observatory/architecture/
 
 ## Adding a new field, error model, or analysis
 
-New implementations should follow the existing base interfaces and configuration
-patterns.
+New implementations should follow the existing base interfaces and configuration patterns.
 
 Please include:
 
+- the physical system of interest;
 - the implementation;
 - configuration validation;
 - at least one representative example configuration;
-focused tests;
+- focused tests;
 - documentation describing the method and assumptions.
 
-Avoid putting general selection or dispatch logic inside an implementation-
-specific module when a shared factory or registry is more appropriate.
+Avoid putting general selection or dispatch logic inside 
+    an implementation-specific module when a shared factory or registry is more appropriate.
 
 ## Documentation
 
@@ -129,7 +127,7 @@ A pull request should ideally:
 - pass the automated CI checks.
 
 Large mechanical refactors should generally be separated from changes to
-scientific behavior so that each can be reviewed independently.
+    scientific behavior so that each can be reviewed independently.
 
 ## Reporting bugs
 
@@ -143,5 +141,5 @@ problem where possible:
 - error message or traceback; and
 - expected versus observed behavior.
 
-For numerical discrepancies, also describe the physical or mathematical result
-you expected.
+For numerical discrepancies, 
+    also describe the physical or mathematical result you expected.
