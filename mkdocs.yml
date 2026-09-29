@@ -21,27 +21,50 @@ markdown_extensions:
   - pymdownx.superfences
   - toc:
       permalink: true
-# Repository-facing instructions are preserved; index.md is the site landing page.
-exclude_docs: |
-  architecture/README.md
 validation:
   links:
     not_found: warn
     anchors: warn
     unrecognized_links: warn
+exclude_docs: |
+  /architecture/README.md
+not_in_nav: |
+  /analysis_methods.md
+  /observatory_error_model.md
+  /timing_calibration.md
+  /timing_affine_investigation.md
+  /timing_quadratic_investigation.md
+  /magnetic_gradient_divergence_audit.md
+  /architecture/README.md
 nav:
   - Home: index.md
-  - Getting Started:
+  - Install:
       - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quick-start.md
-  - User Guide:
-      - Generating Synthetic Observations: user-guide/generation.md
-      - Analysis Methods: analysis_methods.md
-      - Observatory Error Model: observatory_error_model.md
+      - Quick start: getting-started/quick-start.md
+  - Generate: user-guide/generation.md
+  - Analyze: user-guide/analysis.md
+  - Visualize: user-guide/visualization.md
+  - Reproduce:
+      - Example manifest: examples/index.md
+      - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
+      - Timing investigations: research-notes/timing-investigations.md
+  - Scientific Reference:
+      - Configuration and commands: reference/configuration.md
+      - Data products: reference/data-products.md
+      - Fields: reference/fields.md
+      - Errors: reference/errors.md
+      - Statistical methods: reference/statistical-methods.md
+      - Magnetic gradients: reference/magnetic-gradients.md
+      - Reconstruction: reference/reconstruction.md
+      - Shock timing: reference/shock-timing.md
+      - Timing calibration: reference/timing-calibration.md
   - Architecture:
       - Overview: architecture/index.md
-      - Module Dependencies: architecture/module-dependencies.md
-  - Developer Notes:
-      - Design: developer/design.md
-      - Documentation Development: developer/documentation.md
-      - Magnetic-Gradient Divergence Audit: magnetic_gradient_divergence_audit.md
+      - Module dependencies: architecture/module-dependencies.md
+  - Developer:
+      - Development: developer/index.md
+      - Design contracts: developer/design.md
+      - Documentation: developer/documentation.md
+      - Scientific review: developer/scientific-review.md
+      - Preservation audit: developer/preservation-audit.md
+      - Validation record: developer/validation-report.md

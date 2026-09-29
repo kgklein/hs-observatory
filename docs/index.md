@@ -1,38 +1,43 @@
 # HS Observatory
 
-HS Observatory generates controlled, synthetic multipoint observatory
-measurements inspired by HelioSwarm and analyzes the resulting products.
-Physical fields, spacecraft sampling, coordinate and measurement errors, and
-analysis workflows are configured through YAML files.
+Generate controlled synthetic multipoint spacecraft measurements, then analyze
+how spatial sampling, instrument cadence and measurement errors affect inferred
+plasma properties. Models include sine waves, static Malara turbulence, a PLUME
+eigenmode, planar MHD shocks and static numerical simulations. Generated products
+retain truth, observed Monte Carlo realizations and configuration metadata.
 
-Field models include sums of sine waves, Malara-style intermittent turbulence,
-a selected PLUME eigenmode, and sampling of static numerical simulations.
-Generated HDF5 files retain truth, observed Monte Carlo realizations, and metadata
-so the effects of sampling and measurement errors can be studied separately.
+## Researcher workflow
 
-The analysis suite covers Elsasser quantities, structure functions and static
-increment PDFs, spatial decorrelation, time-series spectra, multipoint magnetic
-gradients, and RBF or Timesync magnetic-field reconstruction. See
-[Analysis Methods](analysis_methods.md) for inputs, options, and limitations.
+| Stage | Start here | Continue into reference |
+| --- | --- | --- |
+| Install | [Installation](getting-started/installation.md), [quick start](getting-started/quick-start.md) | [Configuration](reference/configuration.md) |
+| Generate | [Generating observations](user-guide/generation.md) | [Fields](reference/fields.md), [errors](reference/errors.md), [data products](reference/data-products.md) |
+| Analyze | [Choosing and running analyses](user-guide/analysis.md) | [Statistics](reference/statistical-methods.md), [gradients](reference/magnetic-gradients.md), [reconstruction](reference/reconstruction.md), [shock timing](reference/shock-timing.md), [timing research](reference/timing-calibration.md) |
+| Visualize | [Figures and interpretation](user-guide/visualization.md) | Method-specific diagnostics and limitations |
+| Reproduce | [Example manifest](examples/index.md) | [Divergence audit](research-notes/magnetic-gradient-divergence-audit.md), [timing investigations](research-notes/timing-investigations.md) |
 
-## Quick start
+## Capabilities and status
 
-After [installation](getting-started/installation.md), run these commands from
-the repository root:
+Installed methods have different scopes. Static fields do not model temporal
+plasma evolution; the PLUME reader is single-mode; reconstruction and gradient
+references impose their own geometry and sampling assumptions. Timing calibration
+is implemented research methodology, not established flight calibration.
+See the [example manifest](examples/index.md) before assuming inputs or outputs
+are distributed. Future options and reserved settings are labeled in references.
 
-```bash
-hsobs-generate configs/example_generate.yaml
-hsobs-analyze configs/example_analyze.yaml
-```
+## Developer path
 
-The example enables a synthetic spacecraft fallback, so mission CDF files are
-not required. It writes `outputs/synthetic_observations.h5`, diagnostic figures,
-and `outputs/diagnostics.json`.
+Start with the quick start and [public Python API](getting-started/quick-start.md#use-python-instead-of-the-cli),
+then [developer guidance](developer/index.md), [architecture](architecture/index.md),
+[data contracts](reference/data-products.md), the relevant scientific reference
+and focused tests. [Detailed import diagrams](architecture/module-dependencies.md)
+do not represent runtime sequence or HDF5 data flow.
 
-Continue with the [Quick Start](getting-started/quick-start.md), learn how
-[generation](user-guide/generation.md) works, or explore the
-[architecture overview](architecture/index.md).
+## Project information
 
-This documentation is being prepared for public release. The
-[repository README](https://github.com/kgklein/hs-observatory/blob/main/README.md)
-contains additional examples; repository links require access while it is private.
+Use [CITATION.cff](https://github.com/kgklein/hs-observatory/blob/main/CITATION.cff)
+and the method citations when publishing results. The repository
+[README](https://github.com/kgklein/hs-observatory/blob/main/README.md) is the concise
+landing page. The documentation is being prepared for public release; repository
+links require access while private. See [local documentation development](developer/documentation.md)
+and the [scientific review checklist](developer/scientific-review.md).

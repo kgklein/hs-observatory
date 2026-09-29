@@ -1,8 +1,8 @@
 # Documentation Development
 
 The site uses MkDocs and Material for MkDocs. Existing scientific reference pages
-stay in `docs/`; the root README and DESIGN remain repository documents, with
-concise site-facing summaries. No API-autogeneration plugin is required.
+stay in `docs/`; the root README is a concise landing page; DESIGN remains the repository
+design authority. Workflow guides link canonical scientific references. No API-autogeneration plugin is required.
 
 ## Local commands
 
@@ -111,3 +111,47 @@ deployment mechanism, not a `gh-pages` branch. See GitHub's
 and [deployment action](https://github.com/actions/deploy-pages) for the settings
 and permission requirements. Check official action release notes when enabling
 publication in the future.
+
+## Content ownership and migration checks
+
+Scientific equations/parameters/products belong to their method reference;
+shared schema belongs to the data reference. The [example manifest](../examples/index.md)
+owns execution status, and research notes preserve historical evidence. Root
+DESIGN/CONTRIBUTING and visualization helpers remain separate authorities.
+
+Before retiring a legacy page, review the [preservation audit](preservation-audit.md),
+check local links/anchors/assets, and retain practical compatibility links.
+Strict builds validate site links but cannot establish scientific correctness or
+public availability of external inputs. See [scientific review](scientific-review.md).
+
+## Equation rendering without new dependencies
+
+Display and inline TeX equations in timing/gradient references have local SVG
+renderings made with the existing Matplotlib dependency. Their original TeX is
+preserved in expandable source blocks (display equations) and
+`docs/assets/equations/sources.json` (all equations). No JavaScript renderer,
+external CDN or additional documentation dependency is required. Mathematical
+fenced examples elsewhere remain literal code/text as originally written.
+
+After an approved equation edit, update its source record and regenerate from
+the repository root using the existing environment:
+
+```python
+import json
+from pathlib import Path
+from matplotlib.font_manager import FontProperties
+from matplotlib.mathtext import math_to_image
+
+root = Path("docs/assets/equations")
+for equation in json.loads((root / "sources.json").read_text()):
+    math_to_image(
+        "$" + equation["mathtext"] + "$",
+        root / equation["asset"],
+        prop=FontProperties(size=14 if equation["display"] else 11),
+        format="svg",
+    )
+```
+
+The rendering spelling `\frac{1}{2}` replaces `\tfrac12` only in mathtext input;
+the original TeX remains in the source record. Review renderings for clipping and
+sign/index fidelity; a successful build alone cannot validate algebra.

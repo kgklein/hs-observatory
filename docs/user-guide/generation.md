@@ -1,8 +1,8 @@
 # Generating Synthetic Observations
 
 `hsobs-generate` coordinates a YAML-configured observation experiment. The
-starting example is `configs/example_generate.yaml`; the repository README
-describes additional field and error configurations.
+starting example is `configs/example_generate.yaml`; the [field reference](../reference/fields.md) and [error reference](../reference/errors.md)
+describe model choices. Start with the [example manifest](../examples/index.md).
 
 1. **Configuration and sampling grids.** Load and validate the YAML, construct
    native time grids for density `n`, velocity `v`, and magnetic field `B`, and
@@ -22,59 +22,64 @@ describes additional field and error configurations.
    truth, observations, configuration metadata, and configured error products.
    Optional visualization settings produce time-series and geometry figures.
 
-When visualization is enabled, `geometry_overviews/` contains three time-tagged
-geometry summaries, each saved as PDF and PNG:
+## Design the experiment
 
-- `*_geometry_summary_*`: the original eight-panel summary.
-- `*_geometry_polyhedra_*`: a two-row, three-column view with coordinate
-  projections, orbit context, the existing size/shape summary, and elongation
-  versus planarity colored by logarithmic size `L` (km). The `L` colorbar is
-  independent of the spacecraft-count colorbar.
-- `*_geometry_formation_*`: a hub-relative 3D formation spanning the left half,
-  with HS spacecraft colors and Hub-to-Node spokes. The lambda and orbit panels
-  remain on the right; there is no orbit inset in the 3D panel. A faint convex
-  hull is added when SciPy is available and the formation is nondegenerate.
+## Two-stage workflow
 
-For Python plotting, `hs_observatory.visualization.plot_geometry_summary` accepts
-`variant="summary"` (the default), `"polyhedra"`, or `"formation"`.
+Generation loads a spacecraft formation, evaluates a plasma field along every trajectory at each instrument's native cadence, creates a leading-dimension Monte Carlo ensemble using variable-specific error models, and writes truth plus observations to HDF5. Analysis is a separate, registry-selected step that reads that file. The built-in `diagnostics` method reports observed and residual statistics and formation-separation summaries.
 
-Coordinate errors affect where the field is sampled; measurement errors act on
-the resulting values. The nominal coordinates remain available for downstream
-analysis. Observed arrays retain a Monte Carlo dimension even for one realization.
+The CDF adapter accepts one `.cdf` file or a directory of files. It follows the conventions found in the sibling `sparse-field-reconstruction` project: variables named `Epoch`, `Position`, and `Spacecraft_Label`; records are concatenated, sorted, filtered for fill values, and selected nearest to `configuration_time`. This first version treats the selected record as a snapshot and may advect it with a common `velocity_km_s`. The example includes an illustrative common translation so its path projection is visible. Full ephemeris interpolation is a future extension.
 
-## Planar MHD shock field
+Choose a physical model before interpreting generated curves. Set the formation,
+interval, native cadences, velocity measurement frame, seed and MC count. A fixed
+seed does not fix external file contents or a CDF-versus-fallback choice. Record
+`metadata.spacecraft_source` and the embedded YAML alongside results.
 
-`field.model: shock` defines its plane in GSE and solves the downstream state
-from an upstream density, plasma-frame velocity, magnetic field, total thermal
-pressure, and adiabatic index. The normal points from `xi < 0` upstream to
-`xi > 0` downstream. It is normalized automatically. In the shock-rest frame,
-the upstream normal flow must be positive and super-fast.
+## Time grids and frames
 
-The plane coordinate is
+Configure native instrument cadences independently:
 
-```text
-xi = n_hat dot (r - r_mc(t0)) - d0 - n_hat dot V_S (t - t0),
+```yaml
+time:
+  t_start_s: 0.0
+  t_stop_s: 300.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
 ```
 
-where `r_mc(t0)` is the arithmetic mean of the nominal spacecraft positions,
-computed once. Tangential shock velocity is rejected because it cannot move an
-infinite plane. The arbitrary-obliquity ideal-MHD solver validates conservation
-of mass, normal and tangential momentum, tangential electric field, normal
-magnetic field, and energy, and rejects missing, ambiguous, or nonphysical
-solutions.
+A scalar `cadence_s` remains supported and applies the same cadence to all quantities.
 
-The configured thickness is the exact 10%-to-90% width of a tanh interpolation
-between the two uniform states. Normal magnetic-field continuity gives exact
-analytic zero divergence for this planar interpolation. This smoothed interior
-is intended for synthetic sampling; it is not a resolved physical shock
-profile. See `configs/example_generate_shock.yaml` for a complete perpendicular
-fast-shock experiment.
+The [data reference](../reference/data-products.md#velocity-frame-convention)
+defines plasma and spacecraft frames. [Coordinate errors](../reference/errors.md)
+move the sampling point along the trajectory at shifted time before adding the
+position offset; stored coordinates remain nominal.
 
-Generation and analysis are separate stages: `hsobs-analyze` reads the saved
-observation product and runs a selected analysis. See the
-[Quick Start](../getting-started/quick-start.md),
-[Analysis Methods](../analysis_methods.md), and
-[Observatory Error Model](../observatory_error_model.md).
+## Choose a field and errors
 
-For detailed configurations and storage conventions, consult the
-[repository README](https://github.com/kgklein/hs-observatory/blob/main/README.md).
+- [Sine-sum](../reference/fields.md#sine-sum-field): introductory analytic inputs.
+- [Malara](../reference/fields.md#malara-style-intermittent-turbulence-evaluator): static periodic intermittent field.
+- [Simulation sampling](../reference/fields.md#static-numerical-simulation-sampling): external NPY or BP snapshot, explicit layout/scaling.
+- [PLUME](../reference/fields.md#plume-single-mode-plane-wave): external selected eigenmode, fixed geometry; review the documented ambiguity.
+- [Planar shock](../reference/fields.md#propagating-planar-mhd-shocks): jump solution and smooth synthetic transition.
+
+Use Gaussian/OU errors for configurable noise studies, or the
+[observatory requirement model](../reference/errors.md#observatory-requirement-details).
+The latter is distinct from provisional timing-calibration noise weighting.
+
+## Inspect the run
+
+Run `hsobs-generate CONFIG`, then check the printed output path, geometry-source
+metadata, array shapes and [figures](visualization.md). Observed arrays retain a
+leading MC dimension even for one member. Continue with [analysis](analysis.md).
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Unexpected geometry | CDF path, configuration time and fallback source/reason in metadata. Fallback can also follow a CDF validation error. |
+| Missing external input | PLUME/BP/NPY path and optional BP dependency; CDF fallback does not supply a plasma field file. |
+| Velocity-frame error | Supply spacecraft velocity or select the supported plasma measurement frame. |
+| Unexpected units/amplitude | Native units, simulation scaling, total/fluctuation semantics and frame; do not infer conversions. |
+| Unexpected output location | Run from repository root; most input/output paths are working-directory relative. |

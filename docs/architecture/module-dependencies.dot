@@ -28,10 +28,15 @@ digraph module_dependencies {
     "hs_observatory.analysis.magnetic_gradient_wasserstein" [label="analysis.magnetic_gradient_wasserstein"];
     "hs_observatory.analysis.rbf_reconstruction" [label="analysis.rbf_reconstruction"];
     "hs_observatory.analysis.registry" [label="analysis.registry"];
+    "hs_observatory.analysis.shock_timing" [label="analysis.shock_timing"];
     "hs_observatory.analysis.static_decorrelation" [label="analysis.static_decorrelation"];
     "hs_observatory.analysis.structure_function" [label="analysis.structure_function"];
     "hs_observatory.analysis.timeseries_fft" [label="analysis.timeseries_fft"];
     "hs_observatory.analysis.timesync" [label="analysis.timesync"];
+    "hs_observatory.analysis.timing_affine" [label="analysis.timing_affine"];
+    "hs_observatory.analysis.timing_calibrate" [label="analysis.timing_calibrate"];
+    "hs_observatory.analysis.timing_influence" [label="analysis.timing_influence"];
+    "hs_observatory.analysis.timing_noise" [label="analysis.timing_noise"];
   }
   subgraph cluster_2 {
     label="analysis.derived";
@@ -46,6 +51,7 @@ digraph module_dependencies {
     "hs_observatory.fields.factory" [label="fields.factory"];
     "hs_observatory.fields.malara" [label="fields.malara"];
     "hs_observatory.fields.plume_single_mode" [label="fields.plume_single_mode"];
+    "hs_observatory.fields.shock" [label="fields.shock"];
     "hs_observatory.fields.simulation_sampled" [label="fields.simulation_sampled"];
     "hs_observatory.fields.sine_sum" [label="fields.sine_sum"];
   }
@@ -105,10 +111,14 @@ digraph module_dependencies {
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.magnetic_gradient" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.magnetic_gradient_correlation" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.rbf_reconstruction" [style=dashed];
+  "hs_observatory.analysis.registry" -> "hs_observatory.analysis.shock_timing" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.static_decorrelation" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.structure_function" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.timeseries_fft" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.timesync" [style=dashed];
+  "hs_observatory.analysis.registry" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
+  "hs_observatory.analysis.shock_timing" -> "hs_observatory.analysis.base" [style=solid];
+  "hs_observatory.analysis.shock_timing" -> "hs_observatory.visualization" [style=dashed];
   "hs_observatory.analysis.static_decorrelation" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.derived.pairs" [style=solid];
@@ -118,6 +128,22 @@ digraph module_dependencies {
   "hs_observatory.analysis.timeseries_fft" -> "hs_observatory.visualization" [style=solid];
   "hs_observatory.analysis.timesync" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.timesync" -> "hs_observatory.analysis.rbf_reconstruction" [style=dashed];
+  "hs_observatory.analysis.timing_affine" -> "hs_observatory.analysis.magnetic_gradient" [style=solid];
+  "hs_observatory.analysis.timing_affine" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
+  "hs_observatory.analysis.timing_affine" -> "hs_observatory.visualization" [style=dashed];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.analysis.base" [style=solid];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.analysis.magnetic_gradient" [style=solid];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.analysis.timing_affine" [style=dashed];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.analysis.timing_influence" [style=dashed];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.analysis.timing_noise" [style=dashed];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.errors.observatory" [style=solid];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.errors.offsets" [style=solid];
+  "hs_observatory.analysis.timing_calibrate" -> "hs_observatory.visualization" [style=dashed];
+  "hs_observatory.analysis.timing_influence" -> "hs_observatory.analysis.magnetic_gradient" [style=solid];
+  "hs_observatory.analysis.timing_influence" -> "hs_observatory.analysis.timing_calibrate" [style=solid];
+  "hs_observatory.analysis.timing_influence" -> "hs_observatory.visualization" [style=dashed];
+  "hs_observatory.analysis.timing_noise" -> "hs_observatory.analysis.magnetic_gradient" [style=solid];
+  "hs_observatory.analysis.timing_noise" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
   "hs_observatory.analyze" -> "hs_observatory.analysis.registry" [style=solid];
   "hs_observatory.analyze" -> "hs_observatory.config" [style=solid];
   "hs_observatory.cli" -> "hs_observatory.analysis.elsasser_increment_pdf_static" [style=dashed];
@@ -126,6 +152,10 @@ digraph module_dependencies {
   "hs_observatory.cli" -> "hs_observatory.analysis.magnetic_gradient_correlation" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.magnetic_gradient_wasserstein" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.structure_function" [style=dashed];
+  "hs_observatory.cli" -> "hs_observatory.analysis.timing_affine" [style=dashed];
+  "hs_observatory.cli" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
+  "hs_observatory.cli" -> "hs_observatory.analysis.timing_influence" [style=dashed];
+  "hs_observatory.cli" -> "hs_observatory.analysis.timing_noise" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analyze" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.generate" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.visualization" [style=dashed];
@@ -140,6 +170,8 @@ digraph module_dependencies {
   "hs_observatory.fields.malara" -> "hs_observatory.utils.units" [style=solid];
   "hs_observatory.fields.plume_single_mode" -> "hs_observatory.fields.base" [style=solid];
   "hs_observatory.fields.plume_single_mode" -> "hs_observatory.utils.units" [style=solid];
+  "hs_observatory.fields.shock" -> "hs_observatory.fields.base" [style=solid];
+  "hs_observatory.fields.shock" -> "hs_observatory.utils.units" [style=solid];
   "hs_observatory.fields.simulation_sampled" -> "hs_observatory.fields.base" [style=solid];
   "hs_observatory.fields.simulation_sampled" -> "hs_observatory.io.simulation_bp" [style=solid];
   "hs_observatory.fields.simulation_sampled" -> "hs_observatory.io.simulation_npy" [style=solid];
@@ -147,6 +179,7 @@ digraph module_dependencies {
   "hs_observatory.fields.sine_sum" -> "hs_observatory.fields.base" [style=solid];
   "hs_observatory.fields.sine_sum" -> "hs_observatory.fields.malara" [style=dashed];
   "hs_observatory.fields.sine_sum" -> "hs_observatory.fields.plume_single_mode" [style=dashed];
+  "hs_observatory.fields.sine_sum" -> "hs_observatory.fields.shock" [style=dashed];
   "hs_observatory.fields.sine_sum" -> "hs_observatory.fields.simulation_sampled" [style=dashed];
   "hs_observatory.fields.sine_sum" -> "hs_observatory.utils.units" [style=solid];
   "hs_observatory.generate" -> "hs_observatory.config" [style=solid];
