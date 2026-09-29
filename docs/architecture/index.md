@@ -62,7 +62,7 @@ and output for their method.
 
 **Scientific analyses.** Shared Elsasser and pair utilities support intermittency
 analyses; other families cover magnetic gradients, reconstruction, and spectral
-or spatial diagnostics. The [Analysis Methods](../analysis_methods.md) page
+or spatial diagnostics. The [Analysis Methods](../user-guide/analysis.md) page
 documents the available methods.
 
 **Visualization and output.** The package visualization module supplies common
@@ -81,3 +81,7 @@ python3 scripts/generate_architecture_graph.py
 
 The script emits both DOT files and, when Graphviz `dot` is available, both SVGs.
 See [Documentation Development](../developer/documentation.md) for build commands.
+
+Timing calibration (including affine, influence and noise helpers) and shock
+timing now have separate overview groups. Shock field generation remains in
+Fields. Every displayed edge still requires a source-import witness.

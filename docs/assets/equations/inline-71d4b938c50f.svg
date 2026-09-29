@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="24pt" height="16pt" viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-28T17:52:21.589906</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.9, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 16 
+L 24 16 
+L 24 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="text_1">
+   <!-- $\mathcal{R}^{T,C}_{jk}$ -->
+   <g transform="translate(0 11) scale(0.11 -0.11)">
+    <defs>
+     <path id="STIXNonUnicode-Italic-e23e" d="M 5120 826 
+L 5222 710 
+Q 4531 -19 3994 -19 
+Q 3674 -19 3466 147 
+Q 3258 314 3171 528 
+Q 3085 742 2944 1046 
+Q 2803 1350 2643 1536 
+Q 2586 1606 2368 1734 
+Q 2150 1862 2118 1862 
+L 2176 2010 
+Q 2963 2086 3436 2464 
+Q 3910 2842 3910 3219 
+Q 3910 3654 3657 3811 
+Q 3405 3968 2765 3968 
+Q 2605 3968 2544 3917 
+Q 2483 3866 2451 3750 
+L 1709 1216 
+Q 1645 998 1593 857 
+Q 1542 717 1433 537 
+Q 1325 358 1193 252 
+Q 1062 147 848 73 
+Q 634 0 358 0 
+L 416 154 
+Q 608 154 707 314 
+Q 806 474 934 902 
+L 1517 2918 
+Q 1709 3565 1709 3661 
+Q 1709 3891 1414 3891 
+Q 1254 3891 1113 3859 
+Q 973 3827 845 3760 
+Q 717 3693 646 3648 
+Q 576 3603 467 3520 
+Q 358 3437 346 3424 
+L 243 3546 
+Q 486 3795 723 3942 
+Q 960 4090 1270 4150 
+Q 1581 4211 1801 4224 
+Q 2022 4237 2483 4237 
+Q 3341 4237 3814 4118 
+Q 4288 4000 4432 3811 
+Q 4576 3622 4576 3302 
+Q 4576 3110 4509 2934 
+Q 4442 2758 4275 2560 
+Q 4109 2362 3773 2189 
+Q 3437 2016 2957 1888 
+L 2957 1862 
+Q 3219 1760 3382 1568 
+Q 3546 1376 3610 1177 
+Q 3674 979 3731 796 
+Q 3789 614 3897 496 
+Q 4006 378 4205 378 
+Q 4659 378 5120 826 
+z
+" transform="scale(0.015625)"/>
+     <path id="DejaVuSans-Oblique-54" d="M 378 4666 
+L 4325 4666 
+L 4225 4134 
+L 2559 4134 
+L 1759 0 
+L 1125 0 
+L 1925 4134 
+L 275 4134 
+L 378 4666 
+z
+" transform="scale(0.015625)"/>
+     <path id="DejaVuSans-2c" d="M 750 794 
+L 1409 794 
+L 1409 256 
+L 897 -744 
+L 494 -744 
+L 750 256 
+L 750 794 
+z
+" transform="scale(0.015625)"/>
+     <path id="DejaVuSans-Oblique-43" d="M 4447 4306 
+L 4319 3641 
+Q 4019 3944 3683 4091 
+Q 3347 4238 2956 4238 
+Q 2422 4238 2017 3981 
+Q 1613 3725 1319 3200 
+Q 1131 2863 1032 2486 
+Q 934 2109 934 1728 
+Q 934 1091 1264 756 
+Q 1594 422 2222 422 
+Q 2656 422 3056 561 
+Q 3456 700 3834 978 
+L 3688 231 
+Q 3316 72 2936 -9 
+Q 2556 -91 2175 -91 
+Q 1278 -91 773 396 
+Q 269 884 269 1753 
+Q 269 2309 461 2846 
+Q 653 3384 1013 3828 
+Q 1394 4300 1883 4525 
+Q 2372 4750 3022 4750 
+Q 3422 4750 3780 4639 
+Q 4138 4528 4447 4306 
+z
+" transform="scale(0.015625)"/>
+     <path id="DejaVuSans-Oblique-6a" d="M 928 3500 
+L 1503 3500 
+L 813 -63 
+L 809 -78 
+Q 694 -675 544 -897 
+Q 403 -1106 132 -1218 
+Q -138 -1331 -506 -1331 
+L -722 -1331 
+L -628 -844 
+L -481 -844 
+Q -144 -844 -1 -703 
+Q 141 -563 238 -63 
+L 928 3500 
+z
+M 1197 4863 
+L 1772 4863 
+L 1631 4134 
+L 1056 4134 
+L 1197 4863 
+z
+" transform="scale(0.015625)"/>
+     <path id="DejaVuSans-Oblique-6b" d="M 1172 4863 
+L 1747 4863 
+L 1197 2028 
+L 3169 3500 
+L 3916 3500 
+L 1716 1825 
+L 3322 0 
+L 2625 0 
+L 1131 1709 
+L 800 0 
+L 225 0 
+L 1172 4863 
+z
+" transform="scale(0.015625)"/>
+    </defs>
+    <use xlink:href="#STIXNonUnicode-Italic-e23e" transform="translate(0 0.564063)"/>
+    <use xlink:href="#DejaVuSans-Oblique-54" transform="translate(86.357025 47.046875) scale(0.7)"/>
+    <use xlink:href="#DejaVuSans-2c" transform="translate(129.115814 47.046875) scale(0.7)"/>
+    <use xlink:href="#DejaVuSans-Oblique-43" transform="translate(165.004486 47.046875) scale(0.7)"/>
+    <use xlink:href="#DejaVuSans-Oblique-6a" transform="translate(86.357025 -26.779687) scale(0.7)"/>
+    <use xlink:href="#DejaVuSans-Oblique-6b" transform="translate(105.805267 -26.779687) scale(0.7)"/>
+   </g>
+  </g>
+ </g>
+</svg>

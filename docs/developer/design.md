@@ -26,4 +26,7 @@ generator. Shared Elsasser physics and pair operations live under
 
 See the [Architecture Overview](../architecture/index.md) for responsibilities,
 the [Module Dependencies](../architecture/module-dependencies.md) for actual
-imports, and [Analysis Methods](../analysis_methods.md) for supported analyses.
+imports, and [Analysis Methods](../user-guide/analysis.md) for supported analyses.
+
+The [data reference](../reference/data-products.md) owns current schema and frame
+definitions; [developer guidance](index.md) owns extension recipes.

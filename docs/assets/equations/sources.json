@@ -1,0 +1,114 @@
+[
+  {
+    "asset": "display-6ab4bb64361c.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "B_i(r)=B_{0,i}+\\sum_j G_{ij}(r_j-r_{0,j}).",
+    "mathtext": "B_i(r)=B_{0,i}+\\sum_j G_{ij}(r_j-r_{0,j}).",
+    "display": true
+  },
+  {
+    "asset": "display-64c93ae05b4f.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "P_{\\rm aff}^{\\perp}=Q_{\\rm na}Q_{\\rm na}^{T},\\qquad\n P_{\\rm div}=q_{\\rm div}q_{\\rm div}^{T},\\qquad\n P_{\\rm df}^{\\perp}=P_{\\rm aff}^{\\perp}+P_{\\rm div}.",
+    "mathtext": "P_{\\rm aff}^{\\perp}=Q_{\\rm na}Q_{\\rm na}^{T},\\qquad P_{\\rm div}=q_{\\rm div}q_{\\rm div}^{T},\\qquad P_{\\rm df}^{\\perp}=P_{\\rm aff}^{\\perp}+P_{\\rm div}.",
+    "display": true
+  },
+  {
+    "asset": "display-e5f19af99fb7.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "\\chi^2(c)=\\sum_t\\frac{\\|Q(t)^T[y(t)+D(t)c]\\|^2}{\\sigma_B^2}\n           +\\frac{\\|c\\|^2}{\\sigma_t^2},\\qquad c_H=0.",
+    "mathtext": "\\chi^2(c)=\\sum_t\\frac{\\|Q(t)^T[y(t)+D(t)c]\\|^2}{\\sigma_B^2} +\\frac{\\|c\\|^2}{\\sigma_t^2},\\qquad c_H=0.",
+    "display": true
+  },
+  {
+    "asset": "display-a96142b5d083.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "B_i = B_{i0} + G_{ij}x_j + \\tfrac12 H_{ijk}x_jx_k.",
+    "mathtext": "B_i = B_{i0} + G_{ij}x_j + \\frac{1}{2} H_{ijk}x_jx_k.",
+    "display": true
+  },
+  {
+    "asset": "display-d6a06a5f5fae.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "\\sum_i G_{ii}=0,\\qquad \\sum_i H_{iik}=0\\quad(k=1,2,3).",
+    "mathtext": "\\sum_i G_{ii}=0,\\qquad \\sum_i H_{iik}=0\\quad(k=1,2,3).",
+    "display": true
+  },
+  {
+    "asset": "display-e8d5d50f3641.svg",
+    "source": "docs/reference/timing-calibration.md",
+    "tex": "\\chi^2(c)=\\sum_t\\frac{[q(t)^T(y(t)+D(t)c)]^2}{\\sigma_B^2}\n           +\\sum_\\alpha\\frac{c_\\alpha^2}{\\sigma_t^2},\\qquad c_H=0.",
+    "mathtext": "\\chi^2(c)=\\sum_t\\frac{[q(t)^T(y(t)+D(t)c)]^2}{\\sigma_B^2} +\\sum_\\alpha\\frac{c_\\alpha^2}{\\sigma_t^2},\\qquad c_H=0.",
+    "display": true
+  },
+  {
+    "asset": "inline-fbdcb41ac2fa.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\mathcal{R}",
+    "mathtext": "\\mathcal{R}",
+    "display": false
+  },
+  {
+    "asset": "inline-6a20d80ef46f.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "R_{jk}",
+    "mathtext": "R_{jk}",
+    "display": false
+  },
+  {
+    "asset": "inline-274f8c02e874.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "B_x,B_y,B_z",
+    "mathtext": "B_x,B_y,B_z",
+    "display": false
+  },
+  {
+    "asset": "inline-1fb17be39daa.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "x,y,z",
+    "mathtext": "x,y,z",
+    "display": false
+  },
+  {
+    "asset": "inline-8336ca083169.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\partial B_x/\\partial y",
+    "mathtext": "\\partial B_x/\\partial y",
+    "display": false
+  },
+  {
+    "asset": "inline-546bb59f3cd0.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\mathcal{R}^{T,C}",
+    "mathtext": "\\mathcal{R}^{T,C}",
+    "display": false
+  },
+  {
+    "asset": "inline-e7596367e0aa.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\mathcal{R}^{M,T,(m)}",
+    "mathtext": "\\mathcal{R}^{M,T,(m)}",
+    "display": false
+  },
+  {
+    "asset": "inline-1e0cee47a0fc.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\mathcal{R}^{M,C,(m)}",
+    "mathtext": "\\mathcal{R}^{M,C,(m)}",
+    "display": false
+  },
+  {
+    "asset": "inline-92e42d69c507.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "4<N<9",
+    "mathtext": "4<N<9",
+    "display": false
+  },
+  {
+    "asset": "inline-71d4b938c50f.svg",
+    "source": "docs/reference/magnetic-gradients.md",
+    "tex": "\\mathcal{R}^{T,C}_{jk}",
+    "mathtext": "\\mathcal{R}^{T,C}_{jk}",
+    "display": false
+  }
+]
