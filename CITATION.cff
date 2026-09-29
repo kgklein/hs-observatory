@@ -1,8 +1,10 @@
 cff-version: 1.2.0
-message: >
-  If you use HS Observatory in your research, please cite the software
-  using the metadata below and cite the relevant scientific publications
-  describing the methods used in your analysis.
+
+message: >-
+  If you use HS Observatory in your research, please cite this
+  software, the underlying HelioSwarm trajectory dataset where
+  applicable, and the relevant scientific publications describing
+  the methods used in your analysis.
 
 title: "HS Observatory"
 type: software
@@ -17,8 +19,7 @@ repository-code: "https://github.com/kgklein/hs-observatory"
 url: "https://kgklein.github.io/hs-observatory/"
 
 license: MIT
-
-date-released: 2026-09-21
+date-released: 2026-09-29
 
 keywords:
   - heliophysics
@@ -28,3 +29,29 @@ keywords:
   - multipoint measurements
   - turbulence
   - synthetic observations
+
+references:
+  - type: dataset
+    title: "HelioSwarm Trajectories"
+    doi: "10.5281/zenodo.13887061"
+    scope: >-
+      Underlying HelioSwarm spacecraft trajectories used
+      to generate synthetic multipoint observations.
+
+  - type: article
+    authors:
+      - family-names: Klein
+        given-names: Kristopher G.
+      - family-names: Spence
+        given-names: Harlan
+    title: >-
+      HelioSwarm: A Multipoint, Multiscale Mission
+      to Characterize Turbulence
+    journal: "Space Science Reviews"
+    volume: 219
+    year: 2023
+    doi: "10.1007/s11214-023-01019-0"
+    scope: >-
+      Mission science objectives, observatory
+      architecture, instrumentation, analysis techniques, 
+      and reference trajectory.

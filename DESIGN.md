@@ -32,7 +32,7 @@ Spacecraft positions:
 position[q]: (n_spacecraft, n_time_q, 3)
 ```
 
-Truth quantities:
+Truth quantities (platonic values without error or uncertainty):
 
 ```text
 truth/n: (n_time_n, n_spacecraft)
@@ -57,52 +57,74 @@ Field models should not know anything about instrument errors or file output.
 
 A field model receives time and spacecraft position and returns truth values for `n`, `v`, and `B`.
 
-The first field model is `SineSumField`. Future models may include turbulent boxes, wave packets, imported simulations, or analytic plasma-wave modes.
+The first test field model is `SineSumField`, which is just a sum of sine waves.
 
-`MalaraTurbulence` is a low-level, time-independent isotropic turbulence evaluator. It evaluates a periodic, analytically solenoidal hierarchy of compact intermittent eddies directly at arbitrary positions. `MalaraTurbulenceField` adapts it to constant density and optional velocity/magnetic fluctuations in the observation generator. Anisotropic, critical-balance, and compressive-density extensions remain future work.
+`MalaraTurbulence` is a low-level, time-independent isotropic turbulence evaluator, hidden from the user. 
+It evaluates a periodic, analytically solenoidal hierarchy of compact intermittent eddies directly at arbitrary positions. 
+`MalaraTurbulenceField` is a wrapper around it for constant density evaluating velocity/magnetic fluctuations in the observation generator. 
+*Anisotropic, critical-balance, and compressive-density extensions remain future work.*
 
-`PlumeSingleModeField` reads one explicitly selected PLUME eigenmode row and evaluates its physically phased real plane wave. It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units, and normalizes all eigenfunctions through a requested magnetic trace amplitude. Growth/damping, electric-field output, arbitrary rotations, and multimode sums remain future work.
+`PlumeSingleModeField` reads one explicitly selected PLUME eigenmode row and evaluates its physically phased real plane wave. 
+It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units, and normalizes all eigenfunctions through a requested magnetic trace amplitude. 
+*Growth/damping, electric-field output, arbitrary rotations, and multimode sums remain future work.*
 
 `SimulationSampledField` samples static numerical `.npy` snapshots or split
-Gkeyll/ADIOS2 `.bp` field and ion-moment files without delegating to an external
-simulation repository at runtime. Loading and layout validation live in
-`io/simulation_npy.py` and `io/simulation_bp.py`; the field adapter owns
-physical scaling, hub-centered mapping, background semantics, and generation metadata.
+Gkeyll/ADIOS2 `.bp` electromagnetic field and ion-moment files. 
+Loading and layout validation live in
+`io/simulation_npy.py` and 
+`io/simulation_bp.py`. 
+The field adapter owns physical scaling, hub-centered mapping, background semantics, 
+    and generation metadata.
 Uniform snapshot nodes are endpoint-excluded in the periodic `[0,L)` box and
-are sampled with a local NumPy trilinear interpolator. Coordinate configuration
-accepts direct km, generic code-length conversion, or `rho_p` plus `rho_p_km`,
-the latter matching the physical scaling concept used by the development
-reference in `sparse-field-reconstruction`. The BP adapter extracts magnetic
-components 3–5 from the field `CartGridField`, density 0 and momentum-density
-components 1–3 from the ion `CartGridField`, and computes `v=(n*u)/n`; every
-mapping remains configurable. ADIOS2 is an optional dependency. The initial
-adapter applies no rotation and supports one static snapshot state only.
+    are sampled with a local NumPy trilinear interpolator. 
+Coordinate configuration accepts direct km, generic code-length conversion, 
+    or `rho_p` plus `rho_p_km`. 
+The BP adapter extracts 
+    
+    -magnetic components 3–5 from the field `CartGridField`, 
+    -density componetns 0 from the ion `CartGridField` and 
+    -momentum-density components 1–3 from the ion `CartGridField`,
 
-Hub-centered simulation mapping is anchored to the Hub position at the first
-sample, not its instantaneous position. Thus the initial Hub maps to the box
-center while common translational motion remains in every later sample. Using
-the instantaneous Hub position would cancel rigid formation motion and produce
-constant time series from a static snapshot.
+and computes `v=(n*u)/n`; ADIOS2 is an optional dependency. 
+The initial adapter applies no rotation and supports one static snapshot state only.
+*Other simulations inputs should be incorrporated.*
 
-The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. The direct implementation remains the scientific reference. Caching stores only deterministic eddy data for cells actually touched; point-dependent basis and curl calculations remain uncached. Parallel workers reconstruct the compact evaluator configuration and own separate caches, avoiding shared mutable state. All backends must preserve point ordering and match the reference numerical output. Touch statistics reuse the evaluator's local-cell selection and quantify whether caching is likely to help; they never alter scientific evaluation.
+Hub-centered simulation mapping is anchored to the Hub position at the first sample, 
+    not its instantaneous position. 
+The initial Hub maps to the box center 
+    while common translational motion remains in every later sample. 
+
+The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. 
+The direct implementation remains the scientific reference. 
+Caching stores only deterministic eddy data for cells actually touched; point-dependent basis and curl calculations remain uncached. 
+Parallel workers reconstruct the compact evaluator configuration and own separate caches, avoiding shared mutable state. 
+All backends must preserve point ordering and match the reference numerical output. 
+Touch statistics reuse the evaluator's local-cell selection and quantify whether caching is likely to help; they never alter scientific evaluation.
 
 ## Error models
 
-Error models should not know anything about the underlying field model.
+**Error models should not know anything about the underlying field model.**
 
-They receive truth values and a random number generator. They return observed values and, where possible, the actual error realization.
+They receive truth values and a random number generator. 
+They return observed values and, where possible, the actual error realization.
 
 Time-correlated measurement errors also receive the quantity's native time axis. Correlation parameters should be expressed in physical time rather than sample counts so models remain consistent across instrument cadences.
 
-Coordinate errors are drawn once per Monte Carlo realization and spacecraft. They modify the coordinates passed to the field model, while nominal coordinates remain stored for downstream analysis. Measurement errors are applied afterward to the resulting sampled ensemble.
+Coordinate errors are drawn once per Monte Carlo realization and spacecraft. 
+They modify the coordinates passed to the field model, while nominal coordinates remain stored for downstream analysis. 
+Measurement errors are applied afterward to the resulting sampled ensemble.
 
-Field models return plasma-frame velocity. Generation derives spacecraft-frame velocity by subtracting the aligned spacecraft trajectory velocity. The configured velocity measurement frame determines both the input to the error model and the frame stored in `/observed/v`; plasma truth remains `/truth/v`.
+Field models return plasma-frame velocity. 
+Generation derives spacecraft-frame velocity by subtracting the aligned spacecraft trajectory velocity. 
+The configured velocity measurement frame determines both the input to the error model and the frame stored in `/observed/v`; plasma truth remains `/truth/v`.
 
-Prefer reproducible random-number generation using `numpy.random.default_rng(seed)`.
+We implement reproducible random-number generation using 
+    `numpy.random.default_rng(seed)`.
 
 ## HDF5 output
 
-The generated HDF5 file should contain enough metadata to reproduce the run. At minimum, save:
+The generated HDF5 file should contain enough metadata to reproduce the run. 
+At minimum, save:
 
 * serialized YAML configuration
 * creation time
@@ -112,33 +134,40 @@ The generated HDF5 file should contain enough metadata to reproduce the run. At 
 * spacecraft configuration source
 
 Avoid ASCII output for large time series.
+*Consider switching to CDF instead of HDF5, for a uniform I/O setup.*
 
 ## Analysis methods
 
-Analysis methods should be selected by name from a registry. They should read HDF5 files and write compact outputs. Do not hard-code analysis choices inside the generator.
+Analysis methods should be selected by name from a registry. 
+They should read HDF5 files and write compact outputs. 
+Do not hard-code analysis choices inside the generator.
 
-Initial analysis can be simple diagnostics. More advanced methods, such as wave telescope analysis and structure functions, should be added as separate modules.
+Initial analysis are simple diagnostics. 
+More advanced methods, such as wave telescope analysis and structure functions, 
+    are being added as separate modules.
 
-Common physical derived quantities belong under `analysis/derived`, separate
-from selectable I/O wrappers. In particular, all future analyses that need
-Elsasser fields must reuse `analysis.derived.elsasser`. It defines
-`z_plus = delta_v + delta_b` and `z_minus = delta_v - delta_b`, with magnetic
-field converted from nT to km/s using proton density in cm^-3. The defaults are
-full-time, per-spacecraft density normalization and per-spacecraft mean
-subtraction; neither operation averages across the observatory. The standalone
-`elsasser` method handles truth/observed selection, plasma-frame velocity
+Common physical derived quantities belong under `analysis/derived`, 
+    separate from selectable I/O wrappers. 
+In particular, all future analyses that need Elsasser fields must reuse 
+    `analysis.derived.elsasser`. 
+It defines `z_plus = delta_v + delta_b` and `z_minus = delta_v - delta_b`, 
+    with magnetic field converted from nT to km/s using proton density in cm^-3. 
+    The defaults are full-time, per-spacecraft density normalization and 
+    per-spacecraft mean subtraction; 
+    neither operation averages across the observatory. 
+The standalone `elsasser` method handles truth/observed selection, plasma-frame velocity
 recovery, and linear alignment to the slower n/v time grid before calling the
 shared implementation.
 
-`elsasser_increment_pdf_static` is a downstream consumer of that shared
-Elsasser layer. It interprets all `(time, spacecraft)` samples as points in a
-single frozen field and streams the complete unique unordered pair triangle in
-bounded chunks. Pair enumeration and perpendicular projection live in
-`analysis.derived.pairs` so future static pair analyses can reuse them. The
-method uses a local pairwise magnetic-field direction with a global fallback,
-perpendicular scale and increment magnitude by default, and a geometric mean
-within each scale bin to normalize its PDFs. This approximation deliberately
-does not assign dynamics to time separation or invoke Taylor's hypothesis.
+`elsasser_increment_pdf_static` is a downstream consumer of that shared Elsasser layer. 
+It interprets all `(time, spacecraft)` samples as points in a single frozen field and streams the complete unique unordered pair triangle in bounded chunks. 
+Pair enumeration and perpendicular projection live in `analysis.derived.pairs` 
+    so future static pair analyses can reuse them. 
+The method uses a local pairwise magnetic-field direction with a global fallback,
+    perpendicular scale and increment magnitude by default, 
+    and a geometric mean within each scale bin to normalize its PDFs. 
+This approximation deliberately does not assign dynamics to time separation or 
+    invoke Taylor's hypothesis.
 
 ## Coding style
 
@@ -159,7 +188,8 @@ Do not prematurely optimize, but avoid obviously slow Python loops over time sam
 
 ## Testing
 
-Tests should run without real HelioSwarm CDF files. Use a synthetic fallback spacecraft configuration for smoke tests.
+Tests should run without real HelioSwarm CDF files. 
+Use a synthetic fallback spacecraft configuration for smoke tests.
 
 Important tests:
 
