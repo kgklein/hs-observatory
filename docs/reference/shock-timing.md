@@ -6,10 +6,7 @@
 | Required inputs | Observed n/v/B and nominal trajectories; SciPy (`.[analysis]`); optional shock metadata for validation. |
 | Entry points | `hsobs-analyze configs/example_analyze_shock_timing.yaml` after shock generation. |
 | Outputs | Detection/inversion HDF5 and four PDF/PNG figure families. |
-| Limitations | One planar constant-speed transition; approximate detection errors; correlated tetrahedra. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 ### Shock-timing analysis
 
 `shock_timing` detects shock crossings independently in density, velocity
@@ -98,5 +95,4 @@ The complete controls are in
 `modes`, `observables`, `truth_validation`, detection windows/significance,
 fitting widths/coverage/residual limits, timing conditioning/uncertainty floors,
 compression and four plot destinations. Read the [shock field definition](fields.md#propagating-planar-mhd-shocks)
-first. The [example manifest](../examples/index.md#shock-workflow) records the
-chain and status. Shock generation itself does not require the SciPy fitter.
+first. Shock generation itself does not require the SciPy fitter.

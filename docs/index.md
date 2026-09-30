@@ -11,8 +11,6 @@ The timeseries can include measurement errors, including timing and spatial know
 *This is an active, evolving research codebase.*
 The currently implemented methods intentionally have different scopes.
 Some methods, e.g. timing calibration, are areas of active research.
-See the [example manifest](examples/index.md) before assuming inputs or outputs are distributed.
-Future options and reserved settings are labeled in references.
 
 ## Developer path
 
@@ -40,5 +38,3 @@ and the [scientific review checklist](developer/scientific-review.md).
 | Generate | [Generating observations](user-guide/generation.md) | [Fields](reference/fields.md), [errors](reference/errors.md), [data products](reference/data-products.md) |
 | Analyze | [Choosing and running analyses](user-guide/analysis.md) | [Statistics](reference/statistical-methods.md), [gradients](reference/magnetic-gradients.md), [reconstruction](reference/reconstruction.md), [shock timing](reference/shock-timing.md), [timing research](reference/timing-calibration.md) |
 | Visualize | [Figures and interpretation](user-guide/visualization.md) | Method-specific diagnostics and limitations |
-
-To ensure reproducibility, new elements should follow the [Example manifest](examples/index.md); example research notes can be found here [Divergence audit](research-notes/magnetic-gradient-divergence-audit.md) and here [timing investigations](research-notes/timing-investigations.md) |

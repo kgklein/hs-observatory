@@ -59,7 +59,6 @@ nav:
       - Magnetic gradients: reference/magnetic-gradients.md
       - Reconstruction: reference/reconstruction.md
       - Shock timing: reference/shock-timing.md
-      - Timing calibration: reference/timing-calibration.md
   - Architecture:
       - Overview: architecture/index.md
       - Module dependencies: architecture/module-dependencies.md
@@ -67,10 +66,7 @@ nav:
       - Development: developer/index.md
       - Design contracts: developer/design.md
       - Documentation: developer/documentation.md
-      - Scientific review: developer/scientific-review.md
-      - Preservation audit: developer/preservation-audit.md
-      - Validation record: developer/validation-report.md
-  - Reproduce:
-      - Example manifest: examples/index.md
+  - Ongoing Research:
+      - Timing calibration: reference/timing-calibration.md
       - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
       - Timing investigations: research-notes/timing-investigations.md

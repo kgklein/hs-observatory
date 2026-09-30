@@ -8,8 +8,8 @@
 | Outputs | Reconstruction HDF5 and optional reference/error/sigma plots. |
 | Limitations | Single observed MC selection; coverage constraints; kernel/axis restrictions below. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+**In Work...**
+
 ## `rbf_reconstruction`
 
 | Summary | Details |
@@ -18,10 +18,7 @@ and [visualization guide](../user-guide/visualization.md) for inspection and plo
 | Required inputs | Observation product, time window and cylindrical grid. |
 | Entry points | `analysis.method: rbf_reconstruction`. |
 | Outputs | HDF5 and optional fit/reference/error plots. |
-| Limitations | Multiquadric kernel; one MC member; grid/coverage restrictions. |
-
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+| Limitations | Multiquadric kernel; one MC member; grid/coverage
 
 Performs component-wise magnetic-field RBF reconstruction over a cylindrical
 sampling volume.

@@ -2,10 +2,10 @@ analysis:
   method: elsasser_increment_pdf_static
 
 input:
-  path: outputs/synthetic_observations.h5
+  path: outputs/example/synthetic_observations.h5
 
 output:
-  path: outputs/elsasser_increment_pdf_static.h5
+  path: outputs/example/elsasser_increment_pdf_static.h5
 
 elsasser_increment_pdf_static:
   datasets:

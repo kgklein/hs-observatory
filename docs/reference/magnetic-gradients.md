@@ -8,8 +8,7 @@
 | Outputs | Gradient/correlation HDF5, diagnostic figures, comparison JSON/CSV. |
 | Limitations | Finite-configuration affine approximation; offset access; model/reference mismatch; bootstrap unavailable. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+
 ## `magnetic_gradient`
 
 | Summary | Details |
@@ -19,9 +18,6 @@ and [visualization guide](../user-guide/visualization.md) for inspection and plo
 | Entry points | `analysis.method: magnetic_gradient`. |
 | Outputs | Calculation-only HDF5; separate plotter. |
 | Limitations | Finite-scale affine fit differs from point/coarse gradient truth. |
-
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 Computes full multi-spacecraft magnetic-field gradients from numerical-
 simulation observations and writes a calculation-only HDF5 product. It uses

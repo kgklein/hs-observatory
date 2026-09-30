@@ -97,6 +97,6 @@ Each method reference owns its detailed output schema, masks and units:
 - [Shock timing](shock-timing.md): detections, inversions, statuses and MC summaries.
 - [Timing calibration](timing-calibration.md): corrections, objectives, covariance, projections and influence.
 
-NaNs, validity masks and completion flags are method-specific. For timing
-calibration, `metadata.complete = false` marks an incomplete streamed product.
+NaNs, validity masks and completion flags are method-specific.
+For timing calibration, `metadata.complete = false` marks an incomplete streamed product.
 Do not treat NaN statistics or failed fits as zero measurements.

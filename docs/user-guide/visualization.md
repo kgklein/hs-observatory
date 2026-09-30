@@ -1,31 +1,32 @@
 # Visualization and interpretation
 
-Start with the [example manifest](../examples/index.md): a plotting command needs
-its saved input product, and plotting does not establish the physical validity of
-that product. The scientific method reference owns diagnostic definitions.
+A plotting command needs its saved input product,
 
 ## Default visualizations
 
 Generation creates three nominal-truth PNGs by default:
 
-- A seven-panel truth figure, with density and the three velocity components in the left column, the legend in the upper-right, and matching velocity/magnetic components in the remaining rows.
-- A geometry figure with three hub-relative formation projections and an X-Z projection of the spacecraft paths.
-- A velocity/Alfvén-speed comparison figure for `delta U` and
-  `delta b = delta[B / sqrt(mu0 m_p n)]` in km/s by default. This diagnostic
-  uses instantaneous density interpolated onto the magnetic-field cadence,
+- A seven-panel truth figure (* \*_truth.png*), with density and the three velocity components in the left column, the legend in the upper-right, and magnetic components in the remaining right-hand rows. 
+- A velocity/Alfvén-speed comparison figure (* \*_velocity_alfven.png*) for `delta U` and
+  `delta b = delta[B / sqrt(mu0 m_p n)]` in km/s by default.
+  This diagnostic uses instantaneous density interpolated onto the magnetic-field cadence,
   subtracts a full-interval per-spacecraft mean when
   `alfven_fluctuations: true`, and shares each component's y-axis range between
   the matching velocity and magnetic panels.
+- A geometry figure (* \*_geometry.png*) with three hub-relative formation projections and an X-Z projection of the spacecraft paths is created for all runs.
+- Three other geometry figures can be created when `visualization` is enabled.
+  These variants are described in [Geometry summary variants](#geometry-summary-variants)
 
 When any time, position, or measurement error model is enabled, generation also creates overlay figures for one selected Monte Carlo realization:
 
-- Observed `n`, `v`, and `B` in spacecraft colors, with each spacecraft's nominal truth in grayscale underneath.
-- Observed relative positions and absolute X-Z paths in spacecraft colors, with nominal positions and paths in grayscale underneath.
-- Observed `U` and `b` in spacecraft colors, with nominal truth in grayscale.
+- Observed `n`, `v`, and `B` in spacecraft colors (* \*_observed_mc000.png*), with each spacecraft's nominal truth in grayscale underneath.
+- Observed relative positions and absolute X-Z paths in spacecraft colors (* \*_geometry_observed_mc000.png*), with nominal positions and paths in grayscale underneath.
+- Observed `U` and `b` in spacecraft colors (* \*_velocity_alfven_observed_mc000.png*), with nominal truth in grayscale.
 
 The overlay uses `mc_index: 0` by default rather than rendering every member of a potentially large ensemble. Change `mc_index` to inspect another realization, or set `observed_enabled: false` to suppress only the three overlay figures.
 
-The HelioSwarm palette is hardcoded by spacecraft name to match the reference plots in `sparse-field-reconstruction`: N1 through N8 retain their established colors and H is pink. Plot paths default to `<hdf5_stem>_truth.png` and `<hdf5_stem>_geometry.png` beside the HDF5 file. They can be configured or disabled:
+The HelioSwarm palette is hardcoded by spacecraft name to match the spacecraft reference colors.
+Plot paths default to `<hdf5_stem>_truth.png` and `<hdf5_stem>_geometry.png` beside the HDF5 file. They can be configured or disabled:
 
 ```yaml
 visualization:
@@ -43,7 +44,7 @@ visualization:
   dpi: 150
 ```
 
-When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_velocity_alfven.png`, `_observed_mcNNN.png`, `_geometry_observed_mcNNN.png`, and `_velocity_alfven_observed_mcNNN.png`. Observed time series are plotted against nominal time, consistent with the coordinate assumptions used by downstream analysis.
+When paths are omitted, they are derived beside the HDF5 output as `_truth.png`, `_geometry.png`, `_velocity_alfven.png`, `_observed_mcNNN.png`, `_geometry_observed_mcNNN.png`, and `_velocity_alfven_observed_mcNNN.png`. Observed time series are plotted against nominal time.
 
 The geometry-overview workflow also writes a mesocentric 3D GSE configuration
 as time-tagged PDF and PNG files under `geometry_overviews/`. Its default solid
@@ -123,30 +124,15 @@ offsets. Its displayed geometry does not encode the full clock-shift trajectory
 displacement used when sampling the field. Do not interpret it as a complete
 reconstruction of sampled coordinates; see [coordinate conventions](../reference/data-products.md#coordinate-use-by-analysis).
 
-## Read the diagnostic correctly
-
-Keep nominal truth, coarse truth, ideal sampled estimates and MC observations
-distinct. A distributional distance ignores time order; Pearson correlation does
-not measure absolute amplitude accuracy; a tetrahedral affine residual cannot
-measure spatial nonlinearity. NaNs and masked ratios often indicate invalid
-geometry, empty bins or a denominator floor rather than a plotting defect.
-
-Time-window switches on saved-product plotters crop displayed data; they do not
-refit timing calibration. The generation Alfvén comparison uses instantaneous
-density, whereas default Elsasser density normalization is per-spacecraft global.
-
 ## Reconstruction and ParaView
 
-The unchanged [Visualization Export guide](https://github.com/kgklein/hs-observatory/blob/main/visualization/README.md)
+**3D Rendering is a work in progress.**
+
+The [Visualization Export guide](https://github.com/kgklein/hs-observatory/blob/main/visualization/README.md)
 is authoritative for HDF5 inspection, adding validation truth, color/background
-settings, Figure 2 and VTS/VTK export. Adding truth modifies the reconstruction
-file; export/inspection are separate from the fitter. Follow the
+settings, Figure 2 and VTS/VTK export.
+Adding truth modifies the reconstruction file;
+export/inspection are separate from the fitter.
+Follow the
 [ParaView display notes](https://github.com/kgklein/hs-observatory/blob/main/visualization/paraview_notes.md)
 for field rendering and the `cylinder_mask > 0.5` threshold.
-
-## Plotting troubleshooting
-
-Check the product type, selected MC member, saved realization availability,
-valid time interval and native/SI units before changing display limits. Optional
-Crameri colormaps have Matplotlib fallbacks. A missing source product must be
-generated by its preceding workflow; a figure command cannot supply external data.

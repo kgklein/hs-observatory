@@ -1,25 +1,8 @@
 # Coordinate and measurement errors
 
-| Summary | Details |
-| --- | --- |
-| Purpose | Control sampling uncertainty and instrument errors separately. |
-| Required inputs | Generation YAML and field samples at each native cadence. |
-| Entry points | `hsobs-generate CONFIG`; `errors` mapping. |
-| Outputs | Observed ensemble, optional realized errors, and metadata. |
-| Limitations | Requirements are model assumptions; generation noise and timing-fit noise are different models. |
+See [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
-## Coordinate and measurement errors
-
-Time and position uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series. The same offsets apply to `n`, `v`, and `B`. Each observation is evaluated from the field at
-
-```text
-t_sample = t_nominal + time_offset
-r_sample = r_trajectory(t_nominal + time_offset) + position_offset
-```
-
-before its variable-specific measurement error is added. For velocity, the selected plasma- or spacecraft-frame transformation occurs before applying that measurement error. The HDF5 `/time/*` and `/spacecraft/r/*` datasets intentionally retain the nominal coordinates. Stored coordinates remain nominal. Downstream methods differ: some use nominal coordinates, while static increment PDFs and structure functions can use stored position offsets, and magnetic gradients read timing and position offsets. See [coordinate use by analysis](data-products.md#coordinate-use-by-analysis). These are implementation behaviors, not a statement of scientific intent.
+For the generation configuration script, details on the error models will need to be described, using the following form:
 
 ```yaml
 errors:
@@ -37,32 +20,51 @@ errors:
     B: {model: gaussian_absolute, sigma: [0.05, 0.05, 0.05]}
 ```
 
-Set either coordinate model to `none` to disable it. Scalar `sigma_km` applies the same width to X, Y, and Z; a three-component value sets their widths independently. `/errors/n`, `/errors/v`, and `/errors/B` contain the additive measurement-noise realizations; coordinate-induced differences are represented by the stored offsets rather than folded into those arrays.
+## Coordinate and timing errors
 
-### Observatory requirement model
+Time (`time`) and position (`position`) uncertainties are sampled once per Monte Carlo realization and spacecraft, then held constant over that spacecraft's entire time series.
+The example model prescribed a Gaussian with mean zero and width `sigma`.
+The same temporal and spatial offsets apply to measurements of `n`, `v`, and `B`.
 
-Use `errors.model: observatory` for the requirement-motivated HelioSwarm-like
-model. It samples constant timing and position offsets, multiplicative
-density/speed bias plus OU noise, transverse velocity angular precision,
-magnetic DC offsets, merged-product colored magnetic AC noise, and independent
-constant B/V alignment rotations. The updated plume example uses this model:
+Quantitatively, each observation is evaluated from the field model at
 
-Each observatory error section accepts `sigma_level: 2` or `sigma_level: 3`
-(the default) alongside a neutral, unit-specific `requirement_*` value. Levels
-may be mixed between sections. Existing `requirement_3sigma_*` configuration
-keys remain supported as 3-sigma compatibility aliases.
-
-```bash
-hsobs-generate configs/example_generate_plume_single_mode.yaml
+```text
+t_sample = t_nominal + time_offset
+r_sample = r_trajectory(t_nominal + time_offset) + position_offset
 ```
 
-See `docs/observatory_error_model.md` for assumptions, units, default
-requirements, and the additional `/errors` datasets written for each Monte
-Carlo realization.
+before its variable-specific measurement error is added.
+For velocity, the selected plasma- or spacecraft-frame transformation occurs before applying that measurement error.
+The HDF5 `/time/*` and `/spacecraft/r/*` datasets retain the nominal coordinates.
+
+Set either coordinate model to `none` to disable it. Scalar `sigma_km` applies the same width to X, Y, and Z; a three-component value sets their widths independently. `/errors/n`, `/errors/v`, and `/errors/B` contain the additive measurement-noise realizations; coordinate-induced differences are represented by the stored offsets rather than folded into those arrays.
+
+## Measurement errors
+
+In addition to timing and position errors, actual instruments will introduce error into the observations. Those can be modeled with the addition of noise drawn from a simple normal distribution,
+`gaussian_relative` for scalars, and `gaussian_vector_component` for vectors:
+
+```yaml
+errors:
+  random_seed: 12345
+  n_mc: 10
+  time:
+    model: gaussian_constant
+    sigma_s: 0.01
+  position:
+    model: gaussian_constant
+    sigma_km: [0.5, 0.5, 0.5]
+  variables:
+    n: {model: gaussian_relative, sigma: 0.05}
+    v: {model: gaussian_vector_component, sigma: [2.0, 2.0, 2.0]}
+    B: {model: gaussian_vector_component, sigma: [0.05, 0.05, 0.05]}
+```
 
 ### Ornstein–Uhlenbeck measurement errors
 
-Use `model: ornstein_uhlenbeck` for time-correlated measurement noise. OU widths are stationary standard deviations, and correlation times are in seconds. The implementation uses the exact discrete transition for each interval, so the same physical parameters work correctly with different or irregular instrument cadences.
+Use `model: ornstein_uhlenbeck` for time-correlated measurement noise.
+OU widths are stationary standard deviations, and correlation times are in seconds.
+The implementation uses the exact discrete transition for each interval, so the same physical parameters work correctly with different or irregular instrument cadences.
 
 ```yaml
 errors:
@@ -81,11 +83,14 @@ errors:
       model: ornstein_uhlenbeck
       magnitude_sigma: 0.01        # fractional |B| error
       magnitude_tau_s: 0.5
-      direction_sigma_deg: 0.5
+      direction_sigma_deg: 0.5     # RMS total angular error
       direction_tau_s: 0.25
 ```
 
-Density error is additive: `n_observed = n_sampled + epsilon`. Vector magnitude is changed by `max(0, 1 + epsilon)`, preventing an unphysical negative magnitude. Directional noise is an isotropic tangent-plane OU process; `direction_sigma_deg` specifies the stationary RMS total angular deviation. `direction_tau_s` defaults to `magnitude_tau_s`, and `direction_sigma_deg` defaults to zero. Zero vectors remain zero because their direction is undefined.
+Density error is additive: `n_observed = n_sampled + epsilon`.
+Vector magnitude is changed by `max(0, 1 + epsilon)`, preventing an unphysical negative magnitude.
+Directional noise is an isotropic tangent-plane OU process; `direction_sigma_deg` specifies the stationary RMS total angular deviation. `direction_tau_s` defaults to `magnitude_tau_s`, and `direction_sigma_deg` defaults to zero.
+Zero vectors remain zero due to their undefined direction.
 
 The complete OU example can be run with:
 
@@ -93,15 +98,18 @@ The complete OU example can be run with:
 hsobs-generate configs/example_generate_ou.yaml
 ```
 
-## Observatory requirement details
+### Observatory requirement model
 
-The `errors.model: observatory` generation path implements a HelioSwarm-like
-requirement-driven error model in package-native units: seconds, km, cm^-3,
-km/s, and nT.
+Use `errors.model: observatory` for a more realistic requirement-motivated model based on HelioSwarm's expected performance.
+It samples constant timing and position offsets,
+multiplicative density/speed bias plus Ornstein–Uhlenbeck noise, transverse velocity angular precision offsets,
+magnetic DC offsets, colored magnetic AC noise, and independent
+constant B/V alignment rotation misalignments.
 
-Each error section has a `sigma_level` of `2` or `3` (default `3`). Its
-unit-specific `requirement_*` value is divided by that level to obtain the
-one-sigma width. This permits mixed requirements, for example:
+Each observatory error section accepts `sigma_level: 2` or `sigma_level: 3`
+(the default) alongside a neutral, unit-specific `requirement_*` value. Levels
+may be mixed between sections. Existing `requirement_3sigma_*` configuration
+keys remain supported as 3-sigma compatibility aliases.
 
 ```yaml
 errors:
@@ -113,10 +121,6 @@ errors:
     requirement_fraction: 0.04
     sigma_level: 2
 ```
-
-The legacy `requirement_3sigma_*` keys remain accepted as 3-sigma inputs.
-They cannot be combined with their neutral replacement or with
-`sigma_level: 2`.
 
 For each Monte Carlo realization, clock and position offsets are drawn once per
 spacecraft and held fixed over the interval. The timing requirement is treated
@@ -151,6 +155,76 @@ total_vector_asd` and are divided by `sigma_level * sqrt(3)`. Position
 requirements use the matching isotropic 3D radial confidence contour: 95.45%
 for 2 sigma and 99.73% for 3 sigma.
 
+A full list of error parameters for the observatory model is below:
+
+```yaml
+errors:
+  model: observatory
+  random_seed: 12345
+  n_mc: 50
+
+  timing:
+    enabled: true
+    requirement_ms: 12.5
+    sigma_level: 3
+    model: constant_per_spacecraft
+
+  position:
+    enabled: true
+    requirement_magnitude_km: 2.5
+    sigma_level: 2
+    model: isotropic_3d_gaussian_position_error
+
+  density:
+    enabled: true
+    requirement_fraction: 0.06
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_speed:
+    enabled: true
+    requirement_fraction: 0.03
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_angle:
+    enabled: true
+    requirement_deg: 0.25
+    sigma_level: 2
+    model: transverse_ou_rotation
+    ou_correlation_time_s: 300.0
+
+  magnetic_dc:
+    enabled: true
+    requirement_nT_per_axis: 0.15
+    sigma_level: 3
+    model: constant_per_axis_offset
+
+  magnetic_ac:
+    enabled: true
+    model: colored_gaussian_noise_merged_product
+    requirement_interpretation: total_vector_asd
+    sigma_level: 3
+    component_distribution: uniform
+    anchors:
+      - {frequency_Hz: 0.001, asd_pT_per_sqrtHz: 1500.0}
+      - {frequency_Hz: 1.0, asd_pT_per_sqrtHz: 15.0}
+      - {frequency_Hz: 10.0, asd_pT_per_sqrtHz: 1.5}
+    extrapolate_above_10Hz: continue_last_loglog_slope
+
+  alignment:
+    enabled: true
+    requirement_deg_per_axis: 3.0
+    sigma_level: 3
+    model: independent_constant_rotation_B_and_V
+```
+
 The generator writes sampled errors under `/errors`, including:
 
 - `time_offset`, `position_offset`
@@ -163,11 +237,3 @@ The generator writes sampled errors under `/errors`, including:
 
 The exact merged configuration is stored as the HDF5 metadata attribute
 `observatory_error_config`.
-
-
-## Distinct timing-calibration noise normalization
-
-The [timing reference](timing-calibration.md#instrument-noise-divergence-normalization)
-uses a different provisional spectrum to calculate fit weights. It does not
-apply a filter or generate measurement noise. Do not substitute that spectrum for
-the requirement-level total-vector ASD anchors above without scientific review.
