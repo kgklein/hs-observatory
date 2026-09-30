@@ -6,6 +6,7 @@ repo_name: kgklein/hs-observatory
 theme:
   name: material
   logo: assets/figures/HS001-logo_FinalBlackA.png
+  favicon: assets/figures/HS-icon.png
   font: false
   palette:
     primary: blue grey
@@ -32,7 +33,7 @@ validation:
 exclude_docs: |
   /architecture/README.md
 not_in_nav: |
-  /analysis_methods.md
+  /reference/analysis_methods.md
   /observatory_error_model.md
   /timing_calibration.md
   /timing_affine_investigation.md
@@ -41,16 +42,13 @@ not_in_nav: |
   /architecture/README.md
 nav:
   - Home: index.md
-  - Install:
+  - Getting Started:
+      - Overview: getting-started/index.md
       - Installation: getting-started/installation.md
-      - Quick start: getting-started/quick-start.md
+      - First Light: getting-started/quick-start.md
   - Generate: user-guide/generation.md
   - Analyze: user-guide/analysis.md
   - Visualize: user-guide/visualization.md
-  - Reproduce:
-      - Example manifest: examples/index.md
-      - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
-      - Timing investigations: research-notes/timing-investigations.md
   - Scientific Reference:
       - Configuration and commands: reference/configuration.md
       - Data products: reference/data-products.md
@@ -71,3 +69,7 @@ nav:
       - Scientific review: developer/scientific-review.md
       - Preservation audit: developer/preservation-audit.md
       - Validation record: developer/validation-report.md
+  - Reproduce:
+      - Example manifest: examples/index.md
+      - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
+      - Timing investigations: research-notes/timing-investigations.md

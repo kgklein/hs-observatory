@@ -1,10 +1,12 @@
-# Quick Start
+# First Light
 
-Complete [installation](installation.md), activate that environment, and run
-commands from the repository root so relative configuration and output paths
-resolve as expected.
+After completing the [installation](installation.md),
+activate the environment and run commands from the repository root
+so relative configuration and output paths resolve as expected.
 
 ## Generate observations
+
+
 
 ```bash
 hsobs-generate configs/example_generate.yaml

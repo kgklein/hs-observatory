@@ -1,23 +1,9 @@
 # Choosing and running an analysis
 
+A full listing of methods can be found [here](../reference/analysis_methods.md).
 Choose a method from the scientific question and available input, then check the
 [example manifest](../examples/index.md) for prerequisites and verification status.
 Generation and analysis are separate; an analysis configuration names its input.
-
-## Choose a method
-
-| Question | Selector | Reference / constraints |
-| --- | --- | --- |
-| Is the generated ensemble sensible? | `diagnostics` | [Basic statistics](../reference/statistical-methods.md#diagnostics); generated truth required by reader. |
-| What are the Elsasser fields? | `elsasser` | [Elsasser](../reference/statistical-methods.md#elsasser-derived-quantities); proton density, aligned native cadences. |
-| How do increments depend on spatial scale? | `elsasser_increment_pdf_static`, `structure_function` | [Statistics](../reference/statistical-methods.md); distinct pair selections and frozen-field assumptions. |
-| How do simultaneous correlations vary with separation? | `static_decorrelation` | [Decorrelation](../reference/statistical-methods.md#static-spatial-decorrelation-analysis); no time-lag/Taylor interpretation. |
-| What is each spacecraft's frequency spectrum? | `timeseries_fft` | [FFT](../reference/statistical-methods.md#single-spacecraft-fft-analysis); uniform sampling. |
-| How accurately are gradients recovered? | `magnetic_gradient` | [Gradient reference](../reference/magnetic-gradients.md); external simulation reference and stored offsets. |
-| How do saved gradient components covary in time? | `magnetic_gradient_correlation` | [Correlation](../reference/magnetic-gradients.md#magnetic_gradient_correlation); standalone gradient product. |
-| Can a sampled magnetic volume be reconstructed? | `rbf_reconstruction`, `timesync` | [Reconstruction](../reference/reconstruction.md); window/grid/coverage constraints. |
-| What is a planar shock's propagation? | `shock_timing` | [Shock timing](../reference/shock-timing.md); SciPy required. |
-| How do research clock-correction methods behave? | `timing-calibrate` | [Timing calibration](../reference/timing-calibration.md); synthetic research pipeline, not flight calibration. |
 
 ## Run an analysis
 
@@ -78,3 +64,19 @@ Unknown method names are reported with the registry's available choices. Missing
 input paths, uniform-cadence failures, insufficient crossing coverage, rank loss,
 and incomplete streamed products need attention to the input/fit, not cosmetic
 plot changes. Method references describe supported options and rejected cases.
+
+
+## Choose a method
+
+| Question | Selector | Reference / constraints |
+| --- | --- | --- |
+| Is the generated ensemble sensible? | `diagnostics` | [Basic statistics](../reference/statistical-methods.md#diagnostics); generated truth required by reader. |
+| What are the Elsasser fields? | `elsasser` | [Elsasser](../reference/statistical-methods.md#elsasser-derived-quantities); proton density, aligned native cadences. |
+| How do increments depend on spatial scale? | `elsasser_increment_pdf_static`, `structure_function` | [Statistics](../reference/statistical-methods.md); distinct pair selections and frozen-field assumptions. |
+| How do simultaneous correlations vary with separation? | `static_decorrelation` | [Decorrelation](../reference/statistical-methods.md#static-spatial-decorrelation-analysis); no time-lag/Taylor interpretation. |
+| What is each spacecraft's frequency spectrum? | `timeseries_fft` | [FFT](../reference/statistical-methods.md#single-spacecraft-fft-analysis); uniform sampling. |
+| How accurately are gradients recovered? | `magnetic_gradient` | [Gradient reference](../reference/magnetic-gradients.md); external simulation reference and stored offsets. |
+| How do saved gradient components covary in time? | `magnetic_gradient_correlation` | [Correlation](../reference/magnetic-gradients.md#magnetic_gradient_correlation); standalone gradient product. |
+| Can a sampled magnetic volume be reconstructed? | `rbf_reconstruction`, `timesync` | [Reconstruction](../reference/reconstruction.md); window/grid/coverage constraints. |
+| What is a planar shock's propagation? | `shock_timing` | [Shock timing](../reference/shock-timing.md); SciPy required. |
+| How do research clock-correction methods behave? | `timing-calibrate` | [Timing calibration](../reference/timing-calibration.md); synthetic research pipeline, not flight calibration. |

@@ -1,20 +1,10 @@
-# A Synethetic HelioSwarm Observatory
+# A Synthetic HelioSwarm Observatory
 
 This code generates synthetic multipoint spacecraft measurements using representative HelioSwarm trajectories.
 These synthetic data can then be analyzed with a variety of specified techniques.
 The underlying fields used for the data generation include sine waves, static p-model turbulence, initialized linear eigenmodes, planar MHD shocks, and static direct numerical simulations.
 The timeseries can include measurement errors, including timing and spatial knowledge uncertainties and instrumental noise, represented using a Monte Carlo ensemble.
 **The addition of new input fields and analysis methods and encouraged.**
-
-## Researcher workflow
-
-| Stage | Start here | Continue into reference |
-| --- | --- | --- |
-| Install | [Installation](getting-started/installation.md), [quick start](getting-started/quick-start.md) | [Configuration](reference/configuration.md) |
-| Generate | [Generating observations](user-guide/generation.md) | [Fields](reference/fields.md), [errors](reference/errors.md), [data products](reference/data-products.md) |
-| Analyze | [Choosing and running analyses](user-guide/analysis.md) | [Statistics](reference/statistical-methods.md), [gradients](reference/magnetic-gradients.md), [reconstruction](reference/reconstruction.md), [shock timing](reference/shock-timing.md), [timing research](reference/timing-calibration.md) |
-| Visualize | [Figures and interpretation](user-guide/visualization.md) | Method-specific diagnostics and limitations |
-| Reproduce | [Example manifest](examples/index.md) | [Divergence audit](research-notes/magnetic-gradient-divergence-audit.md), [timing investigations](research-notes/timing-investigations.md) |
 
 ## Capabilities and status
 
@@ -41,3 +31,14 @@ and the method citations when publishing results. The repository
 landing page. The documentation is being prepared for public release; repository
 links require access while private. See [local documentation development](developer/documentation.md)
 and the [scientific review checklist](developer/scientific-review.md).
+
+## Researcher workflow
+
+| Stage | Start here | Continue into reference |
+| --- | --- | --- |
+| Install | [Installation](getting-started/installation.md), [quick start](getting-started/quick-start.md) | [Configuration](reference/configuration.md) |
+| Generate | [Generating observations](user-guide/generation.md) | [Fields](reference/fields.md), [errors](reference/errors.md), [data products](reference/data-products.md) |
+| Analyze | [Choosing and running analyses](user-guide/analysis.md) | [Statistics](reference/statistical-methods.md), [gradients](reference/magnetic-gradients.md), [reconstruction](reference/reconstruction.md), [shock timing](reference/shock-timing.md), [timing research](reference/timing-calibration.md) |
+| Visualize | [Figures and interpretation](user-guide/visualization.md) | Method-specific diagnostics and limitations |
+
+To ensure reproducibility, new elements should follow the [Example manifest](examples/index.md); example research notes can be found here [Divergence audit](research-notes/magnetic-gradient-divergence-audit.md) and here [timing investigations](research-notes/timing-investigations.md) |
