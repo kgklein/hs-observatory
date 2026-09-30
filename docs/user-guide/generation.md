@@ -1,8 +1,10 @@
 # Generating Synthetic Observations
 
-`hsobs-generate` coordinates a YAML-configured observation experiment. The
-starting example is `configs/example_generate.yaml`; the [field reference](../reference/fields.md) and [error reference](../reference/errors.md)
-describe model choices. Start with the [example manifest](../examples/index.md).
+`hsobs-generate` coordinates a YAML-configured set of observations.
+The starting example is `configs/example_generate.yaml`.
+The [field reference](../reference/fields.md) and
+[error reference](../reference/errors.md)
+describe model choices.
 
 1. **Configuration and sampling grids.** Load and validate the YAML, construct
    native time grids for density `n`, velocity `v`, and magnetic field `B`, and

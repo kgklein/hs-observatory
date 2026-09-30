@@ -46,6 +46,7 @@ nav:
       - Overview: getting-started/index.md
       - Installation: getting-started/installation.md
       - First Light: getting-started/quick-start.md
+      - First Analysis: getting-started/first-analysis.md
   - Generate: user-guide/generation.md
   - Analyze: user-guide/analysis.md
   - Visualize: user-guide/visualization.md

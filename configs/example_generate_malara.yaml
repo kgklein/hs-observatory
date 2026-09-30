@@ -81,12 +81,12 @@ errors:
       direction_tau_s: 0.25
 
 output:
-  path: outputs/synthetic_observations_malara.h5
+  path: outputs/malara/synthetic_observations_malara.h5
   write_errors: true
 
 visualization:
   enabled: true
   truth_velocity_frame: spacecraft
-  truth_path: outputs/synthetic_observations_malara_truth.png
-  geometry_path: outputs/synthetic_observations_malara_geometry.png
+  truth_path: outputs/malara/synthetic_observations_malara_truth.png
+  geometry_path: outputs/malara/synthetic_observations_malara_geometry.png
   dpi: 150
