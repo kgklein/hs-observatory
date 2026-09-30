@@ -65,8 +65,9 @@ It evaluates a periodic, analytically solenoidal hierarchy of compact intermitte
 *Anisotropic, critical-balance, and compressive-density extensions remain future work.*
 
 `PlumeSingleModeField` reads one explicitly selected PLUME eigenmode row and evaluates its physically phased real plane wave. 
-It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units, and normalizes all eigenfunctions through a requested magnetic trace amplitude. 
-*Growth/damping, electric-field output, arbitrary rotations, and multimode sums remain future work.*
+It keeps PLUME's x-z geometry, converts proton reference scales to km/rad-s units,
+and normalizes all eigenfunctions through a requested magnetic trace amplitude. 
+*Growth/damping, other field outputs, arbitrary rotations, and multimode sums remain future work.*
 
 `SimulationSampledField` samples static numerical `.npy` snapshots or split
 Gkeyll/ADIOS2 `.bp` electromagnetic field and ion-moment files. 
@@ -87,12 +88,12 @@ The BP adapter extracts
 
 and computes `v=(n*u)/n`; ADIOS2 is an optional dependency. 
 The initial adapter applies no rotation and supports one static snapshot state only.
-*Other simulations inputs should be incorrporated.*
+*Other simulations inputs should be incorrporated.
+Gkeyll may have updated their output files, which may require updating these methods.*
 
-Hub-centered simulation mapping is anchored to the Hub position at the first sample, 
-    not its instantaneous position. 
+Hub-centered simulation mapping is anchored to the Hub position at the first sample.
 The initial Hub maps to the box center 
-    while common translational motion remains in every later sample. 
+    and common translational motion defines the positions of all spacecraft in every later sample. 
 
 The evaluator also exposes serial chunking, lazy identity-dependent caching, process-based chunk evaluation, and read-only eddy-touch diagnostics. 
 The direct implementation remains the scientific reference. 
@@ -105,10 +106,11 @@ Touch statistics reuse the evaluator's local-cell selection and quantify whether
 
 **Error models should not know anything about the underlying field model.**
 
-They receive truth values and a random number generator. 
+The error methods receive true values and a random number generator. 
 They return observed values and, where possible, the actual error realization.
 
-Time-correlated measurement errors also receive the quantity's native time axis. Correlation parameters should be expressed in physical time rather than sample counts so models remain consistent across instrument cadences.
+Time-correlated measurement errors receive the quantity's native time axis.
+Correlation parameters are expressed in physical time rather than sample counts so models remain consistent across instrument cadences.
 
 Coordinate errors are drawn once per Monte Carlo realization and spacecraft. 
 They modify the coordinates passed to the field model, while nominal coordinates remain stored for downstream analysis. 
@@ -140,11 +142,11 @@ Avoid ASCII output for large time series.
 
 Analysis methods should be selected by name from a registry. 
 They should read HDF5 files and write compact outputs. 
-Do not hard-code analysis choices inside the generator.
+***Do not hard-code analysis choices inside the generator.***
 
-Initial analysis are simple diagnostics. 
+Simple diagnostics have been implemented as initial analysis methods.
 More advanced methods, such as wave telescope analysis and structure functions, 
-    are being added as separate modules.
+    are being continuously added.
 
 Common physical derived quantities belong under `analysis/derived`, 
     separate from selectable I/O wrappers. 
@@ -184,12 +186,10 @@ Avoid unnecessary dependencies unless they solve a concrete problem.
 
 Document shapes near the code that creates or transforms arrays.
 
-Do not prematurely optimize, but avoid obviously slow Python loops over time samples when vectorized NumPy operations are straightforward.
+Do not prematurely optimize, but avoid obviously slow Python loops over time samples
+when vectorized NumPy operations are straightforward.
 
 ## Testing
-
-Tests should run without real HelioSwarm CDF files. 
-Use a synthetic fallback spacecraft configuration for smoke tests.
 
 Important tests:
 

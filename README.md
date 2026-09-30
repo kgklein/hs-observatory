@@ -1,14 +1,20 @@
 # HelioSwarm Synthetic Observatory
 
-HS Observatory generates synthetic multipoint spacecraft observations and analyzes
-the resulting products, supporting studies of space-plasma structure, turbulence,
-and HelioSwarm-like sampling. YAML configurations specify physical fields,
-spacecraft geometry, native instrument cadences, and coordinate/measurement errors.
-HDF5 products retain nominal truth, Monte Carlo observations and provenance.
+HS Observatory generates synthetic multipoint spacecraft observations from
+representative HelioSwarm (HS) positions and analyzes the resulting products.
+YAML files specify the generation of data, including
+physical fields,
+spacecraft geometry,
+native instrument cadences, and
+coordinate/measurement errors.
+YAML files also specify the details of the analysis methods.
+Output HDF5 products retain nominal true measurements, Monte Carlo observations,
+and generation details.
 
 Field, error and analysis models provide specific locations for growth through
-community input. Scientific assumptions and validation limits are documented per
-method; timing calibration remains research methodology.
+community input.
+Scientific assumptions and validation limits are documented per method.
+*Some methods, e.g. timing calibration via $\nabla \cdot \mathbf{B}=0$, are currently under development.*
 
 ## Install
 
@@ -20,9 +26,12 @@ source .venv/bin/activate
 python -m pip install -e '.[analysis]'
 ```
 
-The existing `analysis` extra is needed by the current default geometry figures
-(`cmcrameri`) and also supplies SciPy. The activation command is for a POSIX shell. See [installation](docs/getting-started/installation.md)
-for checkout instructions, other environments, optional dependencies and external inputs.
+The existing `analysis` extra is needed by the current default geometry figures;
+[`cmcrameri`](https://zenodo.org/records/8409685) is used throughout for perceptually-uniform colour maps.
+as well as SciPy.
+The activation command is for a POSIX shell.
+See [installation](docs/getting-started/installation.md) for
+checkout instructions, other environments, optional dependencies and external inputs.
 
 ## Quick start
 
@@ -33,12 +42,13 @@ hsobs-generate configs/example_generate.yaml
 hsobs-analyze configs/example_analyze.yaml
 ```
 
-The sine-sum example enables synthetic geometry fallback, so mission CDF files
-are not required. It writes `outputs/synthetic_observations.h5`, diagnostic
-figures under `outputs/`, and `outputs/diagnostics.json`. If the configured CDF
-directory exists, its geometry may be used instead; inspect the saved provenance.
-The [quick-start guide](docs/getting-started/quick-start.md) explains the products
-and equivalent Python API. See [example verification](docs/examples/index.md#starter-workflow)
+The sine-sum example enables synthetic geometry fallback,
+so mission CDF files are not required.
+It writes `outputs/synthetic_observations.h5`,
+diagnostic figures under `outputs/`, and `outputs/diagnostics.json`.
+If the configured CDF directory exists, its geometry may be used instead.
+The [quick-start guide](docs/getting-started/quick-start.md) explains the products and equivalent Python API.
+See [example verification](docs/examples/index.md#starter-workflow)
 for the controlled-run record.
 
 ## Documentation
@@ -51,11 +61,11 @@ Follow the researcher workflow:
 4. [Visualize and interpret](docs/user-guide/visualization.md).
 5. [Reproduce examples](docs/examples/index.md), checking dependencies and data availability.
 
-The [documentation home](docs/index.md) links scientific references and research
-notes. Developers can start with [extension and validation guidance](docs/developer/index.md)
-and the [architecture](docs/architecture/index.md). The intended public site is
-[HS Observatory](https://kgklein.github.io/hs-observatory/); this change does not
-publish it.
+The [documentation home](docs/index.md) links scientific references and research notes.
+Developers can start with [extension and validation guidance](docs/developer/index.md)
+and the [architecture](docs/architecture/index.md).
+The intended public site is [HS Observatory](https://kgklein.github.io/hs-observatory/);
+**this will be available once the repo is made public.**
 
 ### Preview the site locally
 
@@ -67,15 +77,15 @@ python -m pip install -e '.[docs]'
 python -m mkdocs serve --dev-addr 127.0.0.1:8000
 ```
 
-Open <http://127.0.0.1:8000/hs-observatory/> in your browser (or follow the URL
-printed in the terminal). Keep the command running while browsing; saved
-documentation edits reload automatically. Press **Ctrl+C** to stop the preview.
+Open <http://127.0.0.1:8000/hs-observatory/> in your browser (or follow the URL printed in the terminal).
+Keep the command running while browsing; saved documentation edits reload automatically.
+Press **Ctrl+C** to stop the preview.
 The install command is only needed when setting up the documentation dependencies.
 See [documentation development](docs/developer/documentation.md#preview-the-site-locally)
 for more preview options and build checks.
 
 ## Citation, contributions and license
 
-Please use [CITATION.cff](CITATION.cff) and cite the scientific methods used in your
-analysis. See [CONTRIBUTING.md](CONTRIBUTING.md) for contributions and issue reports.
+Please use [CITATION.cff](CITATION.cff) and cite the scientific methods used in your analysis.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contributions and issue reports.
 The software is distributed under the [MIT license](LICENSE).
