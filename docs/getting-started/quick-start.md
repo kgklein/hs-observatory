@@ -1,27 +1,34 @@
 # First Light
 
 After completing the [installation](installation.md),
-activate the environment and run commands from the repository root
-so relative configuration and output paths resolve as expected.
+activate the environment and run commands from the repository root,
+enabling relative configuration and output paths to resolve as expected.
 
-## Generate observations
+## Generating Example Observations
 
-
+For our first calculation, we will generate a time series.
 
 ```bash
 hsobs-generate configs/example_generate.yaml
 ```
 
-This existing example uses a sine-sum field, quantity-specific measurement
-cadences, coordinate offsets, Gaussian measurement errors, and ten Monte Carlo
-realizations. It requests CDF spacecraft geometry but enables
-`fallback_synthetic: true`, so it also runs without mission files.
+The script expects a CDF file for the positions of the nine HS spacecraft, covering June 1, 2030.
+In the `spacecraft:` namelist in `example_generate.yaml`, ensure that `cdf_directory` points to the directory where you have stored the [representative trajectories](https://doi.org/10.5281/zenodo.13887061).
+
+This first example uses a sum of sine wave for the underlying field,
+with expected measurement cadences for n,V, and B.
+We include Gaussian measurement errors for position, time, and plasma quantites,
+with ten Monte Carlo realizations.
+It requests CDF spacecraft geometry.
+Enabling `fallback_synthetic: true`, will allow it to run without mission files for arbitrarily selected relative positions.
 
 The configured products include:
 
-- `outputs/synthetic_observations.h5`: truth, observed measurements, coordinates,
+- `outputs/example/synthetic_observations.h5`: true measurements, observed measurements, coordinates,
   errors, and generation metadata.
-- Truth and observed time-series/geometry PNGs under `outputs/`.
+- Truth and observed time-series/geometry PNGs under `outputs/example/`.
+
+Example Figures..
 
 ## Run a basic analysis
 

@@ -72,11 +72,9 @@ For local documentation development:
 python3 -m pip install -e ".[docs]"
 ```
 
-
-
 See [Documentation Development](../developer/documentation.md) for serving,
-strict builds, and the optional system Graphviz executable used for diagrams.
-Then follow the [Quick Start](quick-start.md).
+strict builds, and the optional system Graphviz executable used for [diagrams](architecture/module-dependencies.md).
+
 ## Environment checks
 
 Use `python -m pip` inside the activated environment and check `hsobs-generate --help`.
