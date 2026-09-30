@@ -1,8 +1,8 @@
 # Documentation moved
 
-This compatibility page preserves previous section links. Scientific content
-is maintained only at the destinations below. Start with the
-[researcher workflow](index.md).
+This compatibility page preserves previous section links.
+Scientific content is maintained only at the destinations below.
+Start with the [researcher workflow](index.md).
 
 <a id="analysis-methods"></a>
 

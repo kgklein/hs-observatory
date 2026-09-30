@@ -5,6 +5,7 @@ repo_url: https://github.com/kgklein/hs-observatory
 repo_name: kgklein/hs-observatory
 theme:
   name: material
+  logo: assets/figures/HS001-logo_FinalBlackA.png
   font: false
   palette:
     primary: blue grey
@@ -13,6 +14,8 @@ theme:
     - navigation.sections
     - navigation.top
     - content.code.copy
+extra_css:
+  - assets/stylesheets/header-logo.css
 plugins:
   - search
 markdown_extensions:

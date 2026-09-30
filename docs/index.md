@@ -1,10 +1,10 @@
-# HS Observatory
+# A Synethetic HelioSwarm Observatory
 
-Generate controlled synthetic multipoint spacecraft measurements, then analyze
-how spatial sampling, instrument cadence and measurement errors affect inferred
-plasma properties. Models include sine waves, static Malara turbulence, a PLUME
-eigenmode, planar MHD shocks and static numerical simulations. Generated products
-retain truth, observed Monte Carlo realizations and configuration metadata.
+This code generates synthetic multipoint spacecraft measurements using representative HelioSwarm trajectories.
+These synthetic data can then be analyzed with a variety of specified techniques.
+The underlying fields used for the data generation include sine waves, static p-model turbulence, initialized linear eigenmodes, planar MHD shocks, and static direct numerical simulations.
+The timeseries can include measurement errors, including timing and spatial knowledge uncertainties and instrumental noise, represented using a Monte Carlo ensemble.
+**The addition of new input fields and analysis methods and encouraged.**
 
 ## Researcher workflow
 
@@ -18,20 +18,20 @@ retain truth, observed Monte Carlo realizations and configuration metadata.
 
 ## Capabilities and status
 
-Installed methods have different scopes. Static fields do not model temporal
-plasma evolution; the PLUME reader is single-mode; reconstruction and gradient
-references impose their own geometry and sampling assumptions. Timing calibration
-is implemented research methodology, not established flight calibration.
-See the [example manifest](examples/index.md) before assuming inputs or outputs
-are distributed. Future options and reserved settings are labeled in references.
+*This is an active, evolving research codebase.*
+The currently implemented methods intentionally have different scopes.
+Some methods, e.g. timing calibration, are areas of active research.
+See the [example manifest](examples/index.md) before assuming inputs or outputs are distributed.
+Future options and reserved settings are labeled in references.
 
 ## Developer path
 
 Start with the quick start and [public Python API](getting-started/quick-start.md#use-python-instead-of-the-cli),
-then [developer guidance](developer/index.md), [architecture](architecture/index.md),
-[data contracts](reference/data-products.md), the relevant scientific reference
-and focused tests. [Detailed import diagrams](architecture/module-dependencies.md)
-do not represent runtime sequence or HDF5 data flow.
+followed by [developer guidance](developer/index.md), [architecture](architecture/index.md),
+[data contracts](reference/data-products.md),
+the relevant scientific reference and focused tests.
+[Detailed import diagrams](architecture/module-dependencies.md)
+are intended for general reference, and do not represent runtime sequence or HDF5 data flow.
 
 ## Project information
 
