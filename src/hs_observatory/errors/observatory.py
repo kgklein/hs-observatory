@@ -131,9 +131,7 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
     if "time" in user and "timing" not in user:
         user["timing"] = user["time"]
     relevant = {
-        key: value
-        for key, value in user.items()
-        if key in DEFAULT_OBSERVATORY_ERROR_CONFIG
+        key: value for key, value in user.items() if key in DEFAULT_OBSERVATORY_ERROR_CONFIG
     }
     canonical: dict[str, Any] = {}
     for section_name, section_value in relevant.items():
@@ -146,28 +144,22 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
             if legacy_key in section:
                 if canonical_key in section:
                     raise ValueError(
-                        f"{section_name} cannot specify both {legacy_key} and "
-                        f"{canonical_key}"
+                        f"{section_name} cannot specify both {legacy_key} and {canonical_key}"
                     )
                 if "sigma_level" in section and int(section["sigma_level"]) != 3:
-                    raise ValueError(
-                        f"{section_name}.{legacy_key} implies sigma_level 3"
-                    )
+                    raise ValueError(f"{section_name}.{legacy_key} implies sigma_level 3")
                 section[canonical_key] = section.pop(legacy_key)
                 section["sigma_level"] = 3
         if section_name == "magnetic_ac":
             interpretation = section.get("requirement_interpretation")
             if interpretation == "3sigma_total_vector_asd":
                 if "sigma_level" in section and int(section["sigma_level"]) != 3:
-                    raise ValueError(
-                        "magnetic_ac.3sigma_total_vector_asd implies sigma_level 3"
-                    )
+                    raise ValueError("magnetic_ac.3sigma_total_vector_asd implies sigma_level 3")
                 section["requirement_interpretation"] = "total_vector_asd"
                 section["sigma_level"] = 3
             elif interpretation not in {None, "total_vector_asd"}:
                 raise ValueError(
-                    "magnetic_ac.requirement_interpretation must be "
-                    "'total_vector_asd'"
+                    "magnetic_ac.requirement_interpretation must be 'total_vector_asd'"
                 )
         canonical[section_name] = section
     merged = _deep_merge(DEFAULT_OBSERVATORY_ERROR_CONFIG, canonical)
@@ -194,9 +186,7 @@ def sigma_from_3sigma(value: float) -> float:
     return sigma_from_requirement(value, 3)
 
 
-def component_sigma_from_3d_radial_requirement(
-    radius: float, sigma_level: int
-) -> float:
+def component_sigma_from_3d_radial_requirement(radius: float, sigma_level: int) -> float:
     """Return component sigma for a 2σ or 3σ isotropic radial contour."""
 
     level = int(sigma_level)
@@ -219,9 +209,7 @@ def component_sigma_from_3d_radial_3sigma(
     return _component_sigma_from_3d_radial_probability(radius_3sigma, probability)
 
 
-def _component_sigma_from_3d_radial_probability(
-    radius: float, probability: float
-) -> float:
+def _component_sigma_from_3d_radial_probability(radius: float, probability: float) -> float:
     radius = float(radius)
     probability = float(probability)
     if radius < 0:
@@ -232,10 +220,7 @@ def _component_sigma_from_3d_radial_probability(
         return radius / 3.762
 
     def cdf(x: float) -> float:
-        return float(
-            math.erf(x / np.sqrt(2.0))
-            - np.sqrt(2.0 / np.pi) * x * np.exp(-0.5 * x * x)
-        )
+        return float(math.erf(x / np.sqrt(2.0)) - np.sqrt(2.0 / np.pi) * x * np.exp(-0.5 * x * x))
 
     lo, hi = 0.0, 16.0
     for _ in range(80):
@@ -336,11 +321,7 @@ def orthonormal_basis_perp_to_vector(vhat: np.ndarray) -> tuple[np.ndarray, np.n
     if norm == 0.0:
         return np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])
     unit = unit / norm
-    helper = (
-        np.array([1.0, 0.0, 0.0])
-        if abs(unit[0]) < 0.9
-        else np.array([0.0, 1.0, 0.0])
-    )
+    helper = np.array([1.0, 0.0, 0.0]) if abs(unit[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     e1 = helper - np.dot(helper, unit) * unit
     e1 /= np.linalg.norm(e1)
     e2 = np.cross(unit, e1)
@@ -395,8 +376,8 @@ def apply_transverse_angular_ou(
                     alpha[mc_index, time_index, sc_index] * e1
                     + beta[mc_index, time_index, sc_index] * e2
                 )
-                output[mc_index, time_index, sc_index] = (
-                    mag * _rotate_unit_by_transverse(unit, transverse)
+                output[mc_index, time_index, sc_index] = mag * _rotate_unit_by_transverse(
+                    unit, transverse
                 )
     return output, alpha, beta
 
@@ -459,8 +440,7 @@ def magnetic_asd_total(
     if np.any(freq < 0):
         raise ValueError("frequency must be non-negative")
     points = sorted(
-        (float(item["frequency_Hz"]), float(item["asd_pT_per_sqrtHz"]))
-        for item in anchors
+        (float(item["frequency_Hz"]), float(item["asd_pT_per_sqrtHz"])) for item in anchors
     )
     if len(points) < 2:
         raise ValueError("at least two ASD anchors are required")
@@ -475,7 +455,9 @@ def magnetic_asd_total(
     below = freq < anchor_f[0]
     if np.any(below):
         first_slope = (log_a[1] - log_a[0]) / (log_f[1] - log_f[0])
-        result[below] = anchor_a[0] * (np.maximum(freq[below], anchor_f[0]) / anchor_f[0]) ** first_slope
+        result[below] = (
+            anchor_a[0] * (np.maximum(freq[below], anchor_f[0]) / anchor_f[0]) ** first_slope
+        )
     above = freq > anchor_f[-1]
     if np.any(above):
         if extrapolation != "continue_last_loglog_slope":
@@ -495,14 +477,10 @@ def magnetic_component_asd_1sigma_nT(
         list(section["anchors"]),
         str(section.get("extrapolate_above_10Hz", "continue_last_loglog_slope")),
     )
-    interpretation = section.get(
-        "requirement_interpretation", "3sigma_total_vector_asd"
-    )
+    interpretation = section.get("requirement_interpretation", "3sigma_total_vector_asd")
     legacy = interpretation == "3sigma_total_vector_asd"
     if interpretation not in {"total_vector_asd", "3sigma_total_vector_asd"}:
-        raise ValueError(
-            "requirement_interpretation must be 'total_vector_asd'"
-        )
+        raise ValueError("requirement_interpretation must be 'total_vector_asd'")
     if legacy and section.get("sigma_level", 3) != 3:
         raise ValueError("3sigma_total_vector_asd implies sigma_level 3")
     sigma_level = 3 if legacy else section.get("sigma_level", 3)
@@ -535,9 +513,7 @@ def generate_colored_noise_from_asd(
         stop = -1 if n_times % 2 == 0 else None
         positive = slice(1, stop)
         scale = np.sqrt(n_times * psd[positive] / (4.0 * dt))
-        coeff[positive] = scale * (
-            rng.normal(size=scale.shape) + 1j * rng.normal(size=scale.shape)
-        )
+        coeff[positive] = scale * (rng.normal(size=scale.shape) + 1j * rng.normal(size=scale.shape))
     if n_times % 2 == 0 and len(freqs) > 1:
         coeff[-1] = rng.normal(scale=np.sqrt(n_times * psd[-1] / (2.0 * dt)))
     coeff[0] = 0.0
@@ -602,8 +578,11 @@ def apply_observatory_measurement_errors(
     n_sampled = np.asarray(sampled["n"], dtype=float)
     if cfg["density"].get("enabled", True):
         n_obs, n_bias, n_log_error = _apply_multiplicative_bias_ou(
-            n_sampled, np.asarray(time["n"], dtype=float), cfg["density"],
-            "requirement_fraction", rng
+            n_sampled,
+            np.asarray(time["n"], dtype=float),
+            cfg["density"],
+            "requirement_fraction",
+            rng,
         )
     else:
         n_obs = n_sampled.copy()
@@ -619,8 +598,11 @@ def apply_observatory_measurement_errors(
     if cfg["velocity_speed"].get("enabled", True):
         speed = np.linalg.norm(v_work, axis=-1)
         speed_obs, v_bias, v_log_error = _apply_multiplicative_bias_ou(
-            speed, np.asarray(time["v"], dtype=float), cfg["velocity_speed"],
-            "requirement_fraction", rng
+            speed,
+            np.asarray(time["v"], dtype=float),
+            cfg["velocity_speed"],
+            "requirement_fraction",
+            rng,
         )
         scale = np.divide(speed_obs, speed, out=np.ones_like(speed), where=speed > 0.0)
         v_work = v_work * scale[..., None]

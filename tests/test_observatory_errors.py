@@ -37,9 +37,7 @@ def test_observatory_position_radial_requirement():
     )
     magnitude = np.linalg.norm(offsets[:, 0, :], axis=-1)
     assert np.quantile(magnitude, 0.9973) == pytest.approx(2.5, rel=0.04)
-    assert component_sigma_from_3d_radial_3sigma(2.5) == pytest.approx(
-        2.5 / 3.762
-    )
+    assert component_sigma_from_3d_radial_3sigma(2.5) == pytest.approx(2.5 / 3.762)
 
 
 def test_two_sigma_position_radial_requirement():
@@ -56,9 +54,9 @@ def test_two_sigma_position_radial_requirement():
     )
     magnitude = np.linalg.norm(offsets[:, 0, :], axis=-1)
     assert np.quantile(magnitude, 0.9545) == pytest.approx(2.5, rel=0.03)
-    assert component_sigma_from_3d_radial_requirement(
-        2.5, 2
-    ) == pytest.approx(offsets.std(axis=(0, 1)).mean(), rel=0.02)
+    assert component_sigma_from_3d_radial_requirement(2.5, 2) == pytest.approx(
+        offsets.std(axis=(0, 1)).mean(), rel=0.02
+    )
 
 
 def test_equivalent_two_and_three_sigma_scalar_requirements():
@@ -89,11 +87,7 @@ def test_equivalent_two_and_three_sigma_scalar_requirements():
     )
     assert sigma_from_requirement(
         cfg_2["magnetic_dc"]["requirement_nT_per_axis"], 2
-    ) == pytest.approx(
-        sigma_from_requirement(
-            cfg_3["magnetic_dc"]["requirement_nT_per_axis"], 3
-        )
-    )
+    ) == pytest.approx(sigma_from_requirement(cfg_3["magnetic_dc"]["requirement_nT_per_axis"], 3))
     frequency = np.array([0.001, 1.0, 10.0])
     assert np.allclose(
         magnetic_component_asd_1sigma_nT(frequency, cfg_2["magnetic_ac"]),
@@ -102,9 +96,7 @@ def test_equivalent_two_and_three_sigma_scalar_requirements():
 
 
 def test_legacy_requirements_normalize_and_conflicts_are_rejected():
-    cfg = normalized_observatory_config(
-        {"timing": {"requirement_3sigma_ms": 12.5}}
-    )
+    cfg = normalized_observatory_config({"timing": {"requirement_3sigma_ms": 12.5}})
     assert cfg["timing"]["requirement_ms"] == 12.5
     assert cfg["timing"]["sigma_level"] == 3
     assert "requirement_3sigma_ms" not in cfg["timing"]
@@ -149,12 +141,8 @@ def test_density_and_velocity_log_error_variance_and_metadata():
             "alignment": {"enabled": False},
         }
     )
-    result = apply_observatory_measurement_errors(
-        sampled, time, cfg, np.random.default_rng(3)
-    )
-    assert np.var(result.errors["density_log_error"]) == pytest.approx(
-        (0.06 / 3.0) ** 2, rel=0.15
-    )
+    result = apply_observatory_measurement_errors(sampled, time, cfg, np.random.default_rng(3))
+    assert np.var(result.errors["density_log_error"]) == pytest.approx((0.06 / 3.0) ** 2, rel=0.15)
     assert np.var(result.errors["velocity_speed_log_error"]) == pytest.approx(
         (0.03 / 3.0) ** 2, rel=0.15
     )
@@ -181,9 +169,7 @@ def test_velocity_angle_and_alignment_rotations_preserve_magnitudes():
             "magnetic_ac": {"enabled": False},
         }
     )
-    result = apply_observatory_measurement_errors(
-        sampled, time, cfg, np.random.default_rng(4)
-    )
+    result = apply_observatory_measurement_errors(sampled, time, cfg, np.random.default_rng(4))
     assert np.allclose(
         np.linalg.norm(result.observed["v"], axis=-1),
         np.linalg.norm(sampled["v"], axis=-1),

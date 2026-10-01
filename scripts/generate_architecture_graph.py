@@ -17,8 +17,14 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "hs_observatory"
 GROUPS = (
-    "orchestration", "analysis", "analysis.derived", "fields", "errors",
-    "io", "spacecraft", "utils",
+    "orchestration",
+    "analysis",
+    "analysis.derived",
+    "fields",
+    "errors",
+    "io",
+    "spacecraft",
+    "utils",
 )
 
 
@@ -46,9 +52,7 @@ def read_modules(package_root: Path) -> dict[str, Module]:
         try:
             tree = ast.parse(path.read_bytes(), filename=str(path))
         except SyntaxError as exc:
-            raise ValueError(
-                f"Cannot parse {path}:{exc.lineno}:{exc.offset}: {exc.msg}"
-            ) from exc
+            raise ValueError(f"Cannot parse {path}:{exc.lineno}:{exc.offset}: {exc.msg}") from exc
         modules[name] = Module(path, tree, package)
     return modules
 
@@ -71,8 +75,12 @@ def extract_imports(modules: dict[str, Module]) -> tuple[list[Import], list[str]
         def runtime_condition(node: ast.expr) -> bool | None:
             if isinstance(node, ast.Name) and node.id in checking_names:
                 return False
-            if (isinstance(node, ast.Attribute) and node.attr == "TYPE_CHECKING"
-                    and isinstance(node.value, ast.Name) and node.value.id in typing_names):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "TYPE_CHECKING"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in typing_names
+            ):
                 return False
             if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
                 value = runtime_condition(node.operand)
@@ -80,17 +88,23 @@ def extract_imports(modules: dict[str, Module]) -> tuple[list[Import], list[str]
             if isinstance(node, ast.BoolOp):
                 values = [runtime_condition(value) for value in node.values]
                 if isinstance(node.op, ast.And):
-                    return False if False in values else (True if all(v is True for v in values) else None)
-                return True if True in values else (False if all(v is False for v in values) else None)
+                    return (
+                        False
+                        if False in values
+                        else (True if all(v is True for v in values) else None)
+                    )
+                return (
+                    True if True in values else (False if all(v is False for v in values) else None)
+                )
             return None
 
         def visit(node: ast.AST, local: bool = False) -> None:
             local = local or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             if isinstance(node, ast.If):
                 condition = runtime_condition(node.test)
-                for child in ([] if condition is False else node.body):
+                for child in [] if condition is False else node.body:
                     visit(child, local)
-                for child in ([] if condition is True else node.orelse):
+                for child in [] if condition is True else node.orelse:
                     visit(child, local)
                 return
             if isinstance(node, ast.Import):
@@ -103,8 +117,10 @@ def extract_imports(modules: dict[str, Module]) -> tuple[list[Import], list[str]
                 if node.level:
                     parts = package.split(".")
                     if node.level > len(parts):
-                        raise ValueError(f"{module.path}:{node.lineno}: relative import beyond package")
-                    base = ".".join(parts[:len(parts) - node.level + 1])
+                        raise ValueError(
+                            f"{module.path}:{node.lineno}: relative import beyond package"
+                        )
+                    base = ".".join(parts[: len(parts) - node.level + 1])
                     if node.module:
                         base += "." + node.module
                 else:
@@ -128,8 +144,13 @@ def extract_imports(modules: dict[str, Module]) -> tuple[list[Import], list[str]
     return imports, sorted(set(warnings))
 
 
-def build_graph(modules: dict[str, Module], imports: list[Import], *,
-                full: bool = False, show_local: bool = True):
+def build_graph(
+    modules: dict[str, Module],
+    imports: list[Import],
+    *,
+    full: bool = False,
+    show_local: bool = True,
+):
     def excluded(name: str) -> str | None:
         if full:
             return None
@@ -147,10 +168,12 @@ def build_graph(modules: dict[str, Module], imports: list[Import], *,
         if not full:
             if item.target == PACKAGE and item.symbol == "__version__":
                 reason = "version metadata"
-            elif (item.source.startswith(PACKAGE + ".analysis.")
-                  and not modules[item.source].package
-                  and item.target == PACKAGE + ".analysis.registry"
-                  and item.symbol == "register_analysis"):
+            elif (
+                item.source.startswith(PACKAGE + ".analysis.")
+                and not modules[item.source].package
+                and item.target == PACKAGE + ".analysis.registry"
+                and item.symbol == "register_analysis"
+            ):
                 reason = "analysis registration back-edge"
             else:
                 reason = excluded(item.source) or excluded(item.target)
@@ -186,7 +209,7 @@ def make_dot(modules: dict[str, Module], nodes: list[str], edges: dict) -> str:
         "// Generated by scripts/generate_architecture_graph.py; do not edit.",
         "digraph module_dependencies {",
         '  graph [rankdir=LR, bgcolor="white", fontname="Helvetica", fontsize=12,',
-        '         nodesep=0.24, ranksep=0.65, pad=0.2, compound=true,',
+        "         nodesep=0.24, ranksep=0.65, pad=0.2, compound=true,",
         '         label="hs-observatory module dependencies\\nSolid: module-level import   Dashed: local/lazy import", labelloc=t];',
         '  node [shape=box, style="rounded,filled", fillcolor="#f7f8fa",',
         '        color="#667085", fontcolor="#182230", fontname="Helvetica", fontsize=10, margin="0.09,0.06"];',
@@ -195,11 +218,13 @@ def make_dot(modules: dict[str, Module], nodes: list[str], edges: dict) -> str:
     for index, (group, members) in enumerate(groups.items()):
         if not members:
             continue
-        lines.extend([
-            f"  subgraph cluster_{index} {{",
-            f"    label={quote(group)};",
-            '    color="#d0d5dd"; style="rounded"; fontcolor="#344054";',
-        ])
+        lines.extend(
+            [
+                f"  subgraph cluster_{index} {{",
+                f"    label={quote(group)};",
+                '    color="#d0d5dd"; style="rounded"; fontcolor="#344054";',
+            ]
+        )
         for name in sorted(members):
             label = short_name(name)
             if modules[name].package:
@@ -216,26 +241,45 @@ def make_dot(modules: dict[str, Module], nodes: list[str], edges: dict) -> str:
 # This is an intentionally curated view, not a quotient of every import edge.
 # Each displayed edge must have at least one direct source-import witness.
 OVERVIEW_LABELS = {
-    "cli": "CLI", "config": "Configuration", "generation": "Generation",
-    "spacecraft": "Spacecraft", "fields": "Fields", "errors": "Error models",
-    "io": "I/O", "dispatch": "Analysis dispatch",
-    "intermittency": "Elsasser / intermittency", "gradients": "Magnetic gradients",
-    "reconstruction": "Reconstruction", "diagnostics": "Other diagnostics",
-    "timing": "Timing calibration", "shock": "Shock timing",
+    "cli": "CLI",
+    "config": "Configuration",
+    "generation": "Generation",
+    "spacecraft": "Spacecraft",
+    "fields": "Fields",
+    "errors": "Error models",
+    "io": "I/O",
+    "dispatch": "Analysis dispatch",
+    "intermittency": "Elsasser / intermittency",
+    "gradients": "Magnetic gradients",
+    "reconstruction": "Reconstruction",
+    "diagnostics": "Other diagnostics",
+    "timing": "Timing calibration",
+    "shock": "Shock timing",
     "visualization": "Visualization / output",
 }
 OVERVIEW_RELATIONSHIPS = (
-    ("cli", "generation"), ("cli", "dispatch"),
-    ("generation", "config"), ("generation", "spacecraft"),
-    ("generation", "fields"), ("generation", "errors"),
-    ("generation", "io"), ("generation", "visualization"),
-    ("fields", "io"), ("dispatch", "config"),
-    ("dispatch", "intermittency"), ("dispatch", "gradients"),
-    ("dispatch", "reconstruction"), ("dispatch", "diagnostics"),
-    ("dispatch", "timing"), ("dispatch", "shock"),
-    ("timing", "gradients"), ("shock", "visualization"),
-    ("intermittency", "visualization"), ("gradients", "visualization"),
-    ("reconstruction", "visualization"), ("diagnostics", "visualization"),
+    ("cli", "generation"),
+    ("cli", "dispatch"),
+    ("generation", "config"),
+    ("generation", "spacecraft"),
+    ("generation", "fields"),
+    ("generation", "errors"),
+    ("generation", "io"),
+    ("generation", "visualization"),
+    ("fields", "io"),
+    ("dispatch", "config"),
+    ("dispatch", "intermittency"),
+    ("dispatch", "gradients"),
+    ("dispatch", "reconstruction"),
+    ("dispatch", "diagnostics"),
+    ("dispatch", "timing"),
+    ("dispatch", "shock"),
+    ("timing", "gradients"),
+    ("shock", "visualization"),
+    ("intermittency", "visualization"),
+    ("gradients", "visualization"),
+    ("reconstruction", "visualization"),
+    ("diagnostics", "visualization"),
 )
 
 
@@ -251,8 +295,14 @@ def overview_group(name: str) -> str | None:
     for prefix in ("spacecraft", "fields", "errors", "io"):
         if name.startswith(prefix + "."):
             return prefix
-    if name.startswith(("analysis.elsasser", "analysis.increment_pdf",
-                        "analysis.structure_function", "analysis.derived.")):
+    if name.startswith(
+        (
+            "analysis.elsasser",
+            "analysis.increment_pdf",
+            "analysis.structure_function",
+            "analysis.derived.",
+        )
+    ):
         return "intermittency"
     if name.startswith("analysis.magnetic_gradient"):
         return "gradients"
@@ -287,7 +337,7 @@ def make_overview_dot(members: dict, witnesses: dict) -> str:
         "// Generated curated overview; arrows are selected source-backed dependencies.",
         "digraph package_overview {",
         '  graph [rankdir=LR, bgcolor="white", fontname="Helvetica", fontsize=12,',
-        '         nodesep=0.35, ranksep=0.7, pad=0.2,',
+        "         nodesep=0.35, ranksep=0.7, pad=0.2,",
         '         label="HS Observatory: architectural areas\\nSelected dependencies, not execution order", labelloc=t];',
         '  node [shape=box, style="rounded,filled", fillcolor="#f7f8fa",',
         '        color="#667085", fontname="Helvetica", fontsize=11, margin="0.14,0.10"];',
@@ -296,20 +346,35 @@ def make_overview_dot(members: dict, witnesses: dict) -> str:
     clusters = {
         "Entry points": ("cli", "generation", "dispatch"),
         "Generation and support": ("config", "spacecraft", "fields", "errors", "io"),
-        "Scientific analyses": ("intermittency", "gradients", "reconstruction", "diagnostics",
-                                "timing", "shock"),
+        "Scientific analyses": (
+            "intermittency",
+            "gradients",
+            "reconstruction",
+            "diagnostics",
+            "timing",
+            "shock",
+        ),
         "Output": ("visualization",),
     }
     for index, (label, groups) in enumerate(clusters.items()):
-        lines.extend([f"  subgraph cluster_{index} {{", f"    label={quote(label)};",
-                      '    color="#d0d5dd"; style="rounded";'])
+        lines.extend(
+            [
+                f"  subgraph cluster_{index} {{",
+                f"    label={quote(label)};",
+                '    color="#d0d5dd"; style="rounded";',
+            ]
+        )
         for group in sorted(groups):
             if group in members:
                 tooltip = ", ".join(short_name(name) for name in members[group])
-                lines.append(f"    {quote(group)} [label={quote(OVERVIEW_LABELS[group])}, tooltip={quote(tooltip)}];")
+                lines.append(
+                    f"    {quote(group)} [label={quote(OVERVIEW_LABELS[group])}, tooltip={quote(tooltip)}];"
+                )
         lines.append("  }")
     for pair, evidence in sorted(witnesses.items()):
-        lines.append(f"  {quote(pair[0])} -> {quote(pair[1])} [tooltip={quote('; '.join(evidence))}];")
+        lines.append(
+            f"  {quote(pair[0])} -> {quote(pair[1])} [tooltip={quote('; '.join(evidence))}];"
+        )
     lines.append("}")
     return "\n".join(lines) + "\n"
 
@@ -323,7 +388,9 @@ def render_svg(dot_path: Path, svg_path: Path, no_render: bool) -> None:
         svg_path.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [dot, "-Tsvg", str(dot_path), "-o", str(svg_path)],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if result.returncode:
             raise ValueError(f"Graphviz rendering failed: {result.stderr.strip()}")
@@ -334,10 +401,16 @@ def render_svg(dot_path: Path, svg_path: Path, no_render: bool) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dot", type=Path, default=ROOT / "docs/architecture/module-dependencies.dot")
-    parser.add_argument("--svg", type=Path, default=ROOT / "docs/architecture/module-dependencies.svg")
+    parser.add_argument(
+        "--dot", type=Path, default=ROOT / "docs/architecture/module-dependencies.dot"
+    )
+    parser.add_argument(
+        "--svg", type=Path, default=ROOT / "docs/architecture/module-dependencies.svg"
+    )
     parser.add_argument("--no-render", action="store_true", help="write DOT only")
-    parser.add_argument("--full", action="store_true", help="include wrappers, initializers and registration edges")
+    parser.add_argument(
+        "--full", action="store_true", help="include wrappers, initializers and registration edges"
+    )
     parser.add_argument("--detailed-only", action="store_true", help="skip the curated overview")
     local = parser.add_mutually_exclusive_group()
     local.add_argument("--show-local-imports", dest="show_local", action="store_true")
@@ -357,13 +430,18 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("No Python source modules found")
         imports, warnings = extract_imports(modules)
         nodes, edges, suppressed = build_graph(
-            modules, imports, full=args.full, show_local=args.show_local,
+            modules,
+            imports,
+            full=args.full,
+            show_local=args.show_local,
         )
         args.dot.parent.mkdir(parents=True, exist_ok=True)
         args.dot.write_text(make_dot(modules, nodes, edges), encoding="utf-8")
         print(f"Wrote {args.dot}")
-        print(f"Nodes: {len(nodes)}; module-level edges: {sum(not v for v in edges.values())}; "
-              f"local/lazy edges: {sum(edges.values())}")
+        print(
+            f"Nodes: {len(nodes)}; module-level edges: {sum(not v for v in edges.values())}; "
+            f"local/lazy edges: {sum(edges.values())}"
+        )
         print(f"Suppressed dependencies: {len(suppressed)}")
         for reason, count in sorted(Counter(row[2] for row in suppressed).items()):
             print(f"  {reason}: {count}")

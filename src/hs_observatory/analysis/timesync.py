@@ -102,8 +102,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     mc_index_config = config.get("mc_index", 0)
     if data_group == "observed" and str(mc_index_config).lower() == "all":
         raise NotImplementedError(
-            "Timesync reconstruction requires one observed realization; "
-            "set mc_index to an integer"
+            "Timesync reconstruction requires one observed realization; set mc_index to an integer"
         )
 
     grid = config.get("grid", config)
@@ -115,9 +114,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     reference = config.get("reference", {})
     if not isinstance(reference, dict):
         raise ValueError("timesync.reference must be a mapping")
-    averaged_error_plot = config.get(
-        "averaged_error_plot", config.get("broeren_error_plot", {})
-    )
+    averaged_error_plot = config.get("averaged_error_plot", config.get("broeren_error_plot", {}))
     if not isinstance(averaged_error_plot, dict):
         raise ValueError("timesync.averaged_error_plot must be a mapping")
     time_interp = str(config.get("time_interp", "linear")).lower()
@@ -155,8 +152,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     )
     if averaged_error_cmap not in ERROR_CMAP_NAMES:
         raise ValueError(
-            "timesync.averaged_error_plot.error_cmap must be one of "
-            f"{sorted(ERROR_CMAP_NAMES)}"
+            f"timesync.averaged_error_plot.error_cmap must be one of {sorted(ERROR_CMAP_NAMES)}"
         )
     return {
         "data_group": data_group,
@@ -177,9 +173,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             "radius": float(grid.get("radius", grid.get("radius_km"))),
             "n_axial": int(grid["n_axial"]),
             "n_transverse": int(grid.get("n_transverse", grid.get("n_radial", 11))),
-            "axial_padding": float(
-                grid.get("axial_padding", grid.get("axial_padding_km", 0.0))
-            ),
+            "axial_padding": float(grid.get("axial_padding", grid.get("axial_padding_km", 0.0))),
             "radius_padding": float(
                 grid.get("radius_padding", grid.get("transverse_padding", 0.0))
             ),
@@ -258,8 +252,7 @@ def _read_measurements(
         raise ValueError("/spacecraft/r/B must have shape (spacecraft, time, 3)")
     if magnetic.shape[:2] != (positions.shape[1], positions.shape[0]):
         raise ValueError(
-            f"/{data_group}/B shape must match /spacecraft/r/B as "
-            "(time, spacecraft, 3)"
+            f"/{data_group}/B shape must match /spacecraft/r/B as (time, spacecraft, 3)"
         )
     if magnetic.shape[0] != times.size:
         raise ValueError(f"/{data_group}/B time axis length does not match /time/B")
@@ -866,19 +859,15 @@ class TimesyncAnalysis(AnalysisMethod):
                 add_simulation_reference_to_rbf_output,
             )
 
-            observation_path = reference_settings["observation_path"] or result[
-                "metadata"
-            ]["input_path"]
-            add_simulation_reference_to_rbf_output(
-                output, observation_path, generation_config
+            observation_path = (
+                reference_settings["observation_path"] or result["metadata"]["input_path"]
             )
+            add_simulation_reference_to_rbf_output(output, observation_path, generation_config)
         plot_settings = result["settings"]["plot"]
         if plot_settings["enabled"]:
             from hs_observatory.analysis.rbf_reconstruction import plot_rbf_reconstruction
 
-            plot_path = Path(
-                plot_settings["path"] or output.with_name(f"{output.stem}.png")
-            )
+            plot_path = Path(plot_settings["path"] or output.with_name(f"{output.stem}.png"))
             plot_rbf_reconstruction(
                 output,
                 plot_path,
@@ -896,8 +885,7 @@ class TimesyncAnalysis(AnalysisMethod):
             )
 
             plot_path = Path(
-                averaged_error_plot["path"]
-                or output.with_name(f"{output.stem}_uv_error.png")
+                averaged_error_plot["path"] or output.with_name(f"{output.stem}_uv_error.png")
             )
             plot_rbf_broeren_uv_error(
                 output,

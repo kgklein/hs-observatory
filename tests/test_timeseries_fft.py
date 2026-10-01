@@ -51,9 +51,7 @@ def _write_fft_input(
         observed_group = handle.create_group("observed")
         for variable, values in truth.items():
             truth_group.create_dataset(variable, data=values)
-            ensemble = np.stack(
-                [(mc_index + 1.0) * values for mc_index in range(n_mc)], axis=0
-            )
+            ensemble = np.stack([(mc_index + 1.0) * values for mc_index in range(n_mc)], axis=0)
             observed_group.create_dataset(variable, data=ensemble)
     return path, frequency
 
@@ -111,9 +109,10 @@ def test_plot_frequency_limits_span_all_native_cadences():
     density_frequency = np.array([0.0, 0.1, 1.0, 4.0])
     magnetic_frequency = np.array([0.0, 0.05, 8.0, 16.0])
 
-    assert _common_positive_frequency_limits(
-        [density_frequency, magnetic_frequency]
-    ) == (0.05, 16.0)
+    assert _common_positive_frequency_limits([density_frequency, magnetic_frequency]) == (
+        0.05,
+        16.0,
+    )
 
 
 def test_output_hdf5_shapes_and_metadata(tmp_path):
@@ -139,9 +138,7 @@ def test_output_hdf5_shapes_and_metadata(tmp_path):
 def test_truth_and_observed_mc_selection_produce_different_spectra(tmp_path):
     input_path, _ = _write_fft_input(tmp_path / "selection.h5")
 
-    truth = compute_timeseries_fft(
-        input_path, _config(variables=["n"], data_group="truth")
-    )
+    truth = compute_timeseries_fft(input_path, _config(variables=["n"], data_group="truth"))
     observed = compute_timeseries_fft(
         input_path,
         _config(variables=["n"], data_group="observed", mc_index=1),
@@ -281,9 +278,7 @@ def test_observed_fft_truth_plot_uses_matching_spacecraft_velocity_frame(tmp_pat
         metadata.attrs["velocity_observed_frame"] = "spacecraft"
         plasma_velocity = handle["truth/v"][...]
         spacecraft_velocity = 3.0 * plasma_velocity
-        handle["truth"].create_dataset(
-            "v_spacecraft_frame", data=spacecraft_velocity
-        )
+        handle["truth"].create_dataset("v_spacecraft_frame", data=spacecraft_velocity)
         handle["observed/v"][0] = spacecraft_velocity
 
     result = compute_timeseries_fft(
@@ -295,6 +290,4 @@ def test_observed_fft_truth_plot_uses_matching_spacecraft_velocity_frame(tmp_pat
         ),
     )
 
-    np.testing.assert_allclose(
-        result["truth_psd"]["v_trace"], result["psd"]["v_trace"]
-    )
+    np.testing.assert_allclose(result["truth_psd"]["v_trace"], result["psd"]["v_trace"])

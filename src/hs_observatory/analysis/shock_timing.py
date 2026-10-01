@@ -18,8 +18,12 @@ from hs_observatory.analysis.registry import register_analysis
 OBSERVABLES = ("n", "Vx", "Vy", "Vz", "Bx", "By", "Bz")
 OBSERVABLE_SOURCE = {
     "n": ("n", None),
-    "Vx": ("v", 0), "Vy": ("v", 1), "Vz": ("v", 2),
-    "Bx": ("B", 0), "By": ("B", 1), "Bz": ("B", 2),
+    "Vx": ("v", 0),
+    "Vy": ("v", 1),
+    "Vz": ("v", 2),
+    "Bx": ("B", 0),
+    "By": ("B", 1),
+    "Bz": ("B", 2),
 }
 DETECTION_STATUS = {
     "success": 0,
@@ -130,9 +134,7 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         },
         "fitting": {
             "fit_half_window_s": float(fitting.get("fit_half_window_s", 3.0)),
-            "min_width_cadence_fraction": float(
-                fitting.get("min_width_cadence_fraction", 0.25)
-            ),
+            "min_width_cadence_fraction": float(fitting.get("min_width_cadence_fraction", 0.25)),
             "max_width_s": float(fitting.get("max_width_s", 2.0)),
             "max_normalized_rms": float(fitting.get("max_normalized_rms", 3.0)),
             "max_nfev": int(fitting.get("max_nfev", 2000)),
@@ -207,9 +209,7 @@ def detect_transition(
         return TransitionDetection(DETECTION_STATUS["profile_fit_failed"])
     clusters, scores, global_noise = _candidate_clusters(time, values, detection_settings)
     if not clusters:
-        return TransitionDetection(
-            DETECTION_STATUS["no_detectable_shock"], noise=global_noise
-        )
+        return TransitionDetection(DETECTION_STATUS["no_detectable_shock"], noise=global_noise)
     # A single physical transition creates one contiguous score cluster.
     if len(clusters) > 1:
         return TransitionDetection(DETECTION_STATUS["ambiguous_transition"], noise=global_noise)
@@ -219,12 +219,14 @@ def detect_transition(
     if candidate_index < detection_settings["min_side_samples"]:
         return TransitionDetection(
             DETECTION_STATUS["insufficient_pre_samples"],
-            candidate_time=candidate_time, noise=global_noise,
+            candidate_time=candidate_time,
+            noise=global_noise,
         )
     if len(time) - candidate_index - 1 < detection_settings["min_side_samples"]:
         return TransitionDetection(
             DETECTION_STATUS["insufficient_post_samples"],
-            candidate_time=candidate_time, noise=global_noise,
+            candidate_time=candidate_time,
+            noise=global_noise,
         )
     guard = detection_settings["transition_guard_s"]
     quiet = detection_settings["quiet_window_s"]
@@ -245,8 +247,10 @@ def detect_transition(
     preliminary_significance = abs(downstream0 - upstream0) / noise
     if preliminary_significance < detection_settings["min_jump_significance"]:
         return TransitionDetection(
-            DETECTION_STATUS["insignificant_jump"], noise=noise,
-            significance=preliminary_significance, candidate_time=candidate_time,
+            DETECTION_STATUS["insignificant_jump"],
+            noise=noise,
+            significance=preliminary_significance,
+            candidate_time=candidate_time,
         )
     fit_mask = np.abs(time - candidate_time) <= fitting_settings["fit_half_window_s"]
     fit_time, fit_values = time[fit_mask], values[fit_mask]
@@ -261,18 +265,23 @@ def detect_transition(
         ) from exc
 
     try:
-        initial = np.array([
-            upstream0, downstream0, candidate_time,
-            min(max(2.0 * cadence, minimum_width), maximum_width),
-        ])
+        initial = np.array(
+            [
+                upstream0,
+                downstream0,
+                candidate_time,
+                min(max(2.0 * cadence, minimum_width), maximum_width),
+            ]
+        )
         scale = max(abs(downstream0 - upstream0), noise)
-        lower = [upstream0 - 2 * scale, downstream0 - 2 * scale,
-                 float(fit_time[0]), minimum_width]
-        upper = [upstream0 + 2 * scale, downstream0 + 2 * scale,
-                 float(fit_time[-1]), maximum_width]
+        lower = [upstream0 - 2 * scale, downstream0 - 2 * scale, float(fit_time[0]), minimum_width]
+        upper = [upstream0 + 2 * scale, downstream0 + 2 * scale, float(fit_time[-1]), maximum_width]
         fit = least_squares(
             lambda p: (_tanh(fit_time, *p) - fit_values) / noise,
-            initial, bounds=(lower, upper), loss="linear", x_scale="jac",
+            initial,
+            bounds=(lower, upper),
+            loss="linear",
+            x_scale="jac",
             max_nfev=fitting_settings["max_nfev"],
         )
     except (ValueError, RuntimeError, FloatingPointError):
@@ -298,12 +307,28 @@ def detect_transition(
             else DETECTION_STATUS["invalid_timing_uncertainty"]
         )
         return TransitionDetection(
-            status, crossing, uncertainty, width, upstream, downstream,
-            noise, significance, normalized_rms, candidate_time,
+            status,
+            crossing,
+            uncertainty,
+            width,
+            upstream,
+            downstream,
+            noise,
+            significance,
+            normalized_rms,
+            candidate_time,
         )
     return TransitionDetection(
-        status, crossing, np.nan, width, upstream, downstream,
-        noise, significance, normalized_rms, candidate_time,
+        status,
+        crossing,
+        np.nan,
+        width,
+        upstream,
+        downstream,
+        noise,
+        significance,
+        normalized_rms,
+        candidate_time,
     )
 
 
@@ -346,8 +371,7 @@ def fit_combined_transition(
             for index, (time, values, detection) in enumerate(accepted):
                 mask = np.abs(time - center) <= fitting_settings["fit_half_window_s"]
                 residual = (
-                    _tanh(time[mask], p[2 * index], p[2 * index + 1], center, width)
-                    - values[mask]
+                    _tanh(time[mask], p[2 * index], p[2 * index + 1], center, width) - values[mask]
                 ) / detection.noise
                 if equal_channels:
                     residual = residual / np.sqrt(max(1, len(residual)))
@@ -355,7 +379,11 @@ def fit_combined_transition(
             return np.concatenate(result)
 
         fit = least_squares(
-            residuals, parameters, bounds=(lower, upper), loss="linear", x_scale="jac",
+            residuals,
+            parameters,
+            bounds=(lower, upper),
+            loss="linear",
+            x_scale="jac",
             max_nfev=fitting_settings["max_nfev"],
         )
         if not fit.success:
@@ -384,7 +412,10 @@ def fit_combined_transition(
                 else DETECTION_STATUS["invalid_timing_uncertainty"]
             )
         return TransitionDetection(
-            status, center, uncertainty, width,
+            status,
+            center,
+            uncertainty,
+            width,
             noise=float(np.median([item[2].noise for item in accepted])),
             significance=float(min(item[2].significance for item in accepted)),
             normalized_rms=rms,
@@ -408,10 +439,21 @@ def solve_planar_timing(
     times = np.asarray(crossing_times, dtype=float)
     points = np.asarray(positions, dtype=float)
     empty = TimingSolution(
-        INVERSION_STATUS["timing_inversion_failure"], np.full(3, np.nan),
-        np.full(3, np.nan), np.nan, np.nan, np.full(len(times), np.nan),
-        np.nan, 0, np.full(4, np.nan), np.inf, np.nan,
-        np.inf, np.nan, np.nan, np.nan,
+        INVERSION_STATUS["timing_inversion_failure"],
+        np.full(3, np.nan),
+        np.full(3, np.nan),
+        np.nan,
+        np.nan,
+        np.full(len(times), np.nan),
+        np.nan,
+        0,
+        np.full(4, np.nan),
+        np.inf,
+        np.nan,
+        np.inf,
+        np.nan,
+        np.nan,
+        np.nan,
     )
     if len(times) < 4:
         empty.status = INVERSION_STATUS["insufficient_spacecraft"]
@@ -470,19 +512,34 @@ def solve_planar_timing(
     if sigma is not None and len(times) > 4:
         chi2 = float(np.sum((residuals / sigma) ** 2) / (len(times) - 4))
     return TimingSolution(
-        INVERSION_STATUS["success"], q, q / q_norm, 1.0 / q_norm,
-        reference_time, residuals, rms, rank, singular, condition, chi2,
-        empty.geometry_condition_number, empty.characteristic_size,
-        empty.elongation, empty.planarity,
+        INVERSION_STATUS["success"],
+        q,
+        q / q_norm,
+        1.0 / q_norm,
+        reference_time,
+        residuals,
+        rms,
+        rank,
+        singular,
+        condition,
+        chi2,
+        empty.geometry_condition_number,
+        empty.characteristic_size,
+        empty.elongation,
+        empty.planarity,
     )
 
 
 def _read_input(path: str | Path, observables: list[str]) -> dict[str, Any]:
     with h5py.File(path, "r") as handle:
-        ids = [value.decode() if isinstance(value, bytes) else str(value)
-               for value in handle["spacecraft/id"][...]]
-        metadata = {key: (value.decode() if isinstance(value, bytes) else value)
-                    for key, value in handle["metadata"].attrs.items()}
+        ids = [
+            value.decode() if isinstance(value, bytes) else str(value)
+            for value in handle["spacecraft/id"][...]
+        ]
+        metadata = {
+            key: (value.decode() if isinstance(value, bytes) else value)
+            for key, value in handle["metadata"].attrs.items()
+        }
         data = {}
         n_mc = None
         for name in observables:
@@ -494,16 +551,25 @@ def _read_input(path: str | Path, observables: list[str]) -> dict[str, Any]:
             n_mc = values.shape[0] if n_mc is None else n_mc
             if values.shape != (n_mc, len(time), len(ids)):
                 raise ValueError(f"Observed {name} has an unexpected shape")
-            data[name] = {"time": time, "values": values,
-                          "cadence": float(np.median(np.diff(time)))}
+            data[name] = {
+                "time": time,
+                "values": values,
+                "cadence": float(np.median(np.diff(time))),
+            }
         trajectory_candidates = []
         for quantity in ("n", "v", "B"):
             time = np.asarray(handle[f"time/{quantity}"], dtype=float)
             positions = np.asarray(handle[f"spacecraft/r/{quantity}"], dtype=float)
             trajectory_candidates.append((float(np.median(np.diff(time))), time, positions))
         _, trajectory_time, trajectory = min(trajectory_candidates, key=lambda item: item[0])
-    return {"ids": ids, "metadata": metadata, "data": data, "n_mc": int(n_mc or 0),
-            "trajectory_time": trajectory_time, "trajectory": trajectory}
+    return {
+        "ids": ids,
+        "metadata": metadata,
+        "data": data,
+        "n_mc": int(n_mc or 0),
+        "trajectory_time": trajectory_time,
+        "trajectory": trajectory,
+    }
 
 
 def _positions_at_times(trajectory_time: np.ndarray, trajectory: np.ndarray, times: np.ndarray):
@@ -516,8 +582,12 @@ def _positions_at_times(trajectory_time: np.ndarray, trajectory: np.ndarray, tim
     return positions
 
 
-def _truth(metadata: Mapping[str, Any], reference_position: np.ndarray,
-           trajectory_time: np.ndarray, trajectory: np.ndarray) -> dict[str, Any] | None:
+def _truth(
+    metadata: Mapping[str, Any],
+    reference_position: np.ndarray,
+    trajectory_time: np.ndarray,
+    trajectory: np.ndarray,
+) -> dict[str, Any] | None:
     if str(metadata.get("field_model", "")) != "shock":
         return None
     try:
@@ -532,14 +602,15 @@ def _truth(metadata: Mapping[str, Any], reference_position: np.ndarray,
             return None
         q = normal_ud / signed_speed
         propagation_normal = np.sign(signed_speed) * normal_ud
-        reference_time = t0 + (
-            np.dot(normal_ud, reference_position - center) - distance
-        ) / signed_speed
+        reference_time = (
+            t0 + (np.dot(normal_ud, reference_position - center) - distance) / signed_speed
+        )
         arrivals = np.full(trajectory.shape[0], np.nan)
         for spacecraft in range(trajectory.shape[0]):
             xi = (
                 (trajectory[spacecraft] - center) @ normal_ud
-                - distance - signed_speed * (trajectory_time - t0)
+                - distance
+                - signed_speed * (trajectory_time - t0)
             )
             exact = np.flatnonzero(xi == 0.0)
             if len(exact):
@@ -551,11 +622,15 @@ def _truth(metadata: Mapping[str, Any], reference_position: np.ndarray,
                 arrivals[spacecraft] = trajectory_time[index] - xi[index] * (
                     trajectory_time[index + 1] - trajectory_time[index]
                 ) / (xi[index + 1] - xi[index])
-        return {"normal_upstream_to_downstream": normal_ud,
-                "propagation_normal": propagation_normal,
-                "signed_normal_velocity": signed_speed,
-                "speed": abs(signed_speed), "q": q,
-                "reference_time": float(reference_time), "arrival_times": arrivals}
+        return {
+            "normal_upstream_to_downstream": normal_ud,
+            "propagation_normal": propagation_normal,
+            "signed_normal_velocity": signed_speed,
+            "speed": abs(signed_speed),
+            "q": q,
+            "reference_time": float(reference_time),
+            "arrival_times": arrivals,
+        }
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
 
@@ -563,9 +638,20 @@ def _truth(metadata: Mapping[str, Any], reference_position: np.ndarray,
 def _detection_arrays(shape: tuple[int, ...]) -> dict[str, np.ndarray]:
     return {
         "status": np.full(shape, DETECTION_STATUS["no_detectable_shock"], dtype=np.int16),
-        **{name: np.full(shape, np.nan) for name in (
-            "crossing_time", "uncertainty", "width", "upstream", "downstream",
-            "noise", "significance", "normalized_rms", "candidate_time")},
+        **{
+            name: np.full(shape, np.nan)
+            for name in (
+                "crossing_time",
+                "uncertainty",
+                "width",
+                "upstream",
+                "downstream",
+                "noise",
+                "significance",
+                "normalized_rms",
+                "candidate_time",
+            )
+        },
     }
 
 
@@ -581,14 +667,18 @@ def _put_detection(
 def _solution_arrays(shape: tuple[int, ...], n_spacecraft: int) -> dict[str, np.ndarray]:
     return {
         "status": np.full(shape, INVERSION_STATUS["timing_inversion_failure"], dtype=np.int16),
-        "q": np.full((*shape, 3), np.nan), "normal": np.full((*shape, 3), np.nan),
-        "speed": np.full(shape, np.nan), "reference_time": np.full(shape, np.nan),
-        "rms_residual": np.full(shape, np.nan), "rank": np.zeros(shape, dtype=np.int16),
+        "q": np.full((*shape, 3), np.nan),
+        "normal": np.full((*shape, 3), np.nan),
+        "speed": np.full(shape, np.nan),
+        "reference_time": np.full(shape, np.nan),
+        "rms_residual": np.full(shape, np.nan),
+        "rank": np.zeros(shape, dtype=np.int16),
         "condition_number": np.full(shape, np.nan),
         "reduced_chi_square": np.full(shape, np.nan),
         "geometry_condition_number": np.full(shape, np.nan),
         "characteristic_size": np.full(shape, np.nan),
-        "elongation": np.full(shape, np.nan), "planarity": np.full(shape, np.nan),
+        "elongation": np.full(shape, np.nan),
+        "planarity": np.full(shape, np.nan),
         "n_spacecraft": np.zeros(shape, dtype=np.int16),
         "singular_values": np.full((*shape, 4), np.nan),
         "residuals": np.full((*shape, n_spacecraft), np.nan),
@@ -596,10 +686,24 @@ def _solution_arrays(shape: tuple[int, ...], n_spacecraft: int) -> dict[str, np.
     }
 
 
-def _put_solution(arrays: dict[str, np.ndarray], index: tuple[int, ...], solution: TimingSolution,
-                  members: np.ndarray):
-    for name in ("status", "q", "normal", "speed", "reference_time", "rms_residual",
-                 "rank", "condition_number", "reduced_chi_square", "singular_values"):
+def _put_solution(
+    arrays: dict[str, np.ndarray],
+    index: tuple[int, ...],
+    solution: TimingSolution,
+    members: np.ndarray,
+):
+    for name in (
+        "status",
+        "q",
+        "normal",
+        "speed",
+        "reference_time",
+        "rms_residual",
+        "rank",
+        "condition_number",
+        "reduced_chi_square",
+        "singular_values",
+    ):
         arrays[name][index] = getattr(solution, name)
     for name in ("geometry_condition_number", "characteristic_size", "elongation", "planarity"):
         arrays[name][index] = getattr(solution, name)
@@ -612,17 +716,17 @@ def _put_solution(arrays: dict[str, np.ndarray], index: tuple[int, ...], solutio
 def _add_errors(solution: dict[str, np.ndarray], truth: dict[str, Any] | None):
     shape = solution["status"].shape
     errors = {
-        "angular_error_deg": np.full(shape, np.nan), "speed_error": np.full(shape, np.nan),
+        "angular_error_deg": np.full(shape, np.nan),
+        "speed_error": np.full(shape, np.nan),
         "fractional_speed_error": np.full(shape, np.nan),
-        "q_error": np.full((*shape, 3), np.nan), "q_error_norm": np.full(shape, np.nan),
+        "q_error": np.full((*shape, 3), np.nan),
+        "q_error_norm": np.full(shape, np.nan),
         "reference_time_error": np.full(shape, np.nan),
     }
     if truth is not None:
         valid = solution["status"] == INVERSION_STATUS["success"]
         dots = np.sum(solution["normal"] * truth["propagation_normal"], axis=-1)
-        errors["angular_error_deg"][valid] = np.degrees(
-            np.arccos(np.clip(dots[valid], -1, 1))
-        )
+        errors["angular_error_deg"][valid] = np.degrees(np.arccos(np.clip(dots[valid], -1, 1)))
         errors["speed_error"][valid] = solution["speed"][valid] - truth["speed"]
         errors["fractional_speed_error"][valid] = (
             np.abs(errors["speed_error"][valid]) / truth["speed"]
@@ -645,24 +749,29 @@ def compute_shock_timing(input_path: str | Path, config: Mapping[str, Any]) -> d
         source["trajectory_time"], source["trajectory"], np.full(n_sc, time_origin)
     )
     reference_position = np.mean(reference_positions, axis=0)
-    truth = None if settings["truth_validation"] == "disabled" else _truth(
-        source["metadata"], reference_position, source["trajectory_time"], source["trajectory"]
+    truth = (
+        None
+        if settings["truth_validation"] == "disabled"
+        else _truth(
+            source["metadata"], reference_position, source["trajectory_time"], source["trajectory"]
+        )
     )
     if settings["truth_validation"] == "required" and truth is None:
         raise ValueError("Shock truth validation was required but compatible metadata are absent")
 
     independent = _detection_arrays((n_obs, n_mc, n_sc))
     detections: list[list[list[TransitionDetection]]] = [
-        [[TransitionDetection(1) for _ in range(n_sc)] for _ in range(n_mc)]
-        for _ in range(n_obs)
+        [[TransitionDetection(1) for _ in range(n_sc)] for _ in range(n_mc)] for _ in range(n_obs)
     ]
     for observable_index, name in enumerate(observables):
         item = source["data"][name]
         for mc in range(n_mc):
             for spacecraft in range(n_sc):
                 detection = detect_transition(
-                    item["time"], item["values"][mc, :, spacecraft],
-                    settings["detection"], settings["fitting"],
+                    item["time"],
+                    item["values"][mc, :, spacecraft],
+                    settings["detection"],
+                    settings["fitting"],
                 )
                 detections[observable_index][mc][spacecraft] = detection
                 _put_detection(independent, (observable_index, mc, spacecraft), detection)
@@ -679,7 +788,8 @@ def compute_shock_timing(input_path: str | Path, config: Mapping[str, Any]) -> d
                     item = source["data"][name]
                     channels.append((item["time"], item["values"][mc, :, spacecraft], detection))
                 _put_detection(
-                    combined, (mc, spacecraft),
+                    combined,
+                    (mc, spacecraft),
                     fit_combined_transition(channels, settings["fitting"]),
                 )
     if truth is not None:
@@ -708,7 +818,9 @@ def compute_shock_timing(input_path: str | Path, config: Mapping[str, Any]) -> d
             )
     if settings["modes"] in {"combined", "both"}:
         groups["combined"] = (
-            combined["crossing_time"], combined["uncertainty"], combined["status"]
+            combined["crossing_time"],
+            combined["uncertainty"],
+            combined["status"],
         )
     solutions = {}
     for label, (crossings, uncertainties, statuses) in groups.items():
@@ -731,23 +843,35 @@ def compute_shock_timing(input_path: str | Path, config: Mapping[str, Any]) -> d
                     source["trajectory_time"], source["trajectory"], crossings[mc]
                 )
                 common = dict(
-                    reference_position=reference_position, time_origin=time_origin,
+                    reference_position=reference_position,
+                    time_origin=time_origin,
                     max_condition_number=settings["timing"]["max_condition_number"],
                     rcond=settings["timing"]["rcond"],
                 )
-                _put_solution(global_ols, (mc,), solve_planar_timing(
-                    crossings[mc, members], positions[members], **common
-                ), members)
+                _put_solution(
+                    global_ols,
+                    (mc,),
+                    solve_planar_timing(crossings[mc, members], positions[members], **common),
+                    members,
+                )
                 sigma = np.maximum(uncertainties[mc, members], floor)
-                _put_solution(global_wls, (mc,), solve_planar_timing(
-                    crossings[mc, members], positions[members], uncertainties=sigma, **common
-                ), members)
+                _put_solution(
+                    global_wls,
+                    (mc,),
+                    solve_planar_timing(
+                        crossings[mc, members], positions[members], uncertainties=sigma, **common
+                    ),
+                    members,
+                )
                 member_set = set(members.tolist())
                 for combination_index, subset in enumerate(combinations4):
                     if set(subset.tolist()) <= member_set:
-                        _put_solution(four, (mc, combination_index), solve_planar_timing(
-                            crossings[mc, subset], positions[subset], **common
-                        ), subset)
+                        _put_solution(
+                            four,
+                            (mc, combination_index),
+                            solve_planar_timing(crossings[mc, subset], positions[subset], **common),
+                            subset,
+                        )
             else:
                 global_ols["status"][mc] = INVERSION_STATUS["insufficient_spacecraft"]
                 global_wls["status"][mc] = INVERSION_STATUS["insufficient_spacecraft"]
@@ -756,15 +880,25 @@ def compute_shock_timing(input_path: str | Path, config: Mapping[str, Any]) -> d
             _add_errors(solution, truth)
         solutions[label] = {"ols": global_ols, "wls": global_wls, "four_spacecraft": four}
     return {
-        "source": Path(input_path).resolve(), "settings": settings, "metadata": source["metadata"],
+        "source": Path(input_path).resolve(),
+        "settings": settings,
+        "metadata": source["metadata"],
         "analysis_config_yaml": config.get("_analysis_config_yaml"),
         "analysis_config_path": config.get("_analysis_config_path"),
-        "ids": ids, "observables": observables, "data": source["data"],
-        "n_mc": n_mc, "reference_position": reference_position,
-        "time_origin": float(time_origin), "trajectory_time": source["trajectory_time"],
-        "trajectory": source["trajectory"], "truth": truth,
-        "independent": independent, "combined": combined, "contributors": contributors,
-        "combinations": combinations4, "solutions": solutions,
+        "ids": ids,
+        "observables": observables,
+        "data": source["data"],
+        "n_mc": n_mc,
+        "reference_position": reference_position,
+        "time_origin": float(time_origin),
+        "trajectory_time": source["trajectory_time"],
+        "trajectory": source["trajectory"],
+        "truth": truth,
+        "independent": independent,
+        "combined": combined,
+        "contributors": contributors,
+        "combinations": combinations4,
+        "solutions": solutions,
     }
 
 
@@ -772,8 +906,10 @@ def _store(group: h5py.Group, name: str, value: Any, settings: Mapping[str, Any]
     array = np.asarray(value)
     kwargs = {}
     if array.ndim and array.size:
-        kwargs = {"compression": settings["storage"]["compression"],
-                  "compression_opts": settings["storage"]["compression_level"]}
+        kwargs = {
+            "compression": settings["storage"]["compression"],
+            "compression_opts": settings["storage"]["compression_level"],
+        }
     dataset = group.create_dataset(name, data=array, **kwargs)
     if units:
         dataset.attrs["units"] = units
@@ -781,8 +917,7 @@ def _store(group: h5py.Group, name: str, value: Any, settings: Mapping[str, Any]
 
 
 def _write_detection(group: h5py.Group, values: Mapping[str, np.ndarray], settings):
-    units = {"crossing_time": "s", "uncertainty": "s", "width": "s",
-             "arrival_time_error": "s"}
+    units = {"crossing_time": "s", "uncertainty": "s", "width": "s", "arrival_time_error": "s"}
     for name, value in values.items():
         _store(group, name, value, settings, units.get(name))
     group["status"].attrs["codes"] = json.dumps(DETECTION_STATUS, sort_keys=True)
@@ -796,8 +931,13 @@ def _percentiles(values: np.ndarray, success: np.ndarray) -> np.ndarray:
 
 
 def _write_solution(group: h5py.Group, solution: Mapping[str, Any], settings):
-    units = {"q": "s/km", "speed": "km/s", "reference_time": "s",
-             "rms_residual": "s", "residuals": "s"}
+    units = {
+        "q": "s/km",
+        "speed": "km/s",
+        "reference_time": "s",
+        "rms_residual": "s",
+        "residuals": "s",
+    }
     errors = solution["errors"]
     for name, value in solution.items():
         if name != "errors":
@@ -810,9 +950,14 @@ def _write_solution(group: h5py.Group, solution: Mapping[str, Any], settings):
     group.create_dataset("fit_label", data=np.asarray(labels, dtype=h5py.string_dtype()))
     group["status"].attrs["codes"] = json.dumps(INVERSION_STATUS, sort_keys=True)
     validation = group.create_group("errors")
-    error_units = {"angular_error_deg": "deg", "speed_error": "km/s",
-                   "fractional_speed_error": "1", "q_error": "s/km",
-                   "q_error_norm": "s/km", "reference_time_error": "s"}
+    error_units = {
+        "angular_error_deg": "deg",
+        "speed_error": "km/s",
+        "fractional_speed_error": "1",
+        "q_error": "s/km",
+        "q_error_norm": "s/km",
+        "reference_time_error": "s",
+    }
     for name, value in errors.items():
         _store(validation, name, value, settings, error_units[name])
     success = solution["status"] == INVERSION_STATUS["success"]
@@ -828,21 +973,26 @@ def _write_solution(group: h5py.Group, solution: Mapping[str, Any], settings):
         _store(summary, "failure_count", failures, settings)
         _store(summary, "success_fraction", np.mean(success, axis=0), settings)
     _store(summary, "percentiles", [16.0, 50.0, 84.0], settings, "%")
-    status_counts = np.stack([
-        np.sum(solution["status"] == code, axis=0)
-        for code in sorted(INVERSION_STATUS.values())
-    ])
+    status_counts = np.stack(
+        [np.sum(solution["status"] == code, axis=0) for code in sorted(INVERSION_STATUS.values())]
+    )
     _store(summary, "status_count", status_counts, settings)
     summary["status_count"].attrs["codes"] = json.dumps(INVERSION_STATUS, sort_keys=True)
     for name in ("q", "normal", "speed", "reference_time", "rms_residual"):
         _store(
-            summary, f"{name}_percentiles",
-            _percentiles(solution[name], success), settings, units.get(name),
+            summary,
+            f"{name}_percentiles",
+            _percentiles(solution[name], success),
+            settings,
+            units.get(name),
         )
     for name, value in errors.items():
         _store(
-            summary, f"{name}_percentiles", _percentiles(value, success),
-            settings, error_units[name],
+            summary,
+            f"{name}_percentiles",
+            _percentiles(value, success),
+            settings,
+            error_units[name],
         )
 
 
@@ -887,13 +1037,17 @@ def _save_tetrahedra_geometry(result: Mapping[str, Any], output: Path, plt) -> N
     combinations4 = result["combinations"]
     best, worst = combinations4[best_index], combinations4[worst_index]
     positions = _positions_at_times(
-        result["trajectory_time"], result["trajectory"],
+        result["trajectory_time"],
+        result["trajectory"],
         np.full(len(result["ids"]), result["time_origin"]),
     )
     metrics = [item for item in polyhedron_metrics(positions) if item["n_spacecraft"] == 4]
     hub_index = next(
-        (index for index, spacecraft_id in enumerate(result["ids"])
-         if spacecraft_id in {"H", "Hub"}),
+        (
+            index
+            for index, spacecraft_id in enumerate(result["ids"])
+            if spacecraft_id in {"H", "Hub"}
+        ),
         None,
     )
     regular_hub = (
@@ -901,7 +1055,8 @@ def _save_tetrahedra_geometry(result: Mapping[str, Any], output: Path, plt) -> N
             (item for item in metrics if hub_index in item["indices"]),
             key=lambda item: item["Q"],
         )
-        if hub_index is not None else None
+        if hub_index is not None
+        else None
     )
     mesocenter = np.mean(positions, axis=0)
     relative = positions - mesocenter
@@ -926,53 +1081,98 @@ def _save_tetrahedra_geometry(result: Mapping[str, Any], output: Path, plt) -> N
         axis.plot([x, low], [y, y], [z, z], "--", color=color, alpha=0.16, lw=0.55)
         axis.plot([x, x], [y, high], [z, z], "--", color=color, alpha=0.16, lw=0.55)
         axis.plot([x, x], [y, y], [z, low], "--", color=color, alpha=0.16, lw=0.55)
-        axis.scatter([low, x, x], [y, high, y], [z, z, low], s=14, c=color,
-                     alpha=0.38, edgecolors="none", depthshade=False)
-        axis.scatter(x, y, z, s=52, c=color, edgecolors="#202020",
-                     linewidths=0.5, depthshade=False, zorder=6)
+        axis.scatter(
+            [low, x, x],
+            [y, high, y],
+            [z, z, low],
+            s=14,
+            c=color,
+            alpha=0.38,
+            edgecolors="none",
+            depthshade=False,
+        )
+        axis.scatter(
+            x, y, z, s=52, c=color, edgecolors="#202020", linewidths=0.5, depthshade=False, zorder=6
+        )
         axis.text(x, y, z, f" {spacecraft_id}", fontsize=7)
     for label, subset in subsets.items():
         for left, right in combinations(subset.tolist(), 2):
-            axis.plot(*relative[[left, right]].T, color=colors[label], lw=2.2,
-                      alpha=0.92, zorder=5)
-    axis.scatter(0.0, 0.0, 0.0, marker="x", s=70, color="black",
-                 linewidths=1.5, depthshade=False, zorder=8)
-    axis.set(xlim=(-limit, limit), ylim=(-limit, limit), zlim=(-limit, limit),
-             xlabel=r"$\Delta X_{GSE}$ (km)", ylabel=r"$\Delta Y_{GSE}$ (km)",
-             zlabel=r"$\Delta Z_{GSE}$ (km)", title="Mesocentric Formation and Projections")
+            axis.plot(*relative[[left, right]].T, color=colors[label], lw=2.2, alpha=0.92, zorder=5)
+    axis.scatter(
+        0.0, 0.0, 0.0, marker="x", s=70, color="black", linewidths=1.5, depthshade=False, zorder=8
+    )
+    axis.set(
+        xlim=(-limit, limit),
+        ylim=(-limit, limit),
+        zlim=(-limit, limit),
+        xlabel=r"$\Delta X_{GSE}$ (km)",
+        ylabel=r"$\Delta Y_{GSE}$ (km)",
+        zlabel=r"$\Delta Z_{GSE}$ (km)",
+        title="Mesocentric Formation and Projections",
+    )
     axis.set_box_aspect((1, 1, 1))
     axis.view_init(elev=24, azim=-56)
 
     metric_by_subset = {tuple(item["indices"]): item for item in metrics}
     ql = fig.add_subplot(grid[0, 2])
     ep = fig.add_subplot(grid[1, 2])
-    ql.scatter([item["Q"] for item in metrics], [item["L"] for item in metrics],
-               s=10, color="0.72", alpha=0.5)
-    ep.scatter([item["E"] for item in metrics], [item["P"] for item in metrics],
-               s=10, color="0.72", alpha=0.5)
+    ql.scatter(
+        [item["Q"] for item in metrics],
+        [item["L"] for item in metrics],
+        s=10,
+        color="0.72",
+        alpha=0.5,
+    )
+    ep.scatter(
+        [item["E"] for item in metrics],
+        [item["P"] for item in metrics],
+        s=10,
+        color="0.72",
+        alpha=0.5,
+    )
     for label, subset in subsets.items():
         metric = metric_by_subset[tuple(subset.tolist())]
-        ql.scatter(metric["Q"], metric["L"], s=85, color=colors[label],
-                   edgecolor="white", linewidth=0.7, label=label, zorder=4)
-        ep.scatter(metric["E"], metric["P"], s=85, color=colors[label],
-                   edgecolor="white", linewidth=0.7, label=label, zorder=4)
-    ql.set(xlabel=r"$Q=\sqrt{E^2+P^2}$", ylabel=r"$L$ (km)",
-           title="Tetrahedron Size and Shape")
+        ql.scatter(
+            metric["Q"],
+            metric["L"],
+            s=85,
+            color=colors[label],
+            edgecolor="white",
+            linewidth=0.7,
+            label=label,
+            zorder=4,
+        )
+        ep.scatter(
+            metric["E"],
+            metric["P"],
+            s=85,
+            color=colors[label],
+            edgecolor="white",
+            linewidth=0.7,
+            label=label,
+            zorder=4,
+        )
+    ql.set(xlabel=r"$Q=\sqrt{E^2+P^2}$", ylabel=r"$L$ (km)", title="Tetrahedron Size and Shape")
     ql.set_yscale("log")
-    ep.set(xlabel="Elongation E", ylabel="Planarity P", title="Tetrahedron Shape",
-           xlim=(-0.02, 1.02), ylim=(-0.02, 1.02))
+    ep.set(
+        xlabel="Elongation E",
+        ylabel="Planarity P",
+        title="Tetrahedron Shape",
+        xlim=(-0.02, 1.02),
+        ylim=(-0.02, 1.02),
+    )
     for panel in (ql, ep):
         panel.grid(alpha=0.22, which="both")
     handles, legend_labels = ql.get_legend_handles_labels()
     fig.legend(
-        handles, legend_labels, loc="upper right", bbox_to_anchor=(0.705, 0.88),
+        handles,
+        legend_labels,
+        loc="upper right",
+        bbox_to_anchor=(0.705, 0.88),
         fontsize=8,
     )
     metric_name = "angular" if result["truth"] is not None else "timing-residual"
-    regular_suffix = (
-        f", regular+Hub Q={regular_hub['Q']:.3g}"
-        if regular_hub is not None else ""
-    )
+    regular_suffix = f", regular+Hub Q={regular_hub['Q']:.3g}" if regular_hub is not None else ""
     fig.suptitle(
         f"Selected Four-Spacecraft Geometry by {source_label} "
         f"{metric_name} RMSE\n"
@@ -987,6 +1187,7 @@ def _save_tetrahedra_geometry(result: Mapping[str, Any], output: Path, plt) -> N
 
 def _save_figures(result: Mapping[str, Any], output: Path):
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
@@ -1003,10 +1204,12 @@ def _save_figures(result: Mapping[str, Any], output: Path):
         valid = np.flatnonzero(result["independent"]["status"][0, mc] == 0)
     representatives = (
         valid[np.argsort(crossings[valid])[[0, len(valid) // 2, -1]]]
-        if len(valid) else np.arange(min(3, len(result["ids"])))
+        if len(valid)
+        else np.arange(min(3, len(result["ids"])))
     )
     fig, axes = plt.subplots(
-        len(result["observables"]), len(representatives),
+        len(result["observables"]),
+        len(representatives),
         figsize=(4 * len(representatives), 2.1 * len(result["observables"])),
         squeeze=False,
     )
@@ -1017,14 +1220,22 @@ def _save_figures(result: Mapping[str, Any], output: Path):
             ax.plot(item["time"], item["values"][mc, :, spacecraft], lw=0.8, color="0.35")
             status = int(result["independent"]["status"][row, mc, spacecraft])
             if status == 0:
-                p = [result["independent"][key][row, mc, spacecraft]
-                     for key in ("upstream", "downstream", "crossing_time", "width")]
+                p = [
+                    result["independent"][key][row, mc, spacecraft]
+                    for key in ("upstream", "downstream", "crossing_time", "width")
+                ]
                 ax.plot(item["time"], _tanh(item["time"], *p), color="tab:red", lw=1.2)
                 ax.axvline(p[2], color="tab:red", ls="--", lw=0.8)
             else:
                 reason = next(key for key, value in DETECTION_STATUS.items() if value == status)
-                ax.text(0.02, 0.92, reason.replace("_", " "), transform=ax.transAxes,
-                        va="top", fontsize=7)
+                ax.text(
+                    0.02,
+                    0.92,
+                    reason.replace("_", " "),
+                    transform=ax.transAxes,
+                    va="top",
+                    fontsize=7,
+                )
             if column == 0:
                 ax.set_ylabel(name)
             if row == 0:
@@ -1042,50 +1253,58 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     from hs_observatory.visualization import polyhedron_metrics
 
     formation_positions = _positions_at_times(
-        result["trajectory_time"], result["trajectory"],
+        result["trajectory_time"],
+        result["trajectory"],
         np.full(len(result["ids"]), result["time_origin"]),
     )
     hub_index = next(
-        (index for index, spacecraft_id in enumerate(result["ids"])
-         if spacecraft_id in {"H", "Hub"}),
+        (
+            index
+            for index, spacecraft_id in enumerate(result["ids"])
+            if spacecraft_id in {"H", "Hub"}
+        ),
         None,
     )
     regular_hub_index = None
     if hub_index is not None:
         formation_metrics = [
-            item for item in polyhedron_metrics(formation_positions)
-            if item["n_spacecraft"] == 4
+            item for item in polyhedron_metrics(formation_positions) if item["n_spacecraft"] == 4
         ]
         regular_hub = min(
-            (item for item in formation_metrics
-             if item["n_spacecraft"] == 4 and hub_index in item["indices"]),
+            (
+                item
+                for item in formation_metrics
+                if item["n_spacecraft"] == 4 and hub_index in item["indices"]
+            ),
             key=lambda item: item["Q"],
         )
-        matches = np.flatnonzero(np.all(
-            result["combinations"] == np.asarray(regular_hub["indices"]), axis=1
-        ))
+        matches = np.flatnonzero(
+            np.all(result["combinations"] == np.asarray(regular_hub["indices"]), axis=1)
+        )
         if len(matches):
             regular_hub_index = int(matches[0])
     else:
         formation_metrics = [
-            item for item in polyhedron_metrics(formation_positions)
-            if item["n_spacecraft"] == 4
+            item for item in polyhedron_metrics(formation_positions) if item["n_spacecraft"] == 4
         ]
     metric_by_subset = {tuple(item["indices"]): item for item in formation_metrics}
-    configuration_size = np.asarray([
-        metric_by_subset[tuple(subset.tolist())]["L"]
-        for subset in result["combinations"]
-    ])
+    configuration_size = np.asarray(
+        [metric_by_subset[tuple(subset.tolist())]["L"] for subset in result["combinations"]]
+    )
     metrics = (
-        (("angular_error_deg", "Angular error (deg)"),
-         ("speed_error", "Speed error (km/s)"),
-         ("q_error_norm", "Slowness error (s/km)"),
-         ("reference_time_error", "Reference-time error (s)"))
-        if truth_available else
-        (("speed", "Normal speed (km/s)"),
-         ("q_norm", "Slowness magnitude (s/km)"),
-         ("reference_time", "Reference time (s)"),
-         ("rms_residual", "Timing RMS residual (s)"))
+        (
+            ("angular_error_deg", "Angular error (deg)"),
+            ("speed_error", "Speed error (km/s)"),
+            ("q_error_norm", "Slowness error (s/km)"),
+            ("reference_time_error", "Reference-time error (s)"),
+        )
+        if truth_available
+        else (
+            ("speed", "Normal speed (km/s)"),
+            ("q_norm", "Slowness magnitude (s/km)"),
+            ("reference_time", "Reference time (s)"),
+            ("rms_residual", "Timing RMS residual (s)"),
+        )
     )
     for ax, (metric, ylabel) in zip(axes.ravel(), metrics):
         method_specs = [("ols", None, "OLS"), ("wls", None, "WLS")]
@@ -1095,8 +1314,7 @@ def _save_figures(result: Mapping[str, Any], output: Path):
         for label in labels:
             four = result["solutions"][label]["four_spacecraft"]
             selection_values = (
-                four["errors"]["angular_error_deg"]
-                if truth_available else four["rms_residual"]
+                four["errors"]["angular_error_deg"] if truth_available else four["rms_residual"]
             )
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
@@ -1105,11 +1323,14 @@ def _save_figures(result: Mapping[str, Any], output: Path):
             if len(finite):
                 ordered = finite[np.argsort(performance[finite])]
                 representative_by_label[label] = (
-                    int(ordered[0]), int(ordered[len(ordered) // 2]), int(ordered[-1])
+                    int(ordered[0]),
+                    int(ordered[len(ordered) // 2]),
+                    int(ordered[-1]),
                 )
-        method_specs.extend(("four_spacecraft", slot, name) for slot, name in enumerate(
-            ("4SC best", "4SC median", "4SC worst")
-        ))
+        method_specs.extend(
+            ("four_spacecraft", slot, name)
+            for slot, name in enumerate(("4SC best", "4SC median", "4SC worst"))
+        )
         if regular_hub_index is not None:
             method_specs.append(("four_spacecraft", "regular_hub", "4SC regular + Hub"))
         for offset, (method, slot, display) in enumerate(method_specs):
@@ -1141,15 +1362,12 @@ def _save_figures(result: Mapping[str, Any], output: Path):
                 percentile_high.append(high)
             center = 0.5 * (len(method_specs) - 1)
             x = np.arange(len(labels)) + (offset - center) * 0.11
-            marker, = ax.plot(x, rmses, "o", ms=4, label=display)
+            (marker,) = ax.plot(x, rmses, "o", ms=4, label=display)
             color = marker.get_color()
-            ax.vlines(x, percentile_low, percentile_high, color=color,
-                      linewidth=1.0, alpha=0.82)
+            ax.vlines(x, percentile_low, percentile_high, color=color, linewidth=1.0, alpha=0.82)
             cap = 0.025
-            ax.hlines(percentile_low, x - cap, x + cap, color=color,
-                      linewidth=1.0, alpha=0.82)
-            ax.hlines(percentile_high, x - cap, x + cap, color=color,
-                      linewidth=1.0, alpha=0.82)
+            ax.hlines(percentile_low, x - cap, x + cap, color=color, linewidth=1.0, alpha=0.82)
+            ax.hlines(percentile_high, x - cap, x + cap, color=color, linewidth=1.0, alpha=0.82)
         ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
         ax.set_ylabel(ylabel.replace("error", "RMSE"))
         ax.set_yscale("log")
@@ -1170,10 +1388,12 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     selected_tetrahedra = _best_worst_tetrahedra(result)
     if selected_tetrahedra is not None:
         _, best_index, worst_index, _ = selected_tetrahedra
-        selected_outlines.update({
-            best_index: ("Best RMSE", "#0072B2"),
-            worst_index: ("Worst RMSE", "#D55E00"),
-        })
+        selected_outlines.update(
+            {
+                best_index: ("Best RMSE", "#0072B2"),
+                worst_index: ("Worst RMSE", "#D55E00"),
+            }
+        )
     if regular_hub_index is not None:
         selected_outlines[regular_hub_index] = ("Most regular + Hub", "#009E73")
 
@@ -1195,17 +1415,21 @@ def _save_figures(result: Mapping[str, Any], output: Path):
             edgecolors[combination_index] = color
             linewidths[combination_index] = 1.6
         valid_geometry = (
-            np.isfinite(configuration_size) & np.isfinite(condition)
-            & np.isfinite(marker_size)
+            np.isfinite(configuration_size) & np.isfinite(condition) & np.isfinite(marker_size)
         )
         axes[3].scatter(
-            configuration_size[valid_geometry], condition[valid_geometry],
-            s=marker_size[valid_geometry], alpha=0.5,
-            edgecolors=edgecolors[valid_geometry], linewidths=linewidths[valid_geometry],
+            configuration_size[valid_geometry],
+            condition[valid_geometry],
+            s=marker_size[valid_geometry],
+            alpha=0.5,
+            edgecolors=edgecolors[valid_geometry],
+            linewidths=linewidths[valid_geometry],
             label="_nolegend_",
         )
-        rates = [np.mean(result["solutions"][label][method]["status"] != 0)
-                 for method in ("four_spacecraft", "ols", "wls")]
+        rates = [
+            np.mean(result["solutions"][label][method]["status"] != 0)
+            for method in ("four_spacecraft", "ols", "wls")
+        ]
         axes[2].plot((0, 1, 2), rates, marker="o", label=label)
     axes[0].set_xscale("log")
     axes[0].set_xlabel("Scaled design condition number")
@@ -1215,9 +1439,7 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     axes[1].set_xscale("log")
     axes[1].set_yscale("log")
     axes[1].set_xlabel("Configuration size L (km)")
-    axes[1].set_ylabel(
-        "Median angular error (deg)" if truth_available else "Median speed (km/s)"
-    )
+    axes[1].set_ylabel("Median angular error (deg)" if truth_available else "Median speed (km/s)")
     axes[1].set_title("Size and Accuracy")
     axes[2].set_xticks((0, 1, 2), ("Four-point", "OLS", "WLS"))
     axes[2].set_ylabel("Failure fraction")
@@ -1230,28 +1452,45 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     size_values = (0.1, 1.0, 10.0, 50.0) if truth_available else (1.0, 10.0, 100.0)
     size_handles = [
         axes[3].scatter(
-            [], [], s=10.0 + 3.0 * value, facecolor="none", edgecolor="0.3",
+            [],
+            [],
+            s=10.0 + 3.0 * value,
+            facecolor="none",
+            edgecolor="0.3",
             label=f"{value:g}",
         )
         for value in size_values
     ]
     size_title = "Median angular error (deg)" if truth_available else "Median speed (km/s)"
     size_legend = axes[3].legend(
-        handles=size_handles, title=size_title, fontsize=7, title_fontsize=7,
+        handles=size_handles,
+        title=size_title,
+        fontsize=7,
+        title_fontsize=7,
         loc="upper left",
     )
     selection_handles = [
         Line2D(
-            [], [], marker="o", markersize=np.sqrt(55), markerfacecolor="none",
-            markeredgecolor=color, markeredgewidth=1.6, linestyle="none", label=label,
+            [],
+            [],
+            marker="o",
+            markersize=np.sqrt(55),
+            markerfacecolor="none",
+            markeredgecolor=color,
+            markeredgewidth=1.6,
+            linestyle="none",
+            label=label,
         )
         for label, color in selected_outlines.values()
     ]
     if selection_handles:
         axes[3].add_artist(size_legend)
         axes[3].legend(
-            handles=selection_handles, title="Selected tetrahedra",
-            fontsize=7, title_fontsize=7, loc="center left",
+            handles=selection_handles,
+            title="Selected tetrahedra",
+            fontsize=7,
+            title_fontsize=7,
+            loc="center left",
         )
     for ax in axes:
         ax.grid(alpha=0.25)
@@ -1272,17 +1511,19 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
     settings = result["settings"]
     with h5py.File(output, "w") as handle:
         metadata = handle.create_group("metadata")
-        metadata.attrs.update(method="shock_timing", source_path=str(result["source"]),
-                              settings=json.dumps(settings, sort_keys=True),
-                              truth_available=result["truth"] is not None,
-                              n_mc=result["n_mc"], complete=False)
+        metadata.attrs.update(
+            method="shock_timing",
+            source_path=str(result["source"]),
+            settings=json.dumps(settings, sort_keys=True),
+            truth_available=result["truth"] is not None,
+            n_mc=result["n_mc"],
+            complete=False,
+        )
         if result.get("analysis_config_yaml") is not None:
             metadata.attrs["analysis_config_yaml"] = result["analysis_config_yaml"]
             metadata.attrs["analysis_config_path"] = str(result["analysis_config_path"])
         spacecraft = handle.create_group("spacecraft")
-        spacecraft.create_dataset(
-            "id", data=np.asarray(result["ids"], dtype=h5py.string_dtype())
-        )
+        spacecraft.create_dataset("id", data=np.asarray(result["ids"], dtype=h5py.string_dtype()))
         _store(spacecraft, "reference_position", result["reference_position"], settings, "km")
         spacecraft.attrs["time_origin_s"] = result["time_origin"]
         observable_group = handle.create_group("observables")
@@ -1295,24 +1536,30 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
         _write_detection(combined, result["combined"], settings)
         _store(combined, "contributors", result["contributors"], settings)
         detection_summary = detection.create_group("mc_summary")
-        independent_counts = np.stack([
-            np.sum(result["independent"]["status"] == code, axis=1)
-            for code in sorted(DETECTION_STATUS.values())
-        ])
-        combined_counts = np.stack([
-            np.sum(result["combined"]["status"] == code, axis=0)
-            for code in sorted(DETECTION_STATUS.values())
-        ])
+        independent_counts = np.stack(
+            [
+                np.sum(result["independent"]["status"] == code, axis=1)
+                for code in sorted(DETECTION_STATUS.values())
+            ]
+        )
+        combined_counts = np.stack(
+            [
+                np.sum(result["combined"]["status"] == code, axis=0)
+                for code in sorted(DETECTION_STATUS.values())
+            ]
+        )
         _store(detection_summary, "independent_status_count", independent_counts, settings)
         _store(detection_summary, "combined_status_count", combined_counts, settings)
-        detection_summary.attrs["status_codes"] = json.dumps(
-            DETECTION_STATUS, sort_keys=True
-        )
+        detection_summary.attrs["status_codes"] = json.dumps(DETECTION_STATUS, sort_keys=True)
         combinations_group = handle.create_group("four_spacecraft_combinations")
         _store(combinations_group, "indices", result["combinations"], settings)
-        combinations_group.create_dataset("ids", data=np.asarray([
-            [result["ids"][index] for index in subset] for subset in result["combinations"]
-        ], dtype=h5py.string_dtype()))
+        combinations_group.create_dataset(
+            "ids",
+            data=np.asarray(
+                [[result["ids"][index] for index in subset] for subset in result["combinations"]],
+                dtype=h5py.string_dtype(),
+            ),
+        )
         selected = _best_worst_tetrahedra(result)
         if selected is not None:
             source_label, best_index, worst_index, rmse = selected
@@ -1320,7 +1567,8 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
             highlighted.attrs["selection_source"] = source_label
             highlighted.attrs["selection_metric"] = (
                 "angular_error_rmse_deg"
-                if result["truth"] is not None else "timing_residual_rmse_s"
+                if result["truth"] is not None
+                else "timing_residual_rmse_s"
             )
             for name, index in (("best", best_index), ("worst", worst_index)):
                 subset = result["combinations"][index]
@@ -1339,9 +1587,13 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
             truth_group = handle.create_group("truth")
             for name, value in result["truth"].items():
                 units = (
-                    "km/s" if name in {"signed_normal_velocity", "speed"}
-                    else "s/km" if name == "q"
-                    else "s" if "time" in name else "1"
+                    "km/s"
+                    if name in {"signed_normal_velocity", "speed"}
+                    else "s/km"
+                    if name == "q"
+                    else "s"
+                    if "time" in name
+                    else "1"
                 )
                 _store(truth_group, name, value, settings, units)
         reconstruction = handle.create_group("reconstruction")
@@ -1364,10 +1616,20 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
             for method, solution in methods.items():
                 _write_solution(label_group.create_group(method), solution, settings)
                 for index in np.argwhere(solution["status"] != 0):
-                    failures.append("|".join(map(str, (
-                        "reconstruction", method, label, *index.tolist(),
-                        int(solution["status"][tuple(index)]),
-                    ))))
+                    failures.append(
+                        "|".join(
+                            map(
+                                str,
+                                (
+                                    "reconstruction",
+                                    method,
+                                    label,
+                                    *index.tolist(),
+                                    int(solution["status"][tuple(index)]),
+                                ),
+                            )
+                        )
+                    )
             paired = label_group.create_group("paired_success")
             ols_ok = methods["ols"]["status"] == 0
             wls_ok = methods["wls"]["status"] == 0
@@ -1376,17 +1638,13 @@ def write_shock_timing_product(result: Mapping[str, Any], output_path: str | Pat
             _store(paired, "four_ols_count", np.sum(four_ok & ols_ok[:, None], axis=0), settings)
             _store(paired, "four_wls_count", np.sum(four_ok & wls_ok[:, None], axis=0), settings)
         failure_group = handle.create_group("failure_records")
-        failure_group.create_dataset("record", data=np.asarray(
-            failures, dtype=h5py.string_dtype()
-        ))
+        failure_group.create_dataset("record", data=np.asarray(failures, dtype=h5py.string_dtype()))
         failure_group.attrs["format"] = (
             "detection|mode|observable|mc|spacecraft|status OR "
             "reconstruction|method|analysis|mc|combination_if_present|status"
         )
         failure_group.attrs["status_codes"] = json.dumps(INVERSION_STATUS, sort_keys=True)
-        failure_group.attrs["detection_status_codes"] = json.dumps(
-            DETECTION_STATUS, sort_keys=True
-        )
+        failure_group.attrs["detection_status_codes"] = json.dumps(DETECTION_STATUS, sort_keys=True)
         metadata.attrs["complete"] = True
     if settings["plot"]["enabled"]:
         _save_figures(result, output)

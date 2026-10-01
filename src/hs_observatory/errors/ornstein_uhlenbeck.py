@@ -37,9 +37,8 @@ def _stationary_ou(
     for index, dt in enumerate(np.diff(time), start=1):
         alpha = float(np.exp(-dt / tau_s))
         innovation_sigma = sigma * np.sqrt(1.0 - alpha * alpha)
-        values[:, index, ...] = (
-            alpha * values[:, index - 1, ...]
-            + rng.normal(scale=innovation_sigma, size=sample_shape)
+        values[:, index, ...] = alpha * values[:, index - 1, ...] + rng.normal(
+            scale=innovation_sigma, size=sample_shape
         )
     return values
 
@@ -115,9 +114,7 @@ class VectorOrnsteinUhlenbeckError(ErrorModel):
         self, sampled: np.ndarray, rng: np.random.Generator, time: np.ndarray | None
     ) -> tuple[np.ndarray, np.ndarray]:
         if sampled.ndim != 4 or sampled.shape[-1] != 3:
-            raise ValueError(
-                "Vector OU input must have shape (n_mc, n_time, n_spacecraft, 3)"
-            )
+            raise ValueError("Vector OU input must have shape (n_mc, n_time, n_spacecraft, 3)")
         time_values = _validated_time(time, sampled.shape[1])
         process_shape = (sampled.shape[0], sampled.shape[2])
         magnitude_error = _stationary_ou(

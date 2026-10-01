@@ -221,9 +221,7 @@ def test_publication_aspect_boundaries_and_highlights(variant):
                 assert shape.collections[0].cmap.name == "cividis"
             else:
                 samples = np.linspace(0.0, 1.0, 5)
-                np.testing.assert_allclose(
-                    shape.collections[0].cmap(samples), cm.lajolla(samples)
-                )
+                np.testing.assert_allclose(shape.collections[0].cmap(samples), cm.lajolla(samples))
             for axis in (shape, axes[0, 2]):
                 np.testing.assert_array_equal(axis.collections[0].get_sizes(), [33])
             arc = shape.lines[0]

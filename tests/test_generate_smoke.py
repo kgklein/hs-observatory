@@ -44,7 +44,7 @@ def test_generation_and_analysis_with_synthetic_fallback(tmp_path):
         f"""
 spacecraft:
   source: cdf
-  cdf_path: {tmp_path / 'missing-cdf'}
+  cdf_path: {tmp_path / "missing-cdf"}
   fallback_synthetic: true
 time:
   t_start_s: 0

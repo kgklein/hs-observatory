@@ -81,17 +81,13 @@ def test_malara_field_yaml_selects_equivalent_evaluator_backends():
 
     for backend in ("direct", "chunked", "cached", "parallel"):
         config = yaml.safe_load(yaml.safe_dump(_field_config()))
-        config["turbulence"].update(
-            {"backend": backend, "chunk_size": 4, "n_workers": 1}
-        )
+        config["turbulence"].update({"backend": backend, "chunk_size": 4, "n_workers": 1})
         field = MalaraTurbulenceField(config)
         assert field.backend == backend
         results[backend] = field.evaluate_quantity("B", time, position)
 
     for result in results.values():
-        np.testing.assert_allclose(
-            result, results["direct"], rtol=1.0e-12, atol=1.0e-12
-        )
+        np.testing.assert_allclose(result, results["direct"], rtol=1.0e-12, atol=1.0e-12)
 
 
 def test_malara_field_defaults_to_cached_backend():
@@ -105,12 +101,8 @@ def test_constant_and_legacy_none_density_flags_are_equivalent():
     time = np.arange(3.0)
     position = np.zeros((2, 3, 3))
 
-    constant_values = MalaraTurbulenceField(constant).evaluate_quantity(
-        "n", time, position
-    )
-    legacy_values = MalaraTurbulenceField(legacy).evaluate_quantity(
-        "n", time, position
-    )
+    constant_values = MalaraTurbulenceField(constant).evaluate_quantity("n", time, position)
+    legacy_values = MalaraTurbulenceField(legacy).evaluate_quantity("n", time, position)
 
     assert np.array_equal(constant_values, legacy_values)
     assert np.all(constant_values == 5.0)

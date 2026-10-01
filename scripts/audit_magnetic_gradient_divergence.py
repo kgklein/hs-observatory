@@ -63,16 +63,14 @@ def _load_magnetic_grid(
     coordinates = simulation["coordinates"]
     units = str(coordinates["units"]).lower()
     if units == "rho_p":
-        box = (
-            np.asarray(coordinates["box_size_rho_p"], dtype=float)
-            * float(coordinates["rho_p_km"])
+        box = np.asarray(coordinates["box_size_rho_p"], dtype=float) * float(
+            coordinates["rho_p_km"]
         )
     elif units == "km":
         box = np.asarray(coordinates["box_size_km"], dtype=float)
     else:
-        box = (
-            np.asarray(coordinates["box_size_code"], dtype=float)
-            * float(coordinates["code_length_to_km"])
+        box = np.asarray(coordinates["box_size_code"], dtype=float) * float(
+            coordinates["code_length_to_km"]
         )
     metadata = {
         "source": str(source.resolve()),
@@ -123,9 +121,7 @@ def _coordinate_sample_check(
     difference = reproduced - saved_field
     return {
         "time_s": float(time[index]),
-        "spacecraft_position_input_units": source_metadata.get(
-            "position_units", "not recorded"
-        ),
+        "spacecraft_position_input_units": source_metadata.get("position_units", "not recorded"),
         "spacecraft_position_shape": list(positions.shape),
         "spacecraft_position_min_km": np.min(positions, axis=0).tolist(),
         "spacecraft_position_max_km": np.max(positions, axis=0).tolist(),
@@ -146,9 +142,7 @@ def _dense_affine_fit(points: np.ndarray, field: np.ndarray) -> tuple[np.ndarray
     return estimate.gradient, estimate.rms_residual
 
 
-def _sphere_offsets(
-    count: int, radius: float, rng: np.random.Generator
-) -> np.ndarray:
+def _sphere_offsets(count: int, radius: float, rng: np.random.Generator) -> np.ndarray:
     directions = rng.normal(size=(count, 3))
     directions /= np.linalg.norm(directions, axis=1, keepdims=True)
     radii = radius * rng.random(count) ** (1.0 / 3.0)
@@ -169,9 +163,7 @@ def _dense_sphere_series(
     centered_points = offsets - np.mean(offsets, axis=0)
     centered_field = sampled - np.mean(sampled, axis=1, keepdims=True)
     inverse = np.linalg.inv(centered_points.T @ centered_points)
-    gradient = np.einsum(
-        "tpi,pj,jk->tik", centered_field, centered_points, inverse
-    )
+    gradient = np.einsum("tpi,pj,jk->tik", centered_field, centered_points, inverse)
     fitted = np.mean(sampled, axis=1, keepdims=True) + np.einsum(
         "pj,tij->tpi", centered_points, gradient
     )
@@ -179,9 +171,7 @@ def _dense_sphere_series(
     return gradient, residual
 
 
-def _sample_convex_hull(
-    vertices: np.ndarray, count: int, rng: np.random.Generator
-) -> np.ndarray:
+def _sample_convex_hull(vertices: np.ndarray, count: int, rng: np.random.Generator) -> np.ndarray:
     triangulation = Delaunay(vertices)
     tetrahedra = vertices[triangulation.simplices]
     determinants = np.linalg.det(
@@ -214,16 +204,10 @@ def _grid_derivative_statistics(
     for field_component in range(3):
         for derivative_axis in range(3):
             derivative = (
-                np.roll(
-                    magnetic[..., field_component], -1, axis=derivative_axis
-                )
-                - np.roll(
-                    magnetic[..., field_component], 1, axis=derivative_axis
-                )
+                np.roll(magnetic[..., field_component], -1, axis=derivative_axis)
+                - np.roll(magnetic[..., field_component], 1, axis=derivative_axis)
             ) / (2.0 * spacing[derivative_axis])
-            component_rms[field_component, derivative_axis] = np.sqrt(
-                np.mean(derivative**2)
-            )
+            component_rms[field_component, derivative_axis] = np.sqrt(np.mean(derivative**2))
             if field_component == derivative_axis:
                 divergence += derivative
             if (field_component, derivative_axis) in {
@@ -250,9 +234,7 @@ def _grid_derivative_statistics(
         "absolute_divergence_percentiles": np.percentile(
             np.abs(divergence), (50, 90, 95, 99, 99.9)
         ).tolist(),
-        "curl_magnitude_percentiles": np.percentile(
-            magnitude, (50, 90, 95, 99, 99.9)
-        ).tolist(),
+        "curl_magnitude_percentiles": np.percentile(magnitude, (50, 90, 95, 99, 99.9)).tolist(),
     }
 
 
@@ -289,9 +271,7 @@ def _actual_scale_test(
                     estimate = estimate_gradient_least_squares(
                         points, interpolator.sample(magnetic, points)
                     )
-                    _curl, curl_magnitude, divergence = gradient_curl_divergence(
-                        estimate.gradient
-                    )
+                    _curl, curl_magnitude, divergence = gradient_curl_divergence(estimate.gradient)
                     divergences.append(float(divergence))
                     curls.append(float(curl_magnitude))
                     conditions.append(float(estimate.condition_number))
@@ -305,9 +285,7 @@ def _actual_scale_test(
                         "rms_absolute_divergence_nT_per_km": float(
                             np.sqrt(np.mean(divergences_array**2))
                         ),
-                        "rms_curl_magnitude_nT_per_km": float(
-                            np.sqrt(np.mean(curls_array**2))
-                        ),
+                        "rms_curl_magnitude_nT_per_km": float(np.sqrt(np.mean(curls_array**2))),
                         "median_absolute_divergence_to_curl": float(
                             np.median(
                                 np.abs(divergences_array)
@@ -339,9 +317,7 @@ def _analytic_interpolation_test(
                 dtype=float,
             )
             points -= np.mean(points, axis=0)
-            shapes[category] = (
-                points / geometry_diagnostics(points).characteristic_size
-            )
+            shapes[category] = points / geometry_diagnostics(points).characteristic_size
 
     records: list[dict[str, Any]] = []
     for wavelength in (8.0, 16.0, 32.0):
@@ -391,9 +367,7 @@ def _analytic_interpolation_test(
                             interpolated_ratio,
                         ),
                     ):
-                        _curl, magnitude, divergence = gradient_curl_divergence(
-                            gradient
-                        )
+                        _curl, magnitude, divergence = gradient_curl_divergence(gradient)
                         divergences.append(float(divergence))
                         ratios.append(
                             float(abs(divergence) / magnitude)
@@ -407,18 +381,12 @@ def _analytic_interpolation_test(
                         "configuration": category,
                         "wavelength_grid_spacings": wavelength,
                         "configuration_scale_grid_spacings": scale,
-                        "direct_rms_divergence": float(
-                            np.sqrt(np.mean(direct_array**2))
-                        ),
+                        "direct_rms_divergence": float(np.sqrt(np.mean(direct_array**2))),
                         "interpolated_rms_divergence": float(
                             np.sqrt(np.mean(interpolated_array**2))
                         ),
                         "interpolation_contribution_rms": float(
-                            np.sqrt(
-                                np.mean(
-                                    (interpolated_array - direct_array) ** 2
-                                )
-                            )
+                            np.sqrt(np.mean((interpolated_array - direct_array) ** 2))
                         ),
                         "direct_median_absolute_divergence_to_curl": float(
                             np.nanmedian(direct_ratio)
@@ -437,9 +405,7 @@ def _analytic_interpolation_test(
 def _representative_indices(
     time: np.ndarray, ratio: np.ndarray, start: float, stop: float
 ) -> list[tuple[str, int]]:
-    candidates = np.flatnonzero(
-        (time >= start) & (time <= stop) & np.isfinite(ratio)
-    )
+    candidates = np.flatnonzero((time >= start) & (time <= stop) & np.isfinite(ratio))
     if not len(candidates):
         return []
     local = ratio[candidates]
@@ -493,14 +459,14 @@ def _interval_diagnostics(
             )
             ideal_gradient = np.asarray(estimate["gradient"], dtype=float)[interval]
             coarse_gradient = np.asarray(truth["coarse_gradient"], dtype=float)[interval]
-            ideal_curl, ideal_curl_magnitude, ideal_divergence = (
-                gradient_curl_divergence(ideal_gradient)
+            ideal_curl, ideal_curl_magnitude, ideal_divergence = gradient_curl_divergence(
+                ideal_gradient
             )
-            coarse_curl, coarse_curl_magnitude, coarse_divergence = (
-                gradient_curl_divergence(coarse_gradient)
+            coarse_curl, coarse_curl_magnitude, coarse_divergence = gradient_curl_divergence(
+                coarse_gradient
             )
-            dense_curl, dense_curl_magnitude, dense_divergence = (
-                gradient_curl_divergence(dense_gradient)
+            dense_curl, dense_curl_magnitude, dense_divergence = gradient_curl_divergence(
+                dense_gradient
             )
             ratio = np.asarray(estimate["divergence_curl_ratio"], dtype=float)
             series[category] = {
@@ -519,22 +485,16 @@ def _interval_diagnostics(
                     np.finfo(float).tiny,
                 ),
                 "curl_error": ideal_curl - coarse_curl,
-                "condition_number": np.asarray(
-                    estimate["condition_number"], dtype=float
-                )[interval],
+                "condition_number": np.asarray(estimate["condition_number"], dtype=float)[interval],
                 "dense_residual": dense_residual,
-                "coarse_cell_count": np.asarray(
-                    truth["coarse_cell_count"], dtype=float
-                )[interval],
+                "coarse_cell_count": np.asarray(truth["coarse_cell_count"], dtype=float)[interval],
                 "dense_divergence": dense_divergence,
                 "dense_curl_magnitude": dense_curl_magnitude,
             }
             for label, index in _representative_indices(time, ratio, start, stop):
                 local_index = int(np.searchsorted(interval_indices, index))
                 vertices = positions[index] - np.mean(positions[index], axis=0)
-                hull_offsets = _sample_convex_hull(
-                    vertices, dense_samples, rng
-                )
+                hull_offsets = _sample_convex_hull(vertices, dense_samples, rng)
                 hull_points = centers[index] + hull_offsets
                 hull_gradient, hull_residual = _dense_affine_fit(
                     hull_points,
@@ -553,28 +513,14 @@ def _interval_diagnostics(
                     "Q": geometry_record.chi,
                     "volumetric_tensor_eigenvalues_km2": geometry_record.eigenvalues.tolist(),
                     "condition_number": geometry_record.condition_number,
-                    "affine_residual_nT": float(
-                        np.asarray(estimate["affine_rms_residual"])[index]
-                    ),
-                    "dense_sphere_affine_residual_nT": float(
-                        dense_residual[local_index]
-                    ),
+                    "affine_residual_nT": float(np.asarray(estimate["affine_rms_residual"])[index]),
+                    "dense_sphere_affine_residual_nT": float(dense_residual[local_index]),
                     "dense_hull_affine_residual_nT": hull_residual,
-                    "coarse_cell_count": int(
-                        np.asarray(truth["coarse_cell_count"])[index]
-                    ),
-                    "ideal": _gradient_summary(
-                        np.asarray(estimate["gradient"])[index]
-                    ),
-                    "point_truth": _gradient_summary(
-                        np.asarray(truth["point_gradient"])[index]
-                    ),
-                    "coarse_truth": _gradient_summary(
-                        np.asarray(truth["coarse_gradient"])[index]
-                    ),
-                    "dense_sphere_fit": _gradient_summary(
-                        dense_gradient[local_index]
-                    ),
+                    "coarse_cell_count": int(np.asarray(truth["coarse_cell_count"])[index]),
+                    "ideal": _gradient_summary(np.asarray(estimate["gradient"])[index]),
+                    "point_truth": _gradient_summary(np.asarray(truth["point_gradient"])[index]),
+                    "coarse_truth": _gradient_summary(np.asarray(truth["coarse_gradient"])[index]),
+                    "dense_sphere_fit": _gradient_summary(dense_gradient[local_index]),
                     "dense_convex_hull_fit": _gradient_summary(hull_gradient),
                 }
                 table.append(record)
@@ -586,29 +532,23 @@ def _interval_diagnostics(
         for field_component in range(3):
             for derivative_axis in range(3):
                 derivative = (
-                    np.roll(
-                        magnetic[..., field_component], -1, axis=derivative_axis
-                    )
-                    - np.roll(
-                        magnetic[..., field_component], 1, axis=derivative_axis
-                    )
+                    np.roll(magnetic[..., field_component], -1, axis=derivative_axis)
+                    - np.roll(magnetic[..., field_component], 1, axis=derivative_axis)
                 ) / (2.0 * spacing[derivative_axis])
                 sampled = interpolator.sample(derivative, combined_points)
                 start_index = 0
                 for record_index, points in enumerate(hull_point_sets):
                     stop_index = start_index + len(points)
-                    hull_average_gradients[
-                        record_index, field_component, derivative_axis
-                    ] = np.mean(sampled[start_index:stop_index])
+                    hull_average_gradients[record_index, field_component, derivative_axis] = (
+                        np.mean(sampled[start_index:stop_index])
+                    )
                     start_index = stop_index
         for record, gradient in zip(table, hull_average_gradients):
             record["convex_hull_average_gradient"] = _gradient_summary(gradient)
     return table, series
 
 
-def _plot_debug(
-    series: dict[str, dict[str, np.ndarray]], output: Path, dpi: int
-) -> None:
+def _plot_debug(series: dict[str, dict[str, np.ndarray]], output: Path, dpi: int) -> None:
     categories = [name for name in CONFIGURATION_ORDER if name in series]
     figure, axes = plt.subplots(
         8,
@@ -623,14 +563,10 @@ def _plot_debug(
         time = data["time"]
         axes[0, column].plot(time, data["ideal_curl_magnitude"], label="ideal")
         axes[0, column].plot(time, data["coarse_curl_magnitude"], label="coarse")
-        axes[0, column].plot(
-            time, data["dense_curl_magnitude"], label="dense sphere", alpha=0.8
-        )
+        axes[0, column].plot(time, data["dense_curl_magnitude"], label="dense sphere", alpha=0.8)
         axes[1, column].plot(time, data["ideal_divergence"], label="ideal")
         axes[1, column].plot(time, data["coarse_divergence"], label="coarse")
-        axes[1, column].plot(
-            time, data["dense_divergence"], label="dense sphere", alpha=0.8
-        )
+        axes[1, column].plot(time, data["dense_divergence"], label="dense sphere", alpha=0.8)
         axes[1, column].axhline(0.0, color="black", linewidth=0.7)
         axes[2, column].plot(time, data["ideal_ratio"], label="ideal")
         axes[2, column].plot(time, data["coarse_ratio"], label="coarse")
@@ -685,9 +621,7 @@ def _plot_debug(
     plt.close(figure)
 
 
-def _series_statistics(
-    series: dict[str, dict[str, np.ndarray]]
-) -> dict[str, dict[str, float]]:
+def _series_statistics(series: dict[str, dict[str, np.ndarray]]) -> dict[str, dict[str, float]]:
     statistics: dict[str, dict[str, float]] = {}
     for category, data in series.items():
         ideal_ratio = np.asarray(data["ideal_ratio"], dtype=float)
@@ -696,9 +630,7 @@ def _series_statistics(
             "ideal_ratio_p90": float(np.nanpercentile(ideal_ratio, 90.0)),
             "ideal_ratio_p99": float(np.nanpercentile(ideal_ratio, 99.0)),
             "ideal_ratio_maximum": float(np.nanmax(ideal_ratio)),
-            "ideal_ratio_fraction_at_least_one": float(
-                np.nanmean(ideal_ratio >= 1.0)
-            ),
+            "ideal_ratio_fraction_at_least_one": float(np.nanmean(ideal_ratio >= 1.0)),
             "ideal_rms_divergence_nT_per_km": float(
                 np.sqrt(np.nanmean(data["ideal_divergence"] ** 2))
             ),
@@ -711,12 +643,8 @@ def _series_statistics(
             "ideal_rms_curl_magnitude_nT_per_km": float(
                 np.sqrt(np.nanmean(data["ideal_curl_magnitude"] ** 2))
             ),
-            "dense_sphere_affine_residual_median_nT": float(
-                np.nanmedian(data["dense_residual"])
-            ),
-            "condition_number_median": float(
-                np.nanmedian(data["condition_number"])
-            ),
+            "dense_sphere_affine_residual_median_nT": float(np.nanmedian(data["dense_residual"])),
+            "condition_number_median": float(np.nanmedian(data["condition_number"])),
         }
     return statistics
 
@@ -778,9 +706,7 @@ def main() -> int:
         requested_time=0.5 * (args.start_time + args.stop_time),
     )
     grid_statistics = _grid_derivative_statistics(magnetic, box)
-    scale_records = _actual_scale_test(
-        args.product, magnetic, box, rng=rng
-    )
+    scale_records = _actual_scale_test(args.product, magnetic, box, rng=rng)
     analytic_records = _analytic_interpolation_test(args.product, rng=rng)
     interval_table, series = _interval_diagnostics(
         args.product,

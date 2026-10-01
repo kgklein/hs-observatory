@@ -79,13 +79,9 @@ def load_generation_config(path: str | Path) -> LoadedConfig:
         raise ValueError("visualization.dpi must be positive")
     if int(visualization.get("mc_index", 0)) < 0:
         raise ValueError("visualization.mc_index must be non-negative")
-    truth_velocity_frame = str(
-        visualization.get("truth_velocity_frame", "spacecraft")
-    ).lower()
+    truth_velocity_frame = str(visualization.get("truth_velocity_frame", "spacecraft")).lower()
     if truth_velocity_frame not in {"spacecraft", "plasma"}:
-        raise ValueError(
-            "visualization.truth_velocity_frame must be 'spacecraft' or 'plasma'"
-        )
+        raise ValueError("visualization.truth_velocity_frame must be 'spacecraft' or 'plasma'")
     return loaded
 
 

@@ -71,9 +71,7 @@ def _write_rbf_input(
         spacecraft = handle.create_group("spacecraft")
         spacecraft.create_dataset(
             "id",
-            data=np.asarray(
-                ["H", "N1", "N2", "N3"], dtype=h5py.string_dtype("utf-8")
-            ),
+            data=np.asarray(["H", "N1", "N2", "N3"], dtype=h5py.string_dtype("utf-8")),
         )
         r_group = spacecraft.create_group("r")
         r_group.create_dataset("B", data=positions)
@@ -126,9 +124,7 @@ def test_componentwise_rbf_evaluate_shape_and_known_points():
     )
     magnetic = _linear_B(positions)
 
-    model = ComponentwiseRBFReconstructor(sigma=1.0, smoothing=0.0).fit(
-        positions, magnetic
-    )
+    model = ComponentwiseRBFReconstructor(sigma=1.0, smoothing=0.0).fit(positions, magnetic)
     reconstructed = model.evaluate(positions[:3])
 
     assert reconstructed.shape == (3, 3)
@@ -137,18 +133,14 @@ def test_componentwise_rbf_evaluate_shape_and_known_points():
 
 def test_componentwise_rbf_rejects_too_few_samples():
     with pytest.raises(ValueError, match="at least four samples"):
-        ComponentwiseRBFReconstructor(sigma=1.0).fit(
-            np.zeros((3, 3)), np.zeros((3, 3))
-        )
+        ComponentwiseRBFReconstructor(sigma=1.0).fit(np.zeros((3, 3)), np.zeros((3, 3)))
 
 
 def test_component_plot_field_raw_and_delta_modes():
     magnetic = np.array([[1.0, 2.0, 10.0], [2.0, 4.0, 12.0]])
     background = np.array([1.5, 3.0, 11.0])
 
-    np.testing.assert_allclose(
-        compute_component_plot_field(magnetic, mode="raw"), magnetic
-    )
+    np.testing.assert_allclose(compute_component_plot_field(magnetic, mode="raw"), magnetic)
     np.testing.assert_allclose(
         compute_component_plot_field(magnetic, background, mode="delta"),
         [[-0.5, -1.0, -1.0], [0.5, 1.0, 1.0]],
@@ -160,13 +152,9 @@ def test_determine_background_field_uses_metadata_then_means(tmp_path):
     with h5py.File(path, "w") as handle:
         handle.attrs["B0"] = [0.1, 0.2, 5.0]
         reconstruction = handle.create_group("reconstruction")
-        reconstruction.create_dataset(
-            "B", data=np.array([[1.0, 2.0, 10.0], [3.0, 4.0, 12.0]])
-        )
+        reconstruction.create_dataset("B", data=np.array([[1.0, 2.0, 10.0], [3.0, 4.0, 12.0]]))
         validation = handle.create_group("validation")
-        validation.create_dataset(
-            "B_actual", data=np.array([[2.0, 4.0, 20.0], [4.0, 6.0, 22.0]])
-        )
+        validation.create_dataset("B_actual", data=np.array([[2.0, 4.0, 20.0], [4.0, 6.0, 22.0]]))
 
     with h5py.File(path) as handle:
         background, metadata = determine_background_field(handle, "reconstructed")
@@ -275,9 +263,7 @@ def test_sigma_cache_reuses_and_keys_change(tmp_path):
     changed_smoothing = compute_sigma_cache_key(
         positions, smoothing=0.1, sigma_candidates=candidates
     )
-    changed_grid = compute_sigma_cache_key(
-        positions, sigma_candidates=np.array([0.5, 2.0])
-    )
+    changed_grid = compute_sigma_cache_key(positions, sigma_candidates=np.array([0.5, 2.0]))
     changed_positions = compute_sigma_cache_key(
         positions + np.array([0.1, 0.0, 0.0]), sigma_candidates=candidates
     )
@@ -334,9 +320,7 @@ def test_cylindrical_grid_shape_mask_and_unwrapped_axis():
     positions[:, 1, 0] += 5.0
     positions[:, 1, 1] = 1.0
 
-    grid = build_cylindrical_grid(
-        positions, time, radius=0.25, n_axial=4, n_transverse=5
-    )
+    grid = build_cylindrical_grid(positions, time, radius=0.25, n_axial=4, n_transverse=5)
 
     assert grid.mask.shape == (4, 5, 5)
     assert grid.points.shape[1] == 3
@@ -388,9 +372,7 @@ def test_cylindrical_grid_can_require_all_spacecraft_axial_coverage():
 
     np.testing.assert_allclose(grid.e_parallel, [1.0, 0.0, 0.0])
     assert grid.require_all_spacecraft_coverage
-    np.testing.assert_allclose(
-        grid.axial_values + grid.center[0], [5.0, 10.0, 15.0, 20.0]
-    )
+    np.testing.assert_allclose(grid.axial_values + grid.center[0], [5.0, 10.0, 15.0, 20.0])
     assert np.min(grid.points[:, 0]) >= 5.0
     assert np.max(grid.points[:, 0]) <= 20.0
 
@@ -448,9 +430,7 @@ def test_compute_rbf_reconstruction_rejects_observed_mc_all(tmp_path):
     input_path = _write_rbf_input(tmp_path / "input.h5")
 
     with pytest.raises(NotImplementedError, match="one observed realization"):
-        compute_rbf_reconstruction(
-            input_path, _config(data_group="observed", mc_index="all")
-        )
+        compute_rbf_reconstruction(input_path, _config(data_group="observed", mc_index="all"))
 
 
 def test_collect_samples_for_window_preserves_unwrapped_positions():
@@ -675,9 +655,7 @@ rbf_reconstruction:
     cached_output_path = tmp_path / "rbf-explicit-cached.h5"
     cached_config_path = tmp_path / "rbf-explicit-cached.yaml"
     cached_config_path.write_text(
-        config_path.read_text(encoding="utf-8").replace(
-            str(output_path), str(cached_output_path)
-        ),
+        config_path.read_text(encoding="utf-8").replace(str(output_path), str(cached_output_path)),
         encoding="utf-8",
     )
     assert analyze_from_config(cached_config_path) == cached_output_path
@@ -739,9 +717,7 @@ output:
         encoding="utf-8",
     )
 
-    add_simulation_reference_to_rbf_output(
-        output_path, observation_path, generation_config
-    )
+    add_simulation_reference_to_rbf_output(output_path, observation_path, generation_config)
 
     with h5py.File(output_path) as handle:
         assert handle["validation/B_actual"].shape == handle["reconstruction/B"].shape

@@ -20,9 +20,7 @@ class CoordinateOffsetModel(ABC):
     name: str
 
     @abstractmethod
-    def draw(
-        self, rng: np.random.Generator, n_mc: int, n_spacecraft: int
-    ) -> np.ndarray:
+    def draw(self, rng: np.random.Generator, n_mc: int, n_spacecraft: int) -> np.ndarray:
         """Draw an offset for each Monte Carlo realization and spacecraft."""
 
 
@@ -82,19 +80,11 @@ def time_offset_model_from_config(config: dict[str, Any] | None) -> CoordinateOf
     if model in {"gaussian_constant", "gaussian_time_offset"}:
         return GaussianTimeOffset(config["sigma_s"])
     if model in {"constant_per_spacecraft", "observatory_timing"}:
-        if (
-            "requirement_ms" in config
-            and "requirement_3sigma_ms" in config
-        ):
-            raise ValueError(
-                "timing cannot specify both requirement_ms and "
-                "requirement_3sigma_ms"
-            )
+        if "requirement_ms" in config and "requirement_3sigma_ms" in config:
+            raise ValueError("timing cannot specify both requirement_ms and requirement_3sigma_ms")
         legacy = "requirement_3sigma_ms" in config
         if legacy and config.get("sigma_level", 3) != 3:
-            raise ValueError(
-                "timing.requirement_3sigma_ms implies sigma_level 3"
-            )
+            raise ValueError("timing.requirement_3sigma_ms implies sigma_level 3")
         requirement_ms = float(
             config.get(
                 "requirement_ms",
@@ -102,9 +92,7 @@ def time_offset_model_from_config(config: dict[str, Any] | None) -> CoordinateOf
             )
         )
         return GaussianTimeOffset(
-            sigma_from_requirement(
-                requirement_ms, 3 if legacy else config.get("sigma_level", 3)
-            )
+            sigma_from_requirement(requirement_ms, 3 if legacy else config.get("sigma_level", 3))
             * 1.0e-3
         )
     raise ValueError(f"Unknown time-offset model: {model}")
@@ -123,19 +111,14 @@ def position_offset_model_from_config(config: dict[str, Any] | None) -> Coordina
         "isotropic_3d_gaussian_position_error",
         "observatory_position",
     }:
-        if (
-            "requirement_magnitude_km" in config
-            and "requirement_3sigma_magnitude_km" in config
-        ):
+        if "requirement_magnitude_km" in config and "requirement_3sigma_magnitude_km" in config:
             raise ValueError(
                 "position cannot specify both requirement_magnitude_km and "
                 "requirement_3sigma_magnitude_km"
             )
         legacy = "requirement_3sigma_magnitude_km" in config
         if legacy and config.get("sigma_level", 3) != 3:
-            raise ValueError(
-                "position.requirement_3sigma_magnitude_km implies sigma_level 3"
-            )
+            raise ValueError("position.requirement_3sigma_magnitude_km implies sigma_level 3")
         radius = float(
             config.get(
                 "requirement_magnitude_km",
@@ -144,14 +127,10 @@ def position_offset_model_from_config(config: dict[str, Any] | None) -> Coordina
         )
         if "radial_probability" in config:
             probability = float(config["radial_probability"])
-            component_sigma = component_sigma_from_3d_radial_3sigma(
-                radius, probability
-            )
+            component_sigma = component_sigma_from_3d_radial_3sigma(radius, probability)
         else:
             component_sigma = component_sigma_from_3d_radial_requirement(
                 radius, 3 if legacy else config.get("sigma_level", 3)
             )
-        return GaussianPositionOffset(
-            component_sigma
-        )
+        return GaussianPositionOffset(component_sigma)
     raise ValueError(f"Unknown position-offset model: {model}")

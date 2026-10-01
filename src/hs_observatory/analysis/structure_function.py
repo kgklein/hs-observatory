@@ -108,8 +108,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     increment_mode = str(config.get("increment_mode", "same_time_pairs"))
     if increment_mode not in {"same_time_pairs", "all_spacetime_pairs"}:
         raise ValueError(
-            "structure_function.increment_mode must be "
-            "'same_time_pairs' or 'all_spacetime_pairs'"
+            "structure_function.increment_mode must be 'same_time_pairs' or 'all_spacetime_pairs'"
         )
     pair_sampling = _mapping(config, "pair_sampling")
     pair_mode = str(pair_sampling.get("mode", "all"))
@@ -128,9 +127,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     random_seed = pair_sampling.get("random_seed", 12345)
     random_seed = None if random_seed is None else int(random_seed)
     target_pairs_per_bin = pair_sampling.get("target_pairs_per_bin")
-    target_pairs_per_bin = (
-        None if target_pairs_per_bin is None else int(target_pairs_per_bin)
-    )
+    target_pairs_per_bin = None if target_pairs_per_bin is None else int(target_pairs_per_bin)
     max_candidates = pair_sampling.get("max_candidates")
     max_candidates = None if max_candidates is None else int(max_candidates)
     binning_n_pairs = int(pair_sampling.get("binning_n_pairs", 5_000_000))
@@ -139,12 +136,13 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     if pair_mode == "random" and (n_pairs is None or n_pairs < 1):
         raise ValueError("random structure-function pair sampling requires pair_sampling.n_pairs")
     if pair_mode == "random" and random_seed is None:
-        raise ValueError("random structure-function pair sampling requires pair_sampling.random_seed")
+        raise ValueError(
+            "random structure-function pair sampling requires pair_sampling.random_seed"
+        )
     if pair_mode == "adaptive_stratified":
         if increment_mode != "all_spacetime_pairs":
             raise ValueError(
-                "adaptive_stratified pair sampling requires "
-                "increment_mode='all_spacetime_pairs'"
+                "adaptive_stratified pair sampling requires increment_mode='all_spacetime_pairs'"
             )
         if target_pairs_per_bin is None or target_pairs_per_bin < 1:
             raise ValueError(
@@ -153,13 +151,10 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             )
         if max_candidates is None or max_candidates < 1:
             raise ValueError(
-                "adaptive_stratified pair sampling requires a positive "
-                "pair_sampling.max_candidates"
+                "adaptive_stratified pair sampling requires a positive pair_sampling.max_candidates"
             )
         if random_seed is None:
-            raise ValueError(
-                "adaptive_stratified pair sampling requires pair_sampling.random_seed"
-            )
+            raise ValueError("adaptive_stratified pair sampling requires pair_sampling.random_seed")
     if max_pairs is not None and max_pairs < 1:
         raise ValueError("structure_function.pair_sampling.max_pairs must be positive or null")
     return {
@@ -209,9 +204,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
                 ),
                 "run_label": publication.get("run_label"),
                 "fit_range": publication.get("fit_range"),
-                "gaussian_reference": float(
-                    publication.get("gaussian_reference", 5.0 / 3.0)
-                ),
+                "gaussian_reference": float(publication.get("gaussian_reference", 5.0 / 3.0)),
                 "show_pair_counts": bool(publication.get("show_pair_counts", False)),
                 "dpi": int(publication.get("dpi", 300)),
             },
@@ -594,8 +587,10 @@ def compute_all_spacetime_structure_functions(
             candidates_examined[member] = sampling_diagnostics["candidates_examined"]
             sampling_target_reached[member] = sampling_diagnostics["target_reached"]
             pair_iterator = (
-                (selected_left[start : start + pair_sampling["chunk_size"]],
-                 selected_right[start : start + pair_sampling["chunk_size"]])
+                (
+                    selected_left[start : start + pair_sampling["chunk_size"]],
+                    selected_right[start : start + pair_sampling["chunk_size"]],
+                )
                 for start in range(0, selected_left.size, pair_sampling["chunk_size"])
             )
         else:
@@ -622,11 +617,7 @@ def compute_all_spacetime_structure_functions(
                 valid &= ~above_max
             outside_lambda_bins[member] += int(
                 np.sum(
-                    np.isfinite(separation)
-                    & (separation > 0.0)
-                    & ~below_min
-                    & ~above_max
-                    & ~valid
+                    np.isfinite(separation) & (separation > 0.0) & ~below_min & ~above_max & ~valid
                 )
             )
             for index in range(n_bins):
@@ -636,7 +627,9 @@ def compute_all_spacetime_structure_functions(
                     continue
                 counts[member, index] += count
                 for field, values in flat_values.items():
-                    magnitude = np.linalg.norm(values[right[selected]] - values[left[selected]], axis=1)
+                    magnitude = np.linalg.norm(
+                        values[right[selected]] - values[left[selected]], axis=1
+                    )
                     for order_index, order in enumerate(orders):
                         sums[field][member, order_index, index] += float(np.sum(magnitude**order))
 
@@ -1053,7 +1046,9 @@ def structure_function_kurtosis_ylim(
         plotted_values.append(_flatness_from_product(products["truth"], quantity).reshape(-1))
         observed = _flatness_from_product(products["observed"], quantity)
         plotted_values.extend(_ensemble_interval(observed))
-    values = np.concatenate([np.asarray(value, dtype=float).reshape(-1) for value in plotted_values])
+    values = np.concatenate(
+        [np.asarray(value, dtype=float).reshape(-1) for value in plotted_values]
+    )
     values = values[np.isfinite(values) & (values > 0.0)]
     if values.size == 0:
         raise ValueError("no positive finite kurtosis values are available")
@@ -1062,9 +1057,7 @@ def structure_function_kurtosis_ylim(
     if lower == upper:
         return lower / 1.1, upper * 1.1
     log_margin = 0.05 * (np.log(upper) - np.log(lower))
-    return float(np.exp(np.log(lower) - log_margin)), float(
-        np.exp(np.log(upper) + log_margin)
-    )
+    return float(np.exp(np.log(lower) - log_margin)), float(np.exp(np.log(upper) + log_margin))
 
 
 def plot_structure_function_summary_row(
@@ -1150,7 +1143,8 @@ def plot_structure_function_summary_row(
     if axes is None:
         panel_count = 2 + int(show_kurtosis) + int(show_pair_counts)
         figure, axes_array = plt.subplots(
-            1, panel_count,
+            1,
+            panel_count,
             figsize=({2: 9.6, 3: 14.2, 4: 18.4}[panel_count], 4.25),
             constrained_layout=True,
             squeeze=False,
@@ -1222,8 +1216,13 @@ def plot_structure_function_summary_row(
         )
         order_handles.append(
             Line2D(
-                [0], [0], color=color, linestyle="none", marker=marker,
-                markersize=5.0, label=fr"$n={order}$"
+                [0],
+                [0],
+                color=color,
+                linestyle="none",
+                marker=marker,
+                markersize=5.0,
+                label=rf"$n={order}$",
             )
         )
 
@@ -1236,10 +1235,19 @@ def plot_structure_function_summary_row(
         structure_axis.set_ylim(structure_lower, structure_upper)
     structure_axis.grid(True, which="both", alpha=0.18)
     provenance_handles = [
-        Line2D([0], [0], color=color, linestyle="-", marker="o", markerfacecolor="white",
-               linewidth=1.45, label="sampled truth"),
-        Line2D([0], [0], color=color, linestyle="--", marker="o", linewidth=1.25,
-               label="MC median"),
+        Line2D(
+            [0],
+            [0],
+            color=color,
+            linestyle="-",
+            marker="o",
+            markerfacecolor="white",
+            linewidth=1.45,
+            label="sampled truth",
+        ),
+        Line2D(
+            [0], [0], color=color, linestyle="--", marker="o", linewidth=1.25, label="MC median"
+        ),
         Line2D([0], [0], color=color, linewidth=7, alpha=0.15, label="MC 5th–95th"),
     ]
     if show_legends:
@@ -1290,9 +1298,7 @@ def plot_structure_function_summary_row(
             fit_ranges,
             refit_min_bins,
         )
-    truth_range_index, selected_range = _fit_range_index(
-        truth_exponents, selected_fit_range
-    )
+    truth_range_index, selected_range = _fit_range_index(truth_exponents, selected_fit_range)
     mc_range_index, mc_selected_range = _fit_range_index(mc_exponents, selected_range)
     if mc_selected_range != selected_range:  # pragma: no cover - defensive
         raise ValueError("truth and observed exponent fit ranges do not match")
@@ -1320,8 +1326,14 @@ def plot_structure_function_summary_row(
     truth_xi_selected = truth_xi[truth_indices]
     mc_lower, mc_median, mc_upper = _ensemble_interval(mc_xi[:, mc_indices])
     exponent_axis.plot(
-        fitted_orders, truth_xi_selected, color=color, marker="o", markerfacecolor="white",
-        linewidth=1.5, label="sampled truth", zorder=3
+        fitted_orders,
+        truth_xi_selected,
+        color=color,
+        marker="o",
+        markerfacecolor="white",
+        linewidth=1.5,
+        label="sampled truth",
+        zorder=3,
     )
     exponent_axis.errorbar(
         fitted_orders,
@@ -1342,9 +1354,13 @@ def plot_structure_function_summary_row(
             + (1.0 - float(p_value)) ** (fitted_orders / 3.0)
         )
         exponent_axis.plot(
-            fitted_orders, prediction, color=p_model_color or "black",
-            linestyle="--", linewidth=1.25,
-            label=fr"$p$-model ($p={p_value:g}$)", zorder=2
+            fitted_orders,
+            prediction,
+            color=p_model_color or "black",
+            linestyle="--",
+            linewidth=1.25,
+            label=rf"$p$-model ($p={p_value:g}$)",
+            zorder=2,
         )
     exponent_axis.set_xlabel(r"order $n$")
     exponent_axis.set_ylabel(r"$\xi_n$")
@@ -1362,21 +1378,45 @@ def plot_structure_function_summary_row(
         mc_flatness = _flatness_from_product(observed, quantity)
         flat_lower, flat_median, flat_upper = _ensemble_interval(mc_flatness)
         flatness_axis.fill_between(
-            mc_lambda, flat_lower, flat_upper, color=color, alpha=0.15, linewidth=0,
-            label="MC 5th–95th", zorder=1
+            mc_lambda,
+            flat_lower,
+            flat_upper,
+            color=color,
+            alpha=0.15,
+            linewidth=0,
+            label="MC 5th–95th",
+            zorder=1,
         )
         flatness_axis.plot(
-            truth_lambda, truth_flatness[0], color=color, linestyle="-", linewidth=1.6,
-            marker="o", markersize=4.0, markerfacecolor="white",
-            label="sampled truth", zorder=3
+            truth_lambda,
+            truth_flatness[0],
+            color=color,
+            linestyle="-",
+            linewidth=1.6,
+            marker="o",
+            markersize=4.0,
+            markerfacecolor="white",
+            label="sampled truth",
+            zorder=3,
         )
         flatness_axis.plot(
-            mc_lambda, flat_median, color=color, linestyle="--", linewidth=1.4,
-            marker="o", markersize=4.0, label="MC median", zorder=4
+            mc_lambda,
+            flat_median,
+            color=color,
+            linestyle="--",
+            linewidth=1.4,
+            marker="o",
+            markersize=4.0,
+            label="MC median",
+            zorder=4,
         )
         flatness_axis.axhline(
-            gaussian_reference, color="black", linestyle="--", linewidth=1.2,
-            label="3D Gaussian", zorder=2
+            gaussian_reference,
+            color="black",
+            linestyle="--",
+            linewidth=1.2,
+            label="3D Gaussian",
+            zorder=2,
         )
         flatness_axis.set_xscale("log")
         flatness_axis.set_yscale("log")
@@ -1399,17 +1439,37 @@ def plot_structure_function_summary_row(
             raise ValueError("observed counts must contain at least one MC member")
         count_lower, count_median, count_upper = _ensemble_interval(mc_counts)
         count_axis.fill_between(
-            mc_lambda, count_lower, count_upper, color=color, alpha=0.15,
-            linewidth=0, label="MC 5th–95th", zorder=1,
+            mc_lambda,
+            count_lower,
+            count_upper,
+            color=color,
+            alpha=0.15,
+            linewidth=0,
+            label="MC 5th–95th",
+            zorder=1,
         )
         count_axis.plot(
-            truth_lambda, truth_counts[0], color=color, linestyle="-", linewidth=1.6,
-            marker="o", markersize=4.0, markerfacecolor="white",
-            label="sampled truth", zorder=3,
+            truth_lambda,
+            truth_counts[0],
+            color=color,
+            linestyle="-",
+            linewidth=1.6,
+            marker="o",
+            markersize=4.0,
+            markerfacecolor="white",
+            label="sampled truth",
+            zorder=3,
         )
         count_axis.plot(
-            mc_lambda, count_median, color=color, linestyle="--", linewidth=1.4,
-            marker="o", markersize=4.0, label="MC median", zorder=4,
+            mc_lambda,
+            count_median,
+            color=color,
+            linestyle="--",
+            linewidth=1.4,
+            marker="o",
+            markersize=4.0,
+            label="MC median",
+            zorder=4,
         )
         count_axis.set_xscale("log")
         count_axis.set_yscale("log")
@@ -1446,9 +1506,7 @@ def plot_structure_function_overlay(
         raise ValueError("results_by_p contains duplicate numeric p values")
     cases.sort(key=lambda item: item[0], reverse=True)
 
-    figure, axes = plt.subplots(
-        1, 2, figsize=(12.8, 5.25), constrained_layout=True, squeeze=False
-    )
+    figure, axes = plt.subplots(1, 2, figsize=(12.8, 5.25), constrained_layout=True, squeeze=False)
     axes = axes[0]
     for case_index, (p_value, result) in enumerate(cases):
         plot_structure_function_summary_row(
@@ -1474,9 +1532,13 @@ def plot_structure_function_overlay(
     plotted_orders = truth_orders if max_order is None else truth_orders[truth_orders <= max_order]
     order_handles = [
         Line2D(
-            [0], [0], color="0.25", linestyle="none",
-            marker=_ORDER_MARKERS[index % len(_ORDER_MARKERS)], markersize=5.0,
-            label=fr"$n={order}$",
+            [0],
+            [0],
+            color="0.25",
+            linestyle="none",
+            marker=_ORDER_MARKERS[index % len(_ORDER_MARKERS)],
+            markersize=5.0,
+            label=rf"$n={order}$",
         )
         for index, order in enumerate(plotted_orders)
     ]
@@ -1486,26 +1548,42 @@ def plot_structure_function_overlay(
     axes[0].add_artist(order_legend)
     run_handles = [
         Line2D(
-            [0], [0], color=P_MODEL_RUN_COLORS.get(p_value, "#D55E00"),
-            linewidth=2.0, label=fr"$p={p_value:g}$",
+            [0],
+            [0],
+            color=P_MODEL_RUN_COLORS.get(p_value, "#D55E00"),
+            linewidth=2.0,
+            label=rf"$p={p_value:g}$",
         )
         for p_value, _result in cases
     ]
-    run_legend = axes[0].legend(
-        handles=run_handles, fontsize=7.5, loc="center left", title="run"
-    )
+    run_legend = axes[0].legend(handles=run_handles, fontsize=7.5, loc="center left", title="run")
     axes[0].add_artist(run_legend)
     provenance_handles = [
         Line2D(
-            [0], [0], color="0.25", linestyle="-", marker="o",
-            markerfacecolor="white", linewidth=1.45, label="sampled truth",
+            [0],
+            [0],
+            color="0.25",
+            linestyle="-",
+            marker="o",
+            markerfacecolor="white",
+            linewidth=1.45,
+            label="sampled truth",
         ),
         Line2D(
-            [0], [0], color="0.25", linestyle="--", marker="o",
-            linewidth=1.25, label="MC median",
+            [0],
+            [0],
+            color="0.25",
+            linestyle="--",
+            marker="o",
+            linewidth=1.25,
+            label="MC median",
         ),
         Line2D(
-            [0], [0], color="0.25", linewidth=7, alpha=0.15,
+            [0],
+            [0],
+            color="0.25",
+            linewidth=7,
+            alpha=0.15,
             label="MC 5th–95th",
         ),
     ]
@@ -1517,20 +1595,33 @@ def plot_structure_function_overlay(
         exponent_handles.extend(
             [
                 Line2D(
-                    [0], [0], color=color, marker="o", markerfacecolor="white",
-                    linewidth=1.5, label=fr"sampled truth, $p={p_value:g}$",
+                    [0],
+                    [0],
+                    color=color,
+                    marker="o",
+                    markerfacecolor="white",
+                    linewidth=1.5,
+                    label=rf"sampled truth, $p={p_value:g}$",
                 ),
                 Line2D(
-                    [0], [0], color=color, marker="s", linestyle="none",
-                    label=fr"MC 5th–95th, $p={p_value:g}$",
+                    [0],
+                    [0],
+                    color=color,
+                    marker="s",
+                    linestyle="none",
+                    label=rf"MC 5th–95th, $p={p_value:g}$",
                 ),
             ]
         )
         if show_p_model:
             exponent_handles.append(
                 Line2D(
-                    [0], [0], color=color, linestyle="--", linewidth=1.25,
-                    label=fr"$p$-model, $p={p_value:g}$",
+                    [0],
+                    [0],
+                    color=color,
+                    linestyle="--",
+                    linewidth=1.25,
+                    label=rf"$p$-model, $p={p_value:g}$",
                 )
             )
     axes[1].legend(
@@ -1594,11 +1685,7 @@ def plot_structure_function_overlay_from_config(
             else output.get("figure", "malara-prod-combined_sf_publication.png")
         ),
         quantity=str(config.get("quantity", "z_plus")),
-        max_order=(
-            None
-            if config.get("max_order", 6) is None
-            else int(config.get("max_order", 6))
-        ),
+        max_order=(None if config.get("max_order", 6) is None else int(config.get("max_order", 6))),
         fit_range=(
             fit_range_override
             if fit_range_override is not None
@@ -1610,11 +1697,7 @@ def plot_structure_function_overlay_from_config(
         min_fit_bins=(
             min_fit_bins_override
             if min_fit_bins_override is not None
-            else (
-                None
-                if config.get("min_fit_bins") is None
-                else int(config["min_fit_bins"])
-            )
+            else (None if config.get("min_fit_bins") is None else int(config["min_fit_bins"]))
         ),
         show_p_model=(
             show_p_model_override

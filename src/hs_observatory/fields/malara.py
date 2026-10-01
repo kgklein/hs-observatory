@@ -96,13 +96,7 @@ def F(t: np.ndarray | float) -> np.ndarray:
     """Compact polynomial F(t), zero outside ``[-1/2, 1/2]``."""
 
     values = np.asarray(t, dtype=float)
-    polynomial = (
-        256.0 * values**8
-        - 256.0 * values**6
-        + 96.0 * values**4
-        - 16.0 * values**2
-        + 1.0
-    )
+    polynomial = 256.0 * values**8 - 256.0 * values**6 + 96.0 * values**4 - 16.0 * values**2 + 1.0
     return np.where(np.abs(values) <= 0.5, polynomial, 0.0)
 
 
@@ -110,12 +104,7 @@ def dF_dt(t: np.ndarray | float) -> np.ndarray:
     """Analytic derivative dF/dt, zero outside ``[-1/2, 1/2]``."""
 
     values = np.asarray(t, dtype=float)
-    derivative = (
-        2048.0 * values**7
-        - 1536.0 * values**5
-        + 384.0 * values**3
-        - 32.0 * values
-    )
+    derivative = 2048.0 * values**7 - 1536.0 * values**5 + 384.0 * values**3 - 32.0 * values
     return np.where(np.abs(values) <= 0.5, derivative, 0.0)
 
 
@@ -131,17 +120,14 @@ class MalaraTurbulence:
     def __init__(self, config: MalaraConfig | None = None) -> None:
         self.config = config or MalaraConfig()
         self._domain = np.asarray(self.config.domain_size, dtype=float)
-        self._parameter_cache: dict[
-            tuple[int, int, int, int], _EddyParameters
-        ] = {}
+        self._parameter_cache: dict[tuple[int, int, int, int], _EddyParameters] = {}
         self._eddy_cache: dict[tuple[int, int, int, int], _CachedEddyData] = {}
         self._cache_hits = 0
         self._cache_misses = 0
 
     def _stable_seed(self, scale: int, i: int, j: int, k: int) -> int:
         identity = (
-            f"{self.config.base_seed}|{self.config.realization}|"
-            f"{scale}|{i}|{j}|{k}"
+            f"{self.config.base_seed}|{self.config.realization}|{scale}|{i}|{j}|{k}"
         ).encode("ascii")
         digest = hashlib.blake2b(identity, digest_size=8, person=b"hsobsMT").digest()
         return int.from_bytes(digest, byteorder="little", signed=False)
@@ -161,9 +147,7 @@ class MalaraTurbulence:
         high_octants = frozenset(int(value) for value in rng.choice(8, size=4, replace=False))
         return _EddyParameters(gamma, sign, q_hat, high_octants)
 
-    def energy_transfer_factor(
-        self, scale: int, cell_index: Sequence[int]
-    ) -> float:
+    def energy_transfer_factor(self, scale: int, cell_index: Sequence[int]) -> float:
         """Walk the deterministic p-model heritage from the root to one cell."""
 
         if scale < 0:
@@ -187,9 +171,7 @@ class MalaraTurbulence:
             epsilon *= 2.0 * p if octant in heritage else 2.0 * (1.0 - p)
         return epsilon
 
-    def _cached_parameters(
-        self, identity: tuple[int, int, int, int]
-    ) -> _EddyParameters:
+    def _cached_parameters(self, identity: tuple[int, int, int, int]) -> _EddyParameters:
         """Return lazily cached random parameters for one eddy identity."""
 
         parameters = self._parameter_cache.get(identity)
@@ -198,9 +180,7 @@ class MalaraTurbulence:
             self._parameter_cache[identity] = parameters
         return parameters
 
-    def _cached_energy_transfer_factor(
-        self, scale: int, cell_index: tuple[int, int, int]
-    ) -> float:
+    def _cached_energy_transfer_factor(self, scale: int, cell_index: tuple[int, int, int]) -> float:
         """Calculate p-model transfer while caching parent heritage patterns."""
 
         epsilon = 1.0
@@ -216,9 +196,7 @@ class MalaraTurbulence:
             epsilon *= 2.0 * p if octant in heritage else 2.0 * (1.0 - p)
         return epsilon
 
-    def _cached_eddy_data(
-        self, scale: int, cell_index: tuple[int, int, int]
-    ) -> _CachedEddyData:
+    def _cached_eddy_data(self, scale: int, cell_index: tuple[int, int, int]) -> _CachedEddyData:
         """Return all deterministic data needed for one local eddy."""
 
         identity = (scale, *cell_index)
@@ -234,8 +212,8 @@ class MalaraTurbulence:
         amplitude = (
             parameters.sign
             * self.config.amplitude
-            * epsilon ** self.config.epsilon_exponent
-            * scale_ratio ** self.config.spectral_exponent_h
+            * epsilon**self.config.epsilon_exponent
+            * scale_ratio**self.config.spectral_exponent_h
         )
         cached = _CachedEddyData(parameters, epsilon, amplitude)
         self._eddy_cache[identity] = cached
@@ -310,8 +288,8 @@ class MalaraTurbulence:
         eddy_amplitude = (
             parameters.sign
             * self.config.amplitude
-            * epsilon ** self.config.epsilon_exponent
-            * scale_ratio ** self.config.spectral_exponent_h
+            * epsilon**self.config.epsilon_exponent
+            * scale_ratio**self.config.spectral_exponent_h
         )
         # A = a*q_hat*phi, so curl(A) = a*grad(phi) x q_hat.
         return eddy_amplitude * np.cross(gradient, parameters.q_hat)
@@ -327,10 +305,7 @@ class MalaraTurbulence:
         n_cells = 2**scale
         cell_size = self._domain / n_cells
         center = (np.asarray(cell_index, dtype=float) + 0.5) * cell_size
-        displacement = (
-            (point - center + 0.5 * self._domain) % self._domain
-            - 0.5 * self._domain
-        )
+        displacement = (point - center + 0.5 * self._domain) % self._domain - 0.5 * self._domain
         local = displacement / (2.0 * cell_size)
         if np.any(np.abs(local) > 0.5):
             return np.zeros(3, dtype=float)
@@ -363,10 +338,7 @@ class MalaraTurbulence:
 
         n_cells = 2**scale
         cell_size = self._domain / n_cells
-        nearby = [
-            self._nearby_indices(point[axis], cell_size[axis], n_cells)
-            for axis in range(3)
-        ]
+        nearby = [self._nearby_indices(point[axis], cell_size[axis], n_cells) for axis in range(3)]
         return tuple(product(*nearby))
 
     def _evaluate_point(self, point: np.ndarray) -> np.ndarray:
@@ -483,16 +455,12 @@ class MalaraTurbulence:
             for scale in scales:
                 cells = self._contributing_cells(point, scale)
                 touches_by_scale[scale] += len(cells)
-                unique_by_scale[scale].update(
-                    (scale, i, j, k) for i, j, k in cells
-                )
+                unique_by_scale[scale].update((scale, i, j, k) for i, j, k in cells)
 
         total_eddy_touches = sum(touches_by_scale.values())
         unique_eddies = set().union(*unique_by_scale.values())
         n_unique_eddies = len(unique_eddies)
-        reuse_factor = (
-            total_eddy_touches / n_unique_eddies if n_unique_eddies else 0.0
-        )
+        reuse_factor = total_eddy_touches / n_unique_eddies if n_unique_eddies else 0.0
         return {
             "n_points": flat_positions.shape[0],
             # ``n_scales`` retains its public meaning: maximum zero-based scale.
@@ -502,8 +470,7 @@ class MalaraTurbulence:
             "n_unique_eddies": n_unique_eddies,
             "reuse_factor": reuse_factor,
             "unique_eddies_by_scale": {
-                scale: len(identities)
-                for scale, identities in unique_by_scale.items()
+                scale: len(identities) for scale, identities in unique_by_scale.items()
             },
             "touches_by_scale": touches_by_scale,
         }
@@ -585,9 +552,7 @@ class MalaraTurbulenceField(FieldModel):
         if self.chunk_size <= 0:
             raise ValueError("field.turbulence.chunk_size must be positive")
         configured_workers = turbulence.get("n_workers")
-        self.n_workers = (
-            None if configured_workers is None else int(configured_workers)
-        )
+        self.n_workers = None if configured_workers is None else int(configured_workers)
         if self.n_workers is not None and self.n_workers <= 0:
             raise ValueError("field.turbulence.n_workers must be positive or null")
         self.parallel_use_cache = bool(turbulence.get("use_cache", True))
@@ -604,9 +569,7 @@ class MalaraTurbulenceField(FieldModel):
             amplitude=float(turbulence.get("amplitude", characteristic_length)),
             base_seed=int(turbulence.get("base_seed", 12345)),
             realization=int(turbulence.get("realization", 1)),
-            epsilon_exponent=float(
-                turbulence.get("epsilon_exponent", DEFAULT_EPSILON_EXPONENT)
-            ),
+            epsilon_exponent=float(turbulence.get("epsilon_exponent", DEFAULT_EPSILON_EXPONENT)),
         )
 
         output_fields = config.get("output_fields")
@@ -658,15 +621,11 @@ class MalaraTurbulenceField(FieldModel):
             if effective_realization < 0:
                 raise ValueError("Effective Malara realization must be non-negative")
             if effective_realization not in evaluators_by_realization:
-                evaluator_config = replace(
-                    self.base_config, realization=effective_realization
-                )
+                evaluator_config = replace(self.base_config, realization=effective_realization)
                 evaluators_by_realization[effective_realization] = MalaraTurbulence(
                     evaluator_config
                 )
-            self._quantity_evaluators[quantity] = evaluators_by_realization[
-                effective_realization
-            ]
+            self._quantity_evaluators[quantity] = evaluators_by_realization[effective_realization]
 
     def evaluate_quantity(
         self, quantity: str, time: np.ndarray, position: np.ndarray
@@ -679,9 +638,7 @@ class MalaraTurbulenceField(FieldModel):
             raise ValueError("position must have shape (n_spacecraft, n_time, 3)")
         n_spacecraft, n_time, _ = position.shape
         if time.shape not in {(n_time,), (n_time, n_spacecraft)}:
-            raise ValueError(
-                "time must have shape (n_time,) or (n_time, n_spacecraft)"
-            )
+            raise ValueError("time must have shape (n_time,) or (n_time, n_spacecraft)")
         if quantity == "n":
             return np.full((n_time, n_spacecraft), self.background_n, dtype=float)
 

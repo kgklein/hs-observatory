@@ -20,9 +20,7 @@ def _run(description: str, workflow: Callable[[str], Path], argv: list[str] | No
 def generate_main(argv: list[str] | None = None) -> int:
     from hs_observatory.generate import generate_from_config
 
-    parser = argparse.ArgumentParser(
-        description="Generate synthetic HelioSwarm observations"
-    )
+    parser = argparse.ArgumentParser(description="Generate synthetic HelioSwarm observations")
     parser.add_argument("config", help="YAML configuration file")
     parser.add_argument(
         "--truth-velocity-frame",
@@ -108,11 +106,7 @@ def plot_figure2_main(argv: list[str] | None = None) -> int:
         args.output,
         member_index=args.member_index,
         **({} if args.malara_title is None else {"malara_title": args.malara_title}),
-        **(
-            {}
-            if args.simulation_title is None
-            else {"simulation_title": args.simulation_title}
-        ),
+        **({} if args.simulation_title is None else {"simulation_title": args.simulation_title}),
         input_units=args.input_units,
         velocity_frame=args.velocity_frame,
         start_time_s=args.start_time,
@@ -134,9 +128,7 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
     parser.add_argument("result", help="structure-function analysis JSON")
     parser.add_argument("--output", required=True, help="output figure path")
     parser.add_argument("--p-value", type=float, default=0.9, help="Malara p-model value")
-    parser.add_argument(
-        "--quantity", choices=("z_plus", "z_minus"), default="z_plus"
-    )
+    parser.add_argument("--quantity", choices=("z_plus", "z_minus"), default="z_plus")
     parser.add_argument("--run-color", default=None, help="Matplotlib color for this run")
     parser.add_argument("--max-order", type=int, default=6)
     parser.add_argument("--fit-range", default=None, help="named exponent fit range")
@@ -191,7 +183,8 @@ def plot_structure_function_summary_main(argv: list[str] | None = None) -> int:
         help="set common kurtosis y-axis bounds",
     )
     parser.add_argument(
-        "--pair-counts", action="store_true",
+        "--pair-counts",
+        action="store_true",
         help="add a fourth panel showing the number of baseline pairs per bin",
     )
     parser.add_argument("--dpi", type=int, default=300)
@@ -281,12 +274,19 @@ def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
         description="Plot sampled truth and MC normalized Elsasser increment PDFs"
     )
     parser.add_argument(
-        "--result", action="append", required=True, metavar="P=HDF5",
+        "--result",
+        action="append",
+        required=True,
+        metavar="P=HDF5",
         help="saved result for one p case; repeat for p=0.9, 0.7, and 0.5",
     )
     parser.add_argument("--output", required=True, help="output publication figure path")
     parser.add_argument(
-        "--lags", type=float, nargs="+", default=None, metavar="LAG",
+        "--lags",
+        type=float,
+        nargs="+",
+        default=None,
+        metavar="LAG",
         help="requested perpendicular lags in km; three for 1x3 or four for 2x2",
     )
     parser.add_argument(
@@ -299,9 +299,7 @@ def plot_increment_pdf_publication_main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     expected_lags = 4 if args.layout == "2x2" else 3
     if args.lags is not None and len(args.lags) != expected_lags:
-        parser.error(
-            f"--layout {args.layout} requires exactly {expected_lags} --lags values"
-        )
+        parser.error(f"--layout {args.layout} requires exactly {expected_lags} --lags values")
     results_by_p = {}
     for specification in args.result:
         try:
@@ -352,9 +350,10 @@ def plot_increment_pdf_wasserstein_main(argv: list[str] | None = None) -> int:
             case,
             entry["label"],
             f"{entry['selected_lag_km']:.8g}",
-            *("nan" if not math.isfinite(entry[key]) else f"{entry[key]:.8g}" for key in (
-                "DW_R_p25", "DW_R_p50", "DW_R_p75", "DW_R_median_pdf"
-            )),
+            *(
+                "nan" if not math.isfinite(entry[key]) else f"{entry[key]:.8g}"
+                for key in ("DW_R_p25", "DW_R_p50", "DW_R_p75", "DW_R_median_pdf")
+            ),
         ]
         print(",".join(values))
     return 0
@@ -381,9 +380,7 @@ def plot_magnetic_gradient_main(argv: list[str] | None = None) -> int:
         choices=("divergence", "affine_rms_residual", "condition_number", "chi", "d_ep"),
         default="divergence",
     )
-    parser.add_argument(
-        "--ratio-scale", choices=("auto", "linear", "log"), default="auto"
-    )
+    parser.add_argument("--ratio-scale", choices=("auto", "linear", "log"), default="auto")
     parser.add_argument(
         "--start-time",
         type=float,
@@ -506,28 +503,49 @@ def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True, help="output figure path")
     parser.add_argument("--mc-index", type=int, default=0, help="representative MC realization")
     parser.add_argument(
-        "--timeseries-component", choices=("x", "y", "z", "magnitude", "all"), default="x",
+        "--timeseries-component",
+        choices=("x", "y", "z", "magnitude", "all"),
+        default="x",
         help="magnetic-field quantity in the additional eight-Node time-series figure (default: x)",
     )
-    parser.add_argument("--start-time", type=float, help="first time-series sample to plot, in seconds")
-    parser.add_argument("--stop-time", type=float, help="last time-series sample to plot, in seconds")
+    parser.add_argument(
+        "--start-time", type=float, help="first time-series sample to plot, in seconds"
+    )
+    parser.add_argument(
+        "--stop-time", type=float, help="last time-series sample to plot, in seconds"
+    )
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument(
-        "--compare-products", nargs="+", default=[], metavar="HDF5",
+        "--compare-products",
+        nargs="+",
+        default=[],
+        metavar="HDF5",
         help="additional timing products with identical inputs; write a method comparison figure",
     )
     args = parser.parse_args(argv)
-    print(plot_timing_calibration_product(
-        args.product, args.output, mc_index=args.mc_index, dpi=args.dpi,
-        start_time_s=args.start_time, stop_time_s=args.stop_time,
-    ))
+    print(
+        plot_timing_calibration_product(
+            args.product,
+            args.output,
+            mc_index=args.mc_index,
+            dpi=args.dpi,
+            start_time_s=args.start_time,
+            stop_time_s=args.stop_time,
+        )
+    )
     output = Path(args.output)
     timeseries_output = output.with_name(f"{output.stem}_timeseries{output.suffix}")
-    print(plot_timing_calibration_timeseries(
-        args.product, timeseries_output, mc_index=args.mc_index,
-        component=args.timeseries_component, dpi=args.dpi,
-        start_time_s=args.start_time, stop_time_s=args.stop_time,
-    ))
+    print(
+        plot_timing_calibration_timeseries(
+            args.product,
+            timeseries_output,
+            mc_index=args.mc_index,
+            component=args.timeseries_component,
+            dpi=args.dpi,
+            start_time_s=args.start_time,
+            stop_time_s=args.stop_time,
+        )
+    )
     from hs_observatory.analysis.timing_influence import plot_timing_influence
 
     for influence_output in plot_timing_influence(args.product, args.output, dpi=args.dpi):
@@ -540,7 +558,11 @@ def plot_timing_calibrate_main(argv: list[str] | None = None) -> int:
         from hs_observatory.analysis.timing_affine import plot_timing_method_comparison
 
         comparison_output = output.with_name(f"{output.stem}_comparison{output.suffix}")
-        print(plot_timing_method_comparison(
-            [args.product, *args.compare_products], comparison_output, dpi=args.dpi,
-        ))
+        print(
+            plot_timing_method_comparison(
+                [args.product, *args.compare_products],
+                comparison_output,
+                dpi=args.dpi,
+            )
+        )
     return 0

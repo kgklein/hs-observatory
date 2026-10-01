@@ -174,11 +174,11 @@ def test_selected_lags_only_accumulate_nearest_configured_bins():
         }
     )
 
-    result = compute_increment_pdf_for_points(
-        positions, z_plus, z_minus, magnetic, settings
-    )
+    result = compute_increment_pdf_for_points(positions, z_plus, z_minus, magnetic, settings)
 
-    np.testing.assert_array_equal(result["lambda"]["calculated_bin"], [True, False, True, False, False])
+    np.testing.assert_array_equal(
+        result["lambda"]["calculated_bin"], [True, False, True, False, False]
+    )
     np.testing.assert_array_equal(result["lambda"]["counts"][[1, 3, 4]], 0)
     assert np.all(np.isnan(result["pdf"]["z_plus"]["density"][[1, 3, 4]]))
     assert np.all(result["pdf"]["z_plus"]["counts"][[1, 3, 4]] == 0)
@@ -200,7 +200,9 @@ def test_pair_sampling_max_pair_count_alias_caps_total_pairs():
     all_result = compute_increment_pdf_for_points(positions, z_plus, z_minus, B, all_settings)
     assert all_result["n_pairs_processed"] == 6
 
-    capped_settings = _pair_settings(pair_sampling={"mode": "all", "chunk_size": 2, "max_pair_count": 3})
+    capped_settings = _pair_settings(
+        pair_sampling={"mode": "all", "chunk_size": 2, "max_pair_count": 3}
+    )
     capped_result = compute_increment_pdf_for_points(
         positions,
         z_plus,
@@ -418,9 +420,7 @@ def _write_publication_product(path: Path, scale: float) -> Path:
             field = group.create_group("pdf").create_group("z_plus")
             field.create_dataset("bin_edges", data=x_edges)
             field.create_dataset("bin_centers", data=x_centers)
-            density = np.stack(
-                [base * scale * factor * (1.0 + 0.02 * index) for index in range(7)]
-            )
+            density = np.stack([base * scale * factor * (1.0 + 0.02 * index) for index in range(7)])
             field.create_dataset("density", data=density)
     return path
 
@@ -443,18 +443,13 @@ def test_increment_pdf_publication_uses_saved_products_and_selects_lags(tmp_path
         assert len(axis.collections) == 3
         np.testing.assert_allclose(
             axis.lines[0].get_ydata(),
-            geometric_mean_normalized_rayleigh_pdf_on_bins(
-                np.linspace(0.0, 5.0, 31)
-            ),
+            geometric_mean_normalized_rayleigh_pdf_on_bins(np.linspace(0.0, 5.0, 31)),
         )
         assert [axis.lines[index].get_color() for index in (1, 3, 5)] == [
             P_MODEL_RUN_COLORS[p_value] for p_value in (0.9, 0.7, 0.5)
         ]
     expected_p09_median = (
-        np.exp(-0.5 * axes[0].lines[2].get_xdata() ** 2)
-        / np.sqrt(2.0 * np.pi)
-        * 1.1
-        * 1.02
+        np.exp(-0.5 * axes[0].lines[2].get_xdata() ** 2) / np.sqrt(2.0 * np.pi) * 1.1 * 1.02
     )
     np.testing.assert_allclose(axes[0].lines[2].get_ydata(), expected_p09_median)
     plt.close(figure)
@@ -477,9 +472,7 @@ def test_increment_pdf_publication_uses_saved_products_and_selects_lags(tmp_path
         with h5py.File(path, "r+") as handle:
             for group in handle["results"].values():
                 group["lambda/valid_bin"][...] = selected_only
-    selected_figure, _selected_axes, selected_matched = plot_increment_pdf_publication_row(
-        products
-    )
+    selected_figure, _selected_axes, selected_matched = plot_increment_pdf_publication_row(products)
     np.testing.assert_allclose(selected_matched, [200.0, 400.0, 600.0])
     plt.close(selected_figure)
     output = plot_increment_pdf_publication(

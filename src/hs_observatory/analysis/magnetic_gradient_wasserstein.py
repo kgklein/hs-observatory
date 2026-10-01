@@ -42,9 +42,7 @@ def _validate_interval_percentiles(
 ) -> tuple[float, float]:
     lower, upper = (float(value) for value in interval_percentiles)
     if not 0.0 <= lower < 50.0 < upper <= 100.0:
-        raise ValueError(
-            "interval_percentiles must satisfy 0 <= lower < 50 < upper <= 100"
-        )
+        raise ValueError("interval_percentiles must satisfy 0 <= lower < 50 < upper <= 100")
     return lower, upper
 
 
@@ -116,12 +114,7 @@ def _configuration_diagnostics(
     coarse = data["coarse"]
     true = data["true"]
     measured = data["measured"]
-    base_valid = (
-        data["coarse_valid"]
-        & data["true_valid"]
-        & np.isfinite(coarse)
-        & np.isfinite(true)
-    )
+    base_valid = data["coarse_valid"] & data["true_valid"] & np.isfinite(coarse) & np.isfinite(true)
     scale_values = coarse[base_valid & (coarse > 0.0)]
     scale = float(np.median(scale_values)) if scale_values.size else float("nan")
     canonical_method = empirical_wasserstein_1d(true[base_valid], coarse[base_valid])
@@ -134,11 +127,7 @@ def _configuration_diagnostics(
     triangle_slack = np.full(n_mc, np.nan)
     valid_samples = np.zeros(n_mc, dtype=int)
     for member in range(n_mc):
-        valid = (
-            base_valid
-            & data["measured_valid"][member]
-            & np.isfinite(measured[member])
-        )
+        valid = base_valid & data["measured_valid"][member] & np.isfinite(measured[member])
         valid_samples[member] = int(np.count_nonzero(valid))
         if not valid_samples[member]:
             continue
@@ -163,18 +152,12 @@ def _configuration_diagnostics(
             canonical_method / scale if np.isfinite(scale) and scale > 0.0 else np.nan
         ),
         "method_common_raw": _summary(method_common, interval_percentiles),
-        "method_common_normalized": _summary(
-            normalized(method_common), interval_percentiles
-        ),
+        "method_common_normalized": _summary(normalized(method_common), interval_percentiles),
         "measurement_w1_raw": _summary(measurement, interval_percentiles),
-        "measurement_w1_normalized": _summary(
-            normalized(measurement), interval_percentiles
-        ),
+        "measurement_w1_normalized": _summary(normalized(measurement), interval_percentiles),
         "total_w1_raw": _summary(total, interval_percentiles),
         "total_w1_normalized": _summary(normalized(total), interval_percentiles),
-        "pointwise_median_absolute_error_raw": _summary(
-            pointwise, interval_percentiles
-        ),
+        "pointwise_median_absolute_error_raw": _summary(pointwise, interval_percentiles),
         "pointwise_median_absolute_error_normalized": _summary(
             normalized(pointwise), interval_percentiles
         ),
@@ -252,8 +235,7 @@ def compute_magnetic_gradient_wasserstein_diagnostics(
         try:
             with h5py.File(path, "r") as handle:
                 available = [
-                    name for name in CONFIGURATION_ORDER
-                    if f"configurations/{name}" in handle
+                    name for name in CONFIGURATION_ORDER if f"configurations/{name}" in handle
                 ]
                 if not available:
                     raise ValueError("product contains no recognized configurations")
@@ -323,12 +305,19 @@ def _errorbar(
     lower = median - np.asarray(
         [entry[key].get("interval_lower", entry[key]["q25"]) for entry in entries]
     )
-    upper = np.asarray(
-        [entry[key].get("interval_upper", entry[key]["q75"]) for entry in entries]
-    ) - median
+    upper = (
+        np.asarray([entry[key].get("interval_upper", entry[key]["q75"]) for entry in entries])
+        - median
+    )
     axis.errorbar(
-        x + offset, median, yerr=np.vstack((lower, upper)), fmt="o",
-        color=color, capsize=3, markersize=4, label=label,
+        x + offset,
+        median,
+        yerr=np.vstack((lower, upper)),
+        fmt="o",
+        color=color,
+        capsize=3,
+        markersize=4,
+        label=label,
     )
 
 
@@ -341,16 +330,12 @@ def plot_magnetic_gradient_wasserstein(
     """Plot CDFs and distributional error decomposition."""
 
     categories = [
-        category for category in CONFIGURATION_ORDER
-        if category in diagnostics["configurations"]
+        category for category in CONFIGURATION_ORDER if category in diagnostics["configurations"]
     ]
     cases = diagnostics["case_order"]
     labels = diagnostics["case_labels"]
     interval_percentiles = diagnostics.get("interval_percentiles", (25.0, 75.0))
-    interval_label = (
-        f"{float(interval_percentiles[0]):g}th–"
-        f"{float(interval_percentiles[1]):g}th"
-    )
+    interval_label = f"{float(interval_percentiles[0]):g}th–{float(interval_percentiles[1]):g}th"
     figure, axes = plt.subplots(
         3, len(categories), figsize=(4.3 * len(categories), 10.5), squeeze=False
     )
@@ -368,10 +353,15 @@ def plot_magnetic_gradient_wasserstein(
                 x,
                 cdf.get("measured_cdf_lower", cdf.get("measured_cdf_q25")),
                 cdf.get("measured_cdf_upper", cdf.get("measured_cdf_q75")),
-                color="#48a9e6", alpha=0.24, linewidth=0,
+                color="#48a9e6",
+                alpha=0.24,
+                linewidth=0,
             )
             axis.plot(
-                x, cdf["measured_cdf_median"], color="#48a9e6", lw=1.3,
+                x,
+                cdf["measured_cdf_median"],
+                color="#48a9e6",
+                lw=1.3,
                 label=f"measured median/{interval_label}",
             )
         axis.set_title(category.replace("_", " "))
@@ -385,12 +375,22 @@ def plot_magnetic_gradient_wasserstein(
         positions = np.arange(len(local_cases), dtype=float)
         metric_axis = axes[1, column]
         _errorbar(
-            metric_axis, positions, entries, "measurement_w1_normalized",
-            offset=-0.12, label=r"$W_1(M,T)$", color="#48a9e6",
+            metric_axis,
+            positions,
+            entries,
+            "measurement_w1_normalized",
+            offset=-0.12,
+            label=r"$W_1(M,T)$",
+            color="#48a9e6",
         )
         _errorbar(
-            metric_axis, positions, entries, "total_w1_normalized",
-            offset=0.12, label=r"$W_1(M,C)$", color="#e181b4",
+            metric_axis,
+            positions,
+            entries,
+            "total_w1_normalized",
+            offset=0.12,
+            label=r"$W_1(M,C)$",
+            color="#e181b4",
         )
         method = float(entries[0]["method_w1_normalized"]) if entries else np.nan
         if np.isfinite(method):
@@ -412,14 +412,20 @@ def plot_magnetic_gradient_wasserstein(
                 )
         metric_axis.set_yscale("log")
         metric_axis.set_ylabel(r"Normalized $W_1$")
-        metric_axis.set_xticks(positions, [labels[case] for case in local_cases], rotation=25, ha="right")
+        metric_axis.set_xticks(
+            positions, [labels[case] for case in local_cases], rotation=25, ha="right"
+        )
         metric_axis.grid(alpha=0.22, axis="y")
 
         point_axis = axes[2, column]
         _errorbar(
-            point_axis, positions, entries,
+            point_axis,
+            positions,
+            entries,
             "pointwise_median_absolute_error_normalized",
-            offset=0.0, label="pointwise", color="#725ac1",
+            offset=0.0,
+            label="pointwise",
+            color="#725ac1",
         )
         for entry in entries:
             pointwise = entry["pointwise_median_absolute_error_normalized"]
@@ -463,9 +469,7 @@ def plot_magnetic_gradient_wasserstein(
     return output
 
 
-def _most_regular_tetrahedron(
-    handle: h5py.File, requested: str | None
-) -> tuple[str, float]:
+def _most_regular_tetrahedron(handle: h5py.File, requested: str | None) -> tuple[str, float]:
     tetrahedra: list[tuple[float, str]] = []
     for category in CONFIGURATION_ORDER:
         path = f"configurations/{category}"
@@ -494,9 +498,7 @@ def _most_regular_tetrahedron(
 def _set_linear_limits(
     axis: plt.Axes, values: list[np.ndarray], *, nonnegative: bool = False
 ) -> None:
-    finite_parts = [
-        value[np.isfinite(value)] for value in values if np.any(np.isfinite(value))
-    ]
+    finite_parts = [value[np.isfinite(value)] for value in values if np.any(np.isfinite(value))]
     if not finite_parts:
         return
     finite = np.concatenate(finite_parts)
@@ -524,19 +526,13 @@ def plot_magnetic_gradient_combined(
         raise ValueError("start_time_s must be finite")
     if stop_time_s is not None and not np.isfinite(stop_time_s):
         raise ValueError("stop_time_s must be finite")
-    if (
-        start_time_s is not None
-        and stop_time_s is not None
-        and stop_time_s <= start_time_s
-    ):
+    if start_time_s is not None and stop_time_s is not None and stop_time_s <= start_time_s:
         raise ValueError("stop_time_s must be greater than start_time_s")
 
     with h5py.File(product_path, "r") as handle:
         category, median_chi = _most_regular_tetrahedron(handle, configuration)
         if category not in diagnostics["configurations"]:
-            raise ValueError(
-                f"configuration {category!r} is absent from Wasserstein diagnostics"
-            )
+            raise ValueError(f"configuration {category!r} is absent from Wasserstein diagnostics")
         group = handle[f"configurations/{category}"]
         if "measured/curl" not in group:
             raise ValueError(
@@ -558,21 +554,15 @@ def plot_magnetic_gradient_combined(
         summary = group.get("mc_summary")
         if summary is None:
             raise ValueError("combined plot requires Monte Carlo summary datasets")
-        coarse_magnitude = np.asarray(
-            truth["coarse_curl_magnitude"], dtype=float
-        )[time_mask]
+        coarse_magnitude = np.asarray(truth["coarse_curl_magnitude"], dtype=float)[time_mask]
         ideal_magnitude = np.asarray(ideal["curl_magnitude"], dtype=float)[time_mask]
         measured_magnitude = {
-            statistic: np.asarray(
-                summary[f"curl_magnitude/{statistic}"], dtype=float
-            )[time_mask]
+            statistic: np.asarray(summary[f"curl_magnitude/{statistic}"], dtype=float)[time_mask]
             for statistic in ("q25", "median", "q75")
         }
         ideal_error = np.asarray(ideal["curl_l2_error"], dtype=float)[time_mask]
         measured_error = {
-            statistic: np.asarray(
-                summary[f"curl_l2_error/{statistic}"], dtype=float
-            )[time_mask]
+            statistic: np.asarray(summary[f"curl_l2_error/{statistic}"], dtype=float)[time_mask]
             for statistic in ("q25", "median", "q75")
         }
         ideal_curl = np.asarray(ideal["curl"], dtype=float)[time_mask]
@@ -728,12 +718,9 @@ def plot_magnetic_gradient_combined(
         x = np.asarray(cdf["x_normalized"])
         axis.plot(x, cdf["coarse_cdf"], color=truth_color, lw=1.6, label="coarse truth")
         axis.plot(x, cdf["true_cdf"], color=ideal_color, lw=1.3, label="ideal estimate")
-        interval_percentiles = diagnostics.get(
-            "interval_percentiles", (25.0, 75.0)
-        )
+        interval_percentiles = diagnostics.get("interval_percentiles", (25.0, 75.0))
         interval_label = (
-            f"{float(interval_percentiles[0]):g}th–"
-            f"{float(interval_percentiles[1]):g}th"
+            f"{float(interval_percentiles[0]):g}th–{float(interval_percentiles[1]):g}th"
         )
         axis.fill_between(
             x,
@@ -750,9 +737,7 @@ def plot_magnetic_gradient_combined(
             lw=1.3,
             label=f"measured median/{interval_label}",
         )
-    axis.set_xlabel(
-        r"$|\nabla\times B|/\mathrm{median}(|\nabla\times B|_{\rm coarse})$"
-    )
+    axis.set_xlabel(r"$|\nabla\times B|/\mathrm{median}(|\nabla\times B|_{\rm coarse})$")
     axis.set_ylabel("Empirical CDF")
     axis.set_ylim(0.0, 1.0)
     axis.legend(frameon=False, fontsize=8)
@@ -803,9 +788,7 @@ def plot_magnetic_gradient_combined(
             )
     axis.set_yscale("log")
     axis.set_ylabel(r"Normalized $W_1$")
-    axis.set_xticks(
-        positions, [labels[case] for case in local_cases], rotation=25, ha="right"
-    )
+    axis.set_xticks(positions, [labels[case] for case in local_cases], rotation=25, ha="right")
     axis.legend(frameon=False, fontsize=8)
     axis.grid(alpha=0.22, axis="y")
 
@@ -830,18 +813,14 @@ def plot_magnetic_gradient_combined(
         )
     axis.set_yscale("log")
     axis.set_ylabel("Normalized pointwise median |M−T|")
-    axis.set_xticks(
-        positions, [labels[case] for case in local_cases], rotation=25, ha="right"
-    )
+    axis.set_xticks(positions, [labels[case] for case in local_cases], rotation=25, ha="right")
     axis.grid(alpha=0.22, axis="y")
 
     for axis, limits in (
         (axes[1, 1], wasserstein_limits),
         (axes[1, 2], pointwise_limits),
     ):
-        positive = np.asarray(
-            [value for value in limits if np.isfinite(value) and value > 0.0]
-        )
+        positive = np.asarray([value for value in limits if np.isfinite(value) and value > 0.0])
         if positive.size:
             low = float(np.min(np.log10(positive)))
             high = float(np.max(np.log10(positive)))
@@ -897,14 +876,29 @@ def write_magnetic_gradient_wasserstein_csv(
     diagnostics: Mapping[str, Any], output_path: str | Path
 ) -> Path:
     columns = [
-        "configuration", "case", "label", "reference_scale_nT_per_km",
-        "method_w1_raw", "method_w1_normalized",
-        "measurement_w1_raw_q25", "measurement_w1_raw_median", "measurement_w1_raw_q75",
-        "measurement_w1_normalized_q25", "measurement_w1_normalized_median",
-        "measurement_w1_normalized_q75", "total_w1_raw_q25", "total_w1_raw_median",
-        "total_w1_raw_q75", "total_w1_normalized_q25", "total_w1_normalized_median",
-        "total_w1_normalized_q75", "pointwise_normalized_q25",
-        "pointwise_normalized_median", "pointwise_normalized_q75", "n_mc_valid", "n_mc_total",
+        "configuration",
+        "case",
+        "label",
+        "reference_scale_nT_per_km",
+        "method_w1_raw",
+        "method_w1_normalized",
+        "measurement_w1_raw_q25",
+        "measurement_w1_raw_median",
+        "measurement_w1_raw_q75",
+        "measurement_w1_normalized_q25",
+        "measurement_w1_normalized_median",
+        "measurement_w1_normalized_q75",
+        "total_w1_raw_q25",
+        "total_w1_raw_median",
+        "total_w1_raw_q75",
+        "total_w1_normalized_q25",
+        "total_w1_normalized_median",
+        "total_w1_normalized_q75",
+        "pointwise_normalized_q25",
+        "pointwise_normalized_median",
+        "pointwise_normalized_q75",
+        "n_mc_valid",
+        "n_mc_total",
     ]
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -952,8 +946,7 @@ def magnetic_gradient_wasserstein_from_config(
         all_errors_case=str(config.get("all_errors_case", "200")),
         cdf_points=int(config.get("cdf_points", 256)),
         interval_percentiles=tuple(
-            float(value)
-            for value in config.get("interval_percentiles", (25.0, 75.0))
+            float(value) for value in config.get("interval_percentiles", (25.0, 75.0))
         ),
     )
     output = config.get("output", {})
@@ -994,8 +987,7 @@ def magnetic_gradient_combined_from_config(
         all_errors_case=all_errors_case,
         cdf_points=int(config.get("cdf_points", 256)),
         interval_percentiles=tuple(
-            float(value)
-            for value in config.get("interval_percentiles", (25.0, 75.0))
+            float(value) for value in config.get("interval_percentiles", (25.0, 75.0))
         ),
     )
     selected_case = str(diagnostics["all_errors_case"])
@@ -1003,23 +995,17 @@ def magnetic_gradient_combined_from_config(
     output = config.get("output", {})
     if not isinstance(output, Mapping):
         raise ValueError("output must be a mapping")
-    output_path = output_override or output.get(
-        "figure", "magnetic_gradient_combined.png"
-    )
+    output_path = output_override or output.get("figure", "magnetic_gradient_combined.png")
     configuration = (
         configuration_override
         if configuration_override is not None
         else str(config.get("configuration", "most_regular"))
     )
     start_time_s = (
-        start_time_override
-        if start_time_override is not None
-        else config.get("start_time_s")
+        start_time_override if start_time_override is not None else config.get("start_time_s")
     )
     stop_time_s = (
-        stop_time_override
-        if stop_time_override is not None
-        else config.get("stop_time_s")
+        stop_time_override if stop_time_override is not None else config.get("stop_time_s")
     )
     figure, selected_configuration = plot_magnetic_gradient_combined(
         diagnostics,

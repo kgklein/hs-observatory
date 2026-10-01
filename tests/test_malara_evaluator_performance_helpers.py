@@ -51,9 +51,7 @@ def test_touched_eddy_statistics_are_consistent() -> None:
     assert statistics["reuse_factor"] >= 1.0
     assert set(statistics["touches_by_scale"]) == {2, 3, 4}
     assert set(statistics["unique_eddies_by_scale"]) == {2, 3, 4}
-    assert sum(statistics["touches_by_scale"].values()) == statistics[
-        "total_eddy_touches"
-    ]
+    assert sum(statistics["touches_by_scale"].values()) == statistics["total_eddy_touches"]
 
 
 def test_repeated_positions_expose_eddy_reuse() -> None:
@@ -70,8 +68,12 @@ def test_chunked_evaluation_preserves_periodicity() -> None:
     point = np.array([0.31, 1.17, 4.2])
     domain = np.array(evaluator.config.domain_size)
     positions = np.vstack(
-        [point, point + [domain[0], 0.0, 0.0], point + [0.0, domain[1], 0.0],
-         point + [0.0, 0.0, domain[2]]]
+        [
+            point,
+            point + [domain[0], 0.0, 0.0],
+            point + [0.0, domain[1], 0.0],
+            point + [0.0, 0.0, domain[2]],
+        ]
     )
 
     direct = evaluator.evaluate_vector(positions)
@@ -88,7 +90,5 @@ def test_chunk_size_validation_and_single_worker_parallel_path() -> None:
     with pytest.raises(ValueError, match="positive"):
         evaluator.evaluate_vector_chunked(positions, chunk_size=0)
     reference = evaluator.evaluate_vector(positions)
-    parallel = evaluator.evaluate_vector_parallel(
-        positions, chunk_size=1, n_workers=1
-    )
+    parallel = evaluator.evaluate_vector_parallel(positions, chunk_size=1, n_workers=1)
     assert np.array_equal(parallel, reference)

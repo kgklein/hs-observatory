@@ -43,7 +43,9 @@ class ArchitectureGraphTests(unittest.TestCase):
         for name in ("b", "c", "d", "e"):
             self.source(name + ".py", "class Thing: pass\n")
         self.source("analysis/__init__.py", "")
-        self.source("analysis/a.py", """
+        self.source(
+            "analysis/a.py",
+            """
 from .. import b
 from ..b import Thing
 from typing import TYPE_CHECKING as TC
@@ -61,15 +63,19 @@ class Example:
     async def run(self):
         from .. import b
         from .. import e
-""")
+""",
+        )
         modules, imports = self.extract()
         _, edges, _ = graph.build_graph(modules, imports)
         a = "hs_observatory.analysis.a"
-        self.assertEqual(edges, {
-            (a, "hs_observatory.b"): False,
-            (a, "hs_observatory.d"): False,
-            (a, "hs_observatory.e"): True,
-        })
+        self.assertEqual(
+            edges,
+            {
+                (a, "hs_observatory.b"): False,
+                (a, "hs_observatory.d"): False,
+                (a, "hs_observatory.e"): True,
+            },
+        )
         _, edges, _ = graph.build_graph(modules, imports, show_local=False)
         self.assertNotIn((a, "hs_observatory.e"), edges)
         self.assertIn((a, "hs_observatory.b"), edges)
@@ -80,10 +86,13 @@ class Example:
         self.source("cli_example.py", "from . import cli\n")
         self.source("analysis/__init__.py", "from .registry import get_analysis\n")
         self.source("analysis/registry.py", "")
-        self.source("analysis/example.py", """
+        self.source(
+            "analysis/example.py",
+            """
 from .. import __version__
 from .registry import register_analysis, get_analysis
-""")
+""",
+        )
         modules, imports = self.extract()
         nodes, edges, suppressed = graph.build_graph(modules, imports)
         self.assertNotIn("hs_observatory", nodes)
@@ -96,8 +105,12 @@ from .registry import register_analysis, get_analysis
         self.assertEqual(suppressed, [])
 
     def test_overview_edges_require_evidence_and_do_not_collapse_every_import(self):
-        nodes = ["hs_observatory.cli", "hs_observatory.generate",
-                 "hs_observatory.fields.malara", "hs_observatory.analysis.magnetic_gradient"]
+        nodes = [
+            "hs_observatory.cli",
+            "hs_observatory.generate",
+            "hs_observatory.fields.malara",
+            "hs_observatory.analysis.magnetic_gradient",
+        ]
         evidence = (nodes[0], nodes[1])
         secondary = (nodes[3], nodes[2])
         members, witnesses = graph.build_overview(nodes, {evidence: True, secondary: False})
@@ -148,11 +161,15 @@ from .registry import register_analysis, get_analysis
         self.source("cli.py", "")
         dot = self.root / "detail.dot"
         capture = io.StringIO()
-        with patch.object(graph, "ROOT", self.root), \
-                patch.object(graph.shutil, "which", return_value=None), \
-                patch.object(graph.subprocess, "run") as run, \
-                contextlib.redirect_stdout(capture):
-            self.assertEqual(graph.main(["--dot", str(dot), "--svg", str(dot.with_suffix(".svg"))]), 0)
+        with (
+            patch.object(graph, "ROOT", self.root),
+            patch.object(graph.shutil, "which", return_value=None),
+            patch.object(graph.subprocess, "run") as run,
+            contextlib.redirect_stdout(capture),
+        ):
+            self.assertEqual(
+                graph.main(["--dot", str(dot), "--svg", str(dot.with_suffix(".svg"))]), 0
+            )
             run.assert_not_called()
         self.assertTrue(dot.exists())
         self.assertTrue(dot.with_name("package-overview.dot").exists())

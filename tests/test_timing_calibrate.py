@@ -38,14 +38,23 @@ from hs_observatory.spacecraft.configuration import synthetic_configuration
 IDS = ["H", *(f"N{i}" for i in range(1, 9))]
 
 
-@pytest.mark.parametrize("options", [None, {}, {"allowed_n": None},
-                                   {"max_condition_number": None},
-                                   {"allowed_n": None, "max_condition_number": None}])
+@pytest.mark.parametrize(
+    "options",
+    [
+        None,
+        {},
+        {"allowed_n": None},
+        {"max_condition_number": None},
+        {"allowed_n": None, "max_condition_number": None},
+    ],
+)
 def test_filter_no_cut_preserves_candidates(options):
     points = np.random.default_rng(20).normal(size=(9, 3))
     candidates = select_polyhedra(points, IDS, {})
     settings = _settings({"polyhedron_filter": options})
-    selected, conditions = _filter_polyhedra(points[None], candidates, settings["polyhedron_filter"])
+    selected, conditions = _filter_polyhedra(
+        points[None], candidates, settings["polyhedron_filter"]
+    )
     assert list(selected) == list(candidates)
     assert len(selected) == 382
     for name in selected:
@@ -57,9 +66,14 @@ def test_filter_no_cut_preserves_candidates(options):
 def test_filter_spacecraft_counts(sizes, count):
     points = np.random.default_rng(20).normal(size=(9, 3))
     candidates = select_polyhedra(points, IDS, {})
-    selected, _ = _filter_polyhedra(points[None], candidates, {
-        "allowed_n": sizes, "max_condition_number": None,
-    })
+    selected, _ = _filter_polyhedra(
+        points[None],
+        candidates,
+        {
+            "allowed_n": sizes,
+            "max_condition_number": None,
+        },
+    )
     assert len(selected) == count
     assert all(len(indices) in sizes for indices in selected.values())
     if sizes == [9]:
@@ -70,17 +84,26 @@ def test_filter_spacecraft_counts(sizes, count):
 def test_filter_condition_and_combined_cuts(sizes):
     points = np.random.default_rng(20).normal(size=(9, 3))
     candidates = select_polyhedra(points, IDS, {})
-    expected = {name: geometry_diagnostics(points[indices]).condition_number
-                for name, indices in candidates.items()}
+    expected = {
+        name: geometry_diagnostics(points[indices]).condition_number
+        for name, indices in candidates.items()
+    }
     # Select an actual condition to exercise inclusive equality at the boundary.
     boundary = next(name for name, indices in candidates.items() if len(indices) == 6)
     threshold = expected[boundary]
-    selected, conditions = _filter_polyhedra(points[None], candidates, {
-        "allowed_n": sizes, "max_condition_number": threshold,
-    })
-    assert list(selected) == [name for name, indices in candidates.items()
-                              if (sizes is None or len(indices) in sizes)
-                              and expected[name] <= threshold]
+    selected, conditions = _filter_polyhedra(
+        points[None],
+        candidates,
+        {
+            "allowed_n": sizes,
+            "max_condition_number": threshold,
+        },
+    )
+    assert list(selected) == [
+        name
+        for name, indices in candidates.items()
+        if (sizes is None or len(indices) in sizes) and expected[name] <= threshold
+    ]
     assert boundary in selected
     assert 0 < len(selected) < len(candidates)
     assert all(value <= threshold for value in conditions.values())
@@ -92,33 +115,62 @@ def test_filter_moving_and_translated_geometry():
     moving = np.stack([points * [scale, 1, 1] for scale in (1, 2, 10)])
     expected = np.median([geometry_diagnostics(sample).condition_number for sample in moving])
     assert expected != geometry_diagnostics(moving[0]).condition_number
-    _, conditions = _filter_polyhedra(moving, candidates, {
-        "allowed_n": None, "max_condition_number": expected,
-    })
+    _, conditions = _filter_polyhedra(
+        moving,
+        candidates,
+        {
+            "allowed_n": None,
+            "max_condition_number": expected,
+        },
+    )
     assert conditions["all_nine"] == expected
     with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
-        _filter_polyhedra(moving, candidates, {
-            "allowed_n": None, "max_condition_number": np.nextafter(expected, 0),
-        })
+        _filter_polyhedra(
+            moving,
+            candidates,
+            {
+                "allowed_n": None,
+                "max_condition_number": np.nextafter(expected, 0),
+            },
+        )
     translated = points[None] + np.arange(3)[:, None, None]
-    _, conditions = _filter_polyhedra(translated, candidates, {
-        "allowed_n": None, "max_condition_number": None,
-    })
+    _, conditions = _filter_polyhedra(
+        translated,
+        candidates,
+        {
+            "allowed_n": None,
+            "max_condition_number": None,
+        },
+    )
     assert conditions["all_nine"] == geometry_diagnostics(points).condition_number
     flat = np.zeros((1, 9, 3))
-    _, conditions = _filter_polyhedra(flat, candidates, {
-        "allowed_n": None, "max_condition_number": None,
-    })
+    _, conditions = _filter_polyhedra(
+        flat,
+        candidates,
+        {
+            "allowed_n": None,
+            "max_condition_number": None,
+        },
+    )
     assert conditions["all_nine"] == np.inf
     with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
         _filter_polyhedra(flat, candidates, {"allowed_n": None, "max_condition_number": 100})
 
 
-@pytest.mark.parametrize("options", [
-    False, [], {"allowed_n": 4}, {"allowed_n": [True]}, {"allowed_n": [4.0]},
-    {"allowed_n": [3]}, {"allowed_n": [10]}, {"allowed_n": ["4"]},
-    *[{"max_condition_number": value} for value in (True, "100", 0, -1, np.inf, np.nan)],
-])
+@pytest.mark.parametrize(
+    "options",
+    [
+        False,
+        [],
+        {"allowed_n": 4},
+        {"allowed_n": [True]},
+        {"allowed_n": [4.0]},
+        {"allowed_n": [3]},
+        {"allowed_n": [10]},
+        {"allowed_n": ["4"]},
+        *[{"max_condition_number": value} for value in (True, "100", 0, -1, np.inf, np.nan)],
+    ],
+)
 def test_filter_invalid_settings(options):
     with pytest.raises(ValueError, match="polyhedron_filter"):
         _settings({"polyhedron_filter": options})
@@ -131,8 +183,10 @@ def test_filter_empty_before_response_construction(tmp_path, synthetic, monkeypa
     def unexpected_response(*args, **kwargs):
         pytest.fail("Responses must not be constructed for an empty selection")
 
-    monkeypatch.setattr("hs_observatory.analysis.timing_calibrate.gradient_response_coefficients",
-                        unexpected_response)
+    monkeypatch.setattr(
+        "hs_observatory.analysis.timing_calibrate.gradient_response_coefficients",
+        unexpected_response,
+    )
     with pytest.raises(ValueError, match="polyhedron_filter.*no polyhedra"):
         compute_timing_calibration(source, {"polyhedron_filter": options})
 
@@ -143,9 +197,15 @@ def test_filter_intersects_existing_selection(tmp_path, synthetic):
     result = compute_timing_calibration(source, explicit)
     assert list(result["selected"]) == ["_".join(IDS)]
     assert result["metadata"]["polyhedron_filter"]["candidate_count"] == 2
-    legacy = {"configuration_selection": {
-        "small": False, "intermediate": False, "large": False, "all_nine": True,
-    }, "polyhedron_filter": {"allowed_n": [9]}}
+    legacy = {
+        "configuration_selection": {
+            "small": False,
+            "intermediate": False,
+            "large": False,
+            "all_nine": True,
+        },
+        "polyhedron_filter": {"allowed_n": [9]},
+    }
     result = compute_timing_calibration(source, legacy)
     assert list(result["selected"]) == ["all_nine"]
     legacy["polyhedron_filter"] = {"allowed_n": [4]}
@@ -157,19 +217,33 @@ def test_filter_intersects_existing_selection(tmp_path, synthetic):
 def test_no_filter_preserves_numerical_fit(tmp_path, synthetic, options):
     source = _observation(tmp_path, synthetic)
     time, positions, ideal, _, measured, polyhedra, responses = synthetic
-    result = compute_timing_calibration(source, {
-        "sigma_d_floor": 1e-6, "polyhedron_filter": options,
-    })
-    original_divergence = np.column_stack([
-        divergence_series(response, ideal[:, indices])
-        for indices, response in zip(polyhedra, responses)
-    ])
+    result = compute_timing_calibration(
+        source,
+        {
+            "sigma_d_floor": 1e-6,
+            "polyhedron_filter": options,
+        },
+    )
+    original_divergence = np.column_stack(
+        [
+            divergence_series(response, ideal[:, indices])
+            for indices, response in zip(polyhedra, responses)
+        ]
+    )
     _, variance = divergence_variance(original_divergence, 1e-6)
-    original = calibrate_realization(time, positions, measured, polyhedra, responses,
-                                     np.arange(1, 9), variance, .01)
-    actual = calibrate_realization(time, positions, measured, list(result["selected"].values()),
-                                   result["responses"], result["node_indices"],
-                                   result["variance"], result["sigma_t"])
+    original = calibrate_realization(
+        time, positions, measured, polyhedra, responses, np.arange(1, 9), variance, 0.01
+    )
+    actual = calibrate_realization(
+        time,
+        positions,
+        measured,
+        list(result["selected"].values()),
+        result["responses"],
+        result["node_indices"],
+        result["variance"],
+        result["sigma_t"],
+    )
     for key in ("correction_s", "covariance_s2", "fit_valid"):
         np.testing.assert_array_equal(actual[key], original[key])
 
@@ -177,13 +251,20 @@ def test_no_filter_preserves_numerical_fit(tmp_path, synthetic, options):
 def test_filtered_product_matches_fresh_explicit_fit(tmp_path, synthetic):
     source = _observation(tmp_path, synthetic)
     options = {"allowed_n": [8, 9, 9], "max_condition_number": 100}
-    filtered = compute_timing_calibration(source, {
-        "sigma_d_floor": 1e-6, "polyhedron_filter": options,
-    })
-    explicit = compute_timing_calibration(source, {
-        "sigma_d_floor": 1e-6,
-        "polyhedra": [[IDS[i] for i in indices] for indices in filtered["selected"].values()],
-    })
+    filtered = compute_timing_calibration(
+        source,
+        {
+            "sigma_d_floor": 1e-6,
+            "polyhedron_filter": options,
+        },
+    )
+    explicit = compute_timing_calibration(
+        source,
+        {
+            "sigma_d_floor": 1e-6,
+            "polyhedra": [[IDS[i] for i in indices] for indices in filtered["selected"].values()],
+        },
+    )
     output = write_timing_calibration_product(filtered, tmp_path / "filtered.h5")
     reference = write_timing_calibration_product(explicit, tmp_path / "explicit.h5")
     with h5py.File(output) as actual, h5py.File(reference) as expected:
@@ -232,12 +313,16 @@ def _observation(tmp_path, synthetic, *, order=None):
     v = np.zeros((len(time), 9, 3))
     generation = {"errors": {"time": {"model": "gaussian_constant", "sigma_s": 0.01}}}
     write_observations(
-        path, time={q: time for q in ("n", "v", "B")},
+        path,
+        time={q: time for q in ("n", "v", "B")},
         spacecraft_ids=[IDS[i] for i in order],
         position={q: positions[:, order].swapaxes(0, 1) for q in ("n", "v", "B")},
         truth={"n": n, "v": v, "B": ideal[:, order]},
-        observed={"n": np.stack([n, n]), "v": np.stack([v, v]),
-                  "B": np.stack([ideal[:, order], measured[:, order]])},
+        observed={
+            "n": np.stack([n, n]),
+            "v": np.stack([v, v]),
+            "B": np.stack([ideal[:, order], measured[:, order]]),
+        },
         errors={"time_offset": np.stack([np.zeros(9), offsets[order]])},
         metadata={"config_yaml": yaml.safe_dump(generation)},
     )
@@ -256,8 +341,9 @@ def test_cached_gradient_matches_scalar_for_static_and_moving_geometry():
         response = gradient_response_coefficients(positions)
         assert response.shape[0] == (4 if moving else 1)
         actual = apply_gradient_response(response, field)
-        expected = np.array([estimate_gradient_least_squares(p, b).gradient
-                             for p, b in zip(positions, field)])
+        expected = np.array(
+            [estimate_gradient_least_squares(p, b).gradient for p, b in zip(positions, field)]
+        )
         np.testing.assert_allclose(actual, expected, atol=2e-14)
     flat = np.zeros((2, 4, 3))
     rejected = gradient_response_coefficients(flat, allow_pseudoinverse=False)
@@ -267,19 +353,30 @@ def test_cached_gradient_matches_scalar_for_static_and_moving_geometry():
 def test_selection_and_variance(synthetic):
     _, positions, _, _, _, polyhedra, _ = synthetic
     assert len(polyhedra) == 382
-    assert [tuple(p) for p in polyhedra] == [p for n in range(4, 10) for p in combinations(range(9), n)]
+    assert [tuple(p) for p in polyhedra] == [
+        p for n in range(4, 10) for p in combinations(range(9), n)
+    ]
     selected = select_polyhedra(positions[0], IDS, {"polyhedra": [["N3", "H", "N2", "N1"]]})
     assert list(selected) == ["H_N1_N2_N3"]
-    raw, variance = divergence_variance(np.array([[2., 0.], [2., 0.]]), 0.1)
+    raw, variance = divergence_variance(np.array([[2.0, 0.0], [2.0, 0.0]]), 0.1)
     np.testing.assert_allclose(raw, [4, 0])
     np.testing.assert_allclose(variance, [4, 0.01])
     with pytest.raises(ValueError, match="not both"):
         select_polyhedra(positions[0], IDS, {"polyhedra": [], "configuration_selection": {}})
     with pytest.raises(ValueError, match="unique"):
         select_polyhedra(positions[0], IDS, {"polyhedra": [["H"] * 4]})
-    legacy = select_polyhedra(positions[0], IDS, {"configuration_selection": {
-        "small": False, "intermediate": False, "large": False, "all_nine": True,
-    }})
+    legacy = select_polyhedra(
+        positions[0],
+        IDS,
+        {
+            "configuration_selection": {
+                "small": False,
+                "intermediate": False,
+                "large": False,
+                "all_nine": True,
+            }
+        },
+    )
     assert list(legacy) == ["all_nine"]
 
 
@@ -287,8 +384,9 @@ def test_zero_offset_and_known_offsets(synthetic):
     time, positions, ideal, offsets, measured, polyhedra, responses = synthetic
     variance = np.full(len(polyhedra), 1e-12)
     for values, injected in ((ideal, np.zeros(9)), (measured, offsets)):
-        result = calibrate_realization(time, positions, values, polyhedra, responses,
-                                       np.arange(1, 9), variance, 0.01)
+        result = calibrate_realization(
+            time, positions, values, polyhedra, responses, np.arange(1, 9), variance, 0.01
+        )
         assert result["correction_s"].shape == (8,)
         # One-sided endpoint derivatives and nonlinear offsets introduce truncation error.
         tolerance = 2e-7 if np.any(injected) else 1e-12
@@ -300,7 +398,8 @@ def test_zero_offset_and_known_offsets(synthetic):
         assert result["linear_chi2_after"] <= result["linear_chi2_before"] + 1e-10
         assert result["prior_chi2_before"] == 0
         assert result["chi2_after"] == pytest.approx(
-            result["divergence_chi2_after"] + result["prior_chi2_after"])
+            result["divergence_chi2_after"] + result["prior_chi2_after"]
+        )
         if np.any(injected):
             assert not result["corrected_B_valid"].all()
             assert np.isnan(result["corrected_B"]).any()
@@ -324,15 +423,16 @@ def test_jacobian_membership_sign_and_finite_difference(synthetic):
     perturbation[:, 1] = derivative[:, 1] * step
     before = apply_gradient_response(responses[0], measured[:, indices])
     after = apply_gradient_response(responses[0], (measured + perturbation)[:, indices])
-    np.testing.assert_allclose(np.trace(after - before, axis1=1, axis2=2) / step,
-                               jacobian[:, 0, 0], atol=1e-9)
+    np.testing.assert_allclose(
+        np.trace(after - before, axis1=1, axis2=2) / step, jacobian[:, 0, 0], atol=1e-9
+    )
 
 
 def test_augmented_solver_covariance_and_rank_deficiency():
     rng = np.random.default_rng(15)
     jacobian = rng.normal(size=(20, 3, 8))
     divergence = rng.normal(size=(20, 3))
-    variance = np.array([0.1, 2., 3.])
+    variance = np.array([0.1, 2.0, 3.0])
     result = solve_timing(divergence, jacobian, variance, 0.2)
     weighted = (jacobian / np.sqrt(variance)[None, :, None]).reshape(-1, 8)
     normal = weighted.T @ weighted + np.eye(8) / 0.2**2
@@ -353,10 +453,16 @@ def test_hdf5_cli_roundtrip_ordering_and_product_only_plot(tmp_path, synthetic):
     source = _observation(tmp_path, synthetic, order=order)
     config = tmp_path / "analysis.yaml"
     output = tmp_path / "calibrated.h5"
-    config.write_text(yaml.safe_dump({
-        "input": {"path": str(source)}, "analysis": {"method": "timing-calibrate"},
-        "output": {"path": str(output)}, "timing_calibrate": {"sigma_d_floor": 1e-6},
-    }))
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "input": {"path": str(source)},
+                "analysis": {"method": "timing-calibrate"},
+                "output": {"path": str(output)},
+                "timing_calibrate": {"sigma_d_floor": 1e-6},
+            }
+        )
+    )
     assert analyze_from_config(config) == output
     with h5py.File(output) as handle:
         assert handle["metadata"].attrs["complete"]
@@ -373,7 +479,9 @@ def test_hdf5_cli_roundtrip_ordering_and_product_only_plot(tmp_path, synthetic):
         recovered = handle["timing/recovered_offset_s"][...]
         injected = handle["timing/injected_offset_s"][...]
         np.testing.assert_allclose(handle["mc_summary/bias_s"][...], (recovered - injected).mean(0))
-        np.testing.assert_allclose(handle["mc_summary/std_recovered_offset_s"][...], recovered.std(0))
+        np.testing.assert_allclose(
+            handle["mc_summary/std_recovered_offset_s"][...], recovered.std(0)
+        )
         assert handle["mc_summary/chi2_before"].id == handle["diagnostics/chi2_before"].id
     source.unlink()  # Plotting must not reopen the source observations.
     plot = tmp_path / "diagnostics.png"
@@ -396,9 +504,14 @@ def test_input_rejection_and_explicit_selection(tmp_path, synthetic):
         compute_timing_calibration(source, config)
     with h5py.File(source, "r+") as handle:
         handle["errors/time_offset"][0, 0] = 0
-        handle["metadata"].attrs["config_yaml"] = yaml.safe_dump({"errors": {
-            "model": "observatory", "timing": {"enabled": True},
-        }})
+        handle["metadata"].attrs["config_yaml"] = yaml.safe_dump(
+            {
+                "errors": {
+                    "model": "observatory",
+                    "timing": {"enabled": True},
+                }
+            }
+        )
     with pytest.raises(ValueError, match="timing-only"):
         compute_timing_calibration(source, config)
 
@@ -407,10 +520,16 @@ def test_reference_generation_preserves_node_draws_and_default(tmp_path):
     config = {
         "spacecraft": {"source": "synthetic", "velocity_km_s": [2, 0, 0]},
         "time": {"t_start_s": 0, "t_stop_s": 0.5, "cadence_s": 0.25},
-        "field": {"model": "sine_sum", "background": {"n": 1, "v": [0, 0, 0], "B": [0, 0, 1]},
-                  "modes": [{"quantity": "B", "amplitude": [1, 0, 0], "k": [0, 0, 0], "omega": 1}]},
-        "errors": {"random_seed": 12, "n_mc": 2,
-                   "time": {"model": "gaussian_constant", "sigma_s": 0.01}},
+        "field": {
+            "model": "sine_sum",
+            "background": {"n": 1, "v": [0, 0, 0], "B": [0, 0, 1]},
+            "modes": [{"quantity": "B", "amplitude": [1, 0, 0], "k": [0, 0, 0], "omega": 1}],
+        },
+        "errors": {
+            "random_seed": 12,
+            "n_mc": 2,
+            "time": {"model": "gaussian_constant", "sigma_s": 0.01},
+        },
         "output": {"path": str(tmp_path / "observations.h5")},
         "visualization": {"enabled": False},
     }
@@ -427,8 +546,9 @@ def test_reference_generation_preserves_node_draws_and_default(tmp_path):
         actual = handle["errors/time_offset"][...]
         np.testing.assert_array_equal(actual[:, 0], [0, 0])
         np.testing.assert_array_equal(actual[:, 1:], original[:, 1:])
-        np.testing.assert_allclose(handle["observed/B"][:, :, 0],
-                                   np.broadcast_to(handle["truth/B"][:, 0], (2, 3, 3)))
+        np.testing.assert_allclose(
+            handle["observed/B"][:, :, 0], np.broadcast_to(handle["truth/B"][:, 0], (2, 3, 3))
+        )
     config["errors"]["time"]["reference_spacecraft"] = "unknown"
     path.write_text(yaml.safe_dump(config))
     with pytest.raises(ValueError, match="existing spacecraft"):
@@ -458,10 +578,12 @@ def test_exact_divergence_free_linear_timing_toy(linear_timing_toy):
     slope = 2.0
     ideal = np.zeros_like(positions)
     ideal[:, :, 0] = slope * time[:, None]
-    ideal_d = np.column_stack([
-        divergence_series(response, ideal[:, indices])
-        for indices, response in zip(polyhedra, responses)
-    ])
+    ideal_d = np.column_stack(
+        [
+            divergence_series(response, ideal[:, indices])
+            for indices, response in zip(polyhedra, responses)
+        ]
+    )
     np.testing.assert_allclose(ideal_d, 0, atol=1e-14)
     _, variance = divergence_variance(ideal_d, floor=1e-8)
     jacobian = timing_jacobian(time, ideal, polyhedra, responses, np.arange(1, 9))
@@ -482,8 +604,9 @@ def test_exact_divergence_free_linear_timing_toy(linear_timing_toy):
         valid = result["corrected_B_valid"]
         np.testing.assert_allclose(result["corrected_B"][valid], ideal[valid], atol=3e-11, rtol=0)
         valid_d = result["comparison_valid"]
-        np.testing.assert_allclose(result["corrected_divergence"][valid_d],
-                                   ideal_d[valid_d], atol=1e-12, rtol=0)
+        np.testing.assert_allclose(
+            result["corrected_divergence"][valid_d], ideal_d[valid_d], atol=1e-12, rtol=0
+        )
 
         # Alignment's argument is a source-clock offset, not a sampling correction.
         correction = np.r_[0.0, result["correction_s"]]
@@ -492,15 +615,18 @@ def test_exact_divergence_free_linear_timing_toy(linear_timing_toy):
         known_alignment = align_spacecraft_samples(
             time, injected, positions.swapaxes(0, 1), measured
         )
-        np.testing.assert_allclose(known_alignment.field[known_alignment.valid],
-                                   ideal[known_alignment.valid], atol=1e-14, rtol=0)
-        wrong_sign = align_spacecraft_samples(
-            time, correction, positions.swapaxes(0, 1), measured
+        np.testing.assert_allclose(
+            known_alignment.field[known_alignment.valid],
+            ideal[known_alignment.valid],
+            atol=1e-14,
+            rtol=0,
         )
+        wrong_sign = align_spacecraft_samples(time, correction, positions.swapaxes(0, 1), measured)
         doubled = ideal.copy()
         doubled[:, :, 0] += 2 * slope * injected[None, :]
-        np.testing.assert_allclose(wrong_sign.field[wrong_sign.valid],
-                                   doubled[wrong_sign.valid], atol=3e-11, rtol=0)
+        np.testing.assert_allclose(
+            wrong_sign.field[wrong_sign.valid], doubled[wrong_sign.valid], atol=3e-11, rtol=0
+        )
         assert np.max(np.abs(wrong_sign.field[wrong_sign.valid] - ideal[wrong_sign.valid])) > 1e-4
 
 
@@ -511,10 +637,12 @@ def test_timing_fit_ideal_divergence_residual(linear_timing_toy):
     # The static Bx = b*x term does not change the exact linear timing derivative.
     ideal = np.zeros_like(positions)
     ideal[:, :, 0] = slope * time[:, None] + 1e-6 * positions[:, :, 0]
-    ideal_d = np.column_stack([
-        divergence_series(response, ideal[:, indices])
-        for indices, response in zip(polyhedra, responses)
-    ])
+    ideal_d = np.column_stack(
+        [
+            divergence_series(response, ideal[:, indices])
+            for indices, response in zip(polyhedra, responses)
+        ]
+    )
     np.testing.assert_allclose(ideal_d, 1e-6, atol=1e-14, rtol=0)
     raw, variance = divergence_variance(ideal_d, floor=1e-12)
     np.testing.assert_array_equal(raw, np.mean(ideal_d**2, axis=0))
@@ -522,10 +650,12 @@ def test_timing_fit_ideal_divergence_residual(linear_timing_toy):
     for injected in [np.zeros(9), *cases]:
         measured = ideal.copy()
         measured[:, :, 0] += slope * injected[None, :]
-        measured_d = np.column_stack([
-            divergence_series(response, measured[:, indices])
-            for indices, response in zip(polyhedra, responses)
-        ])
+        measured_d = np.column_stack(
+            [
+                divergence_series(response, measured[:, indices])
+                for indices, response in zip(polyhedra, responses)
+            ]
+        )
         jacobian = timing_jacobian(time, measured, polyhedra, responses, np.arange(1, 9))
         result = solve_timing(measured_d, jacobian, variance, 0.0125, ideal_divergence=ideal_d)
         if not np.any(injected):
@@ -539,19 +669,23 @@ def test_timing_fit_ideal_divergence_residual(linear_timing_toy):
         np.testing.assert_allclose(result["recovered_offset_s"], injected[1:], atol=1e-10, rtol=0)
         residual = measured_d - ideal_d
         predicted = residual + jacobian @ result["correction_s"]
-        prior = np.sum((result["correction_s"] / 0.0125)**2)
+        prior = np.sum((result["correction_s"] / 0.0125) ** 2)
         np.testing.assert_allclose(result["linear_chi2_before"], np.sum(residual**2 / variance))
-        np.testing.assert_allclose(result["linear_chi2_after"],
-                                   np.sum(predicted**2 / variance) + prior, atol=1e-12)
+        np.testing.assert_allclose(
+            result["linear_chi2_after"], np.sum(predicted**2 / variance) + prior, atol=1e-12
+        )
         aligned = align_spacecraft_samples(
             time, np.r_[0.0, -result["correction_s"]], positions.swapaxes(0, 1), measured
         )
-        np.testing.assert_allclose(aligned.field[aligned.valid], ideal[aligned.valid],
-                                   atol=3e-10, rtol=0)
-        corrected_d = np.column_stack([
-            divergence_series(response, aligned.field[:, indices])
-            for indices, response in zip(polyhedra, responses)
-        ])
+        np.testing.assert_allclose(
+            aligned.field[aligned.valid], ideal[aligned.valid], atol=3e-10, rtol=0
+        )
+        corrected_d = np.column_stack(
+            [
+                divergence_series(response, aligned.field[:, indices])
+                for indices, response in zip(polyhedra, responses)
+            ]
+        )
         valid = np.isfinite(corrected_d)
         np.testing.assert_allclose(corrected_d[valid], ideal_d[valid], atol=1e-11, rtol=0)
 
@@ -567,13 +701,20 @@ def test_yaml_ideal_reference_reaches_fit_and_saved_objectives(tmp_path, synthet
         handle["errors/time_offset"][...] = 0
     output = tmp_path / "residual.h5"
     config = tmp_path / "residual.yaml"
-    config.write_text(yaml.safe_dump({
-        "input": {"path": str(source)}, "analysis": {"method": "timing-calibrate"},
-        "output": {"path": str(output)}, "timing_calibrate": {
-            "use_ideal_divergence": True, "sigma_t_s": 0.0125,
-            "polyhedra": [["H", "N1", "N2", "N3"]],
-        },
-    }))
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "input": {"path": str(source)},
+                "analysis": {"method": "timing-calibrate"},
+                "output": {"path": str(output)},
+                "timing_calibrate": {
+                    "use_ideal_divergence": True,
+                    "sigma_t_s": 0.0125,
+                    "polyhedra": [["H", "N1", "N2", "N3"]],
+                },
+            }
+        )
+    )
     analyze_from_config(config)
     with h5py.File(output) as handle:
         assert handle["metadata"].attrs["use_ideal_divergence"]

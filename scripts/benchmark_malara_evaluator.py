@@ -67,9 +67,7 @@ def _print_evaluations(rows: list[dict[str, Any]]) -> None:
         chunk = "-" if row["chunk_size"] is None else str(row["chunk_size"])
         workers = "-" if row["n_workers"] is None else str(row["n_workers"])
         entries = "-" if row["cache_entries"] is None else str(row["cache_entries"])
-        hit_rate = (
-            "-" if row["cache_hit_rate"] is None else f"{row['cache_hit_rate']:.3f}"
-        )
+        hit_rate = "-" if row["cache_hit_rate"] is None else f"{row['cache_hit_rate']:.3f}"
         print(
             f"{row['backend']:<18s} {row['n_points']:>6d} "
             f"{row['n_scales']:>6d} {row['intermittency_p']:>3.1f} "
@@ -135,10 +133,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--backends",
         default="direct,cached,parallel",
-        help=(
-            "comma-separated direct, chunked, cached, parallel, or "
-            "parallel-uncached"
-        ),
+        help=("comma-separated direct, chunked, cached, parallel, or parallel-uncached"),
     )
     parser.add_argument("--chunk-size", type=int, default=100)
     parser.add_argument(
@@ -165,9 +160,7 @@ def main() -> None:
         raise SystemExit("--max-points must be positive")
 
     requested_points = _comma_separated_numbers(args.point_counts, int)
-    point_counts = sorted(
-        {value for value in requested_points if 0 < value <= args.max_points}
-    )
+    point_counts = sorted({value for value in requested_points if 0 < value <= args.max_points})
     if not point_counts:
         point_counts = [args.max_points]
     scales = sorted(set(_comma_separated_numbers(args.scales, int)))
@@ -182,14 +175,10 @@ def main() -> None:
     }
     unknown_backends = sorted(set(backends) - supported_backends)
     if not backends or unknown_backends:
-        raise SystemExit(
-            "--backends contains unsupported values: " + ", ".join(unknown_backends)
-        )
+        raise SystemExit("--backends contains unsupported values: " + ", ".join(unknown_backends))
     chunk_sizes = [args.chunk_size]
     if args.chunk_sizes:
-        chunk_sizes = sorted(
-            set(_comma_separated_numbers(args.chunk_sizes, int))
-        )
+        chunk_sizes = sorted(set(_comma_separated_numbers(args.chunk_sizes, int)))
     if not scales or min(scales) < 2:
         raise SystemExit("--scales must contain values >= injection scale 2")
     if not p_values or any(not 0.5 <= value <= 1.0 for value in p_values):
@@ -245,9 +234,7 @@ def main() -> None:
                             if backend == "cached":
                                 values = optimized.evaluate_vector_cached(positions)
                             elif backend == "chunked":
-                                values = optimized.evaluate_vector_chunked(
-                                    positions, chunk_size
-                                )
+                                values = optimized.evaluate_vector_chunked(positions, chunk_size)
                             else:
                                 values = optimized.evaluate_vector_parallel(
                                     positions,

@@ -649,15 +649,14 @@ def plot_intermittency_timeseries(
         (2, 1, "z_plus", r"$z_x^+$ (km s$^{-1}$)"),
     )
     with plt.rc_context({"font.size": 12, "axes.labelsize": 13, "axes.linewidth": 0.7}):
-        figure, axes = plt.subplots(
-            4, 2, figsize=(13.0, 9.0), sharex=True, constrained_layout=True
-        )
+        figure, axes = plt.subplots(4, 2, figsize=(13.0, 9.0), sharex=True, constrained_layout=True)
         figure.get_layout_engine().set(h_pad=0.025, w_pad=0.04, hspace=0.025, wspace=0.04)
         try:
             for row, col, quantity, label in specs:
                 pair_values = []
-                for offset, (kind, prefix) in enumerate((("truth", "True"),
-                                                       ("observed", "Measured"))):
+                for offset, (kind, prefix) in enumerate(
+                    (("truth", "True"), ("observed", "Measured"))
+                ):
                     if quantity == "z_plus":
                         time = data[f"{kind}_z_time"]
                         values = data[f"{kind}_z_plus"][:, :, 0]
@@ -683,8 +682,13 @@ def plot_intermittency_timeseries(
                     axis.grid(alpha=0.18, linewidth=0.5)
                     panel = "abcdefgh"[2 * (row + offset) + col]
                     axis.text(
-                        0.015, 0.9, f"({panel})", transform=axis.transAxes,
-                        fontsize=11, fontweight="bold", va="top",
+                        0.015,
+                        0.9,
+                        f"({panel})",
+                        transform=axis.transAxes,
+                        fontsize=11,
+                        fontweight="bold",
+                        va="top",
                     )
                 limits = _component_ylim(*pair_values)
                 axes[row, col].set_ylim(limits)
@@ -858,9 +862,7 @@ def plot_observed_velocity_alfven_timeseries(
     handles.append(Line2D([0], [0], color="#777777", linewidth=2.0, label="Nominal truth"))
     labels.append("Nominal truth")
     axes[0, 1].legend(handles, labels, loc="best", ncol=3, fontsize=8, frameon=False)
-    fig.suptitle(
-        f"Observed {title_prefix}Velocity and Alfvén-Speed Magnetic Field: MC {mc_index}"
-    )
+    fig.suptitle(f"Observed {title_prefix}Velocity and Alfvén-Speed Magnetic Field: MC {mc_index}")
     return fig, axes
 
 
@@ -887,7 +889,13 @@ def _plot_relative_projection(
             linewidths=1.3 if is_hub else 1.0,
             zorder=3,
         )
-        ax.annotate(spacecraft_id, (point[x_index], point[y_index]), xytext=(5, 4), textcoords="offset points", fontsize=8)
+        ax.annotate(
+            spacecraft_id,
+            (point[x_index], point[y_index]),
+            xytext=(5, 4),
+            textcoords="offset points",
+            fontsize=8,
+        )
     ax.axhline(0, color="#444444", linewidth=0.8, alpha=0.35)
     ax.axvline(0, color="#444444", linewidth=0.8, alpha=0.35)
     ax.set(xlim=(-limit, limit), ylim=(-limit, limit), xlabel=x_label, ylabel=y_label, title=title)
@@ -914,16 +922,34 @@ def plot_spacecraft_geometry(
     relative = initial - initial[hub_index]
     fig, axes = plt.subplots(2, 2, figsize=(12, 10), constrained_layout=True)
     _plot_relative_projection(
-        axes[0, 0], relative, spacecraft_ids, 0, 2,
-        r"$\Delta X$ (km)", r"$\Delta Z$ (km)", r"Hub-Relative $\Delta X$-$\Delta Z$",
+        axes[0, 0],
+        relative,
+        spacecraft_ids,
+        0,
+        2,
+        r"$\Delta X$ (km)",
+        r"$\Delta Z$ (km)",
+        r"Hub-Relative $\Delta X$-$\Delta Z$",
     )
     _plot_relative_projection(
-        axes[1, 0], relative, spacecraft_ids, 0, 1,
-        r"$\Delta X$ (km)", r"$\Delta Y$ (km)", r"Hub-Relative $\Delta X$-$\Delta Y$",
+        axes[1, 0],
+        relative,
+        spacecraft_ids,
+        0,
+        1,
+        r"$\Delta X$ (km)",
+        r"$\Delta Y$ (km)",
+        r"Hub-Relative $\Delta X$-$\Delta Y$",
     )
     _plot_relative_projection(
-        axes[1, 1], relative, spacecraft_ids, 2, 1,
-        r"$\Delta Z$ (km)", r"$\Delta Y$ (km)", r"Hub-Relative $\Delta Z$-$\Delta Y$",
+        axes[1, 1],
+        relative,
+        spacecraft_ids,
+        2,
+        1,
+        r"$\Delta Z$ (km)",
+        r"$\Delta Y$ (km)",
+        r"Hub-Relative $\Delta Z$-$\Delta Y$",
     )
 
     path_ax = axes[0, 1]
@@ -1042,16 +1068,37 @@ def plot_observed_spacecraft_geometry(
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10), constrained_layout=True)
     _plot_relative_overlay(
-        axes[0, 0], true_relative, measured_relative, spacecraft_ids, 0, 2,
-        r"$\Delta X$ (km)", r"$\Delta Z$ (km)", r"Hub-Relative $\Delta X$-$\Delta Z$",
+        axes[0, 0],
+        true_relative,
+        measured_relative,
+        spacecraft_ids,
+        0,
+        2,
+        r"$\Delta X$ (km)",
+        r"$\Delta Z$ (km)",
+        r"Hub-Relative $\Delta X$-$\Delta Z$",
     )
     _plot_relative_overlay(
-        axes[1, 0], true_relative, measured_relative, spacecraft_ids, 0, 1,
-        r"$\Delta X$ (km)", r"$\Delta Y$ (km)", r"Hub-Relative $\Delta X$-$\Delta Y$",
+        axes[1, 0],
+        true_relative,
+        measured_relative,
+        spacecraft_ids,
+        0,
+        1,
+        r"$\Delta X$ (km)",
+        r"$\Delta Y$ (km)",
+        r"Hub-Relative $\Delta X$-$\Delta Y$",
     )
     _plot_relative_overlay(
-        axes[1, 1], true_relative, measured_relative, spacecraft_ids, 2, 1,
-        r"$\Delta Z$ (km)", r"$\Delta Y$ (km)", r"Hub-Relative $\Delta Z$-$\Delta Y$",
+        axes[1, 1],
+        true_relative,
+        measured_relative,
+        spacecraft_ids,
+        2,
+        1,
+        r"$\Delta Z$ (km)",
+        r"$\Delta Y$ (km)",
+        r"Hub-Relative $\Delta Z$-$\Delta Y$",
     )
 
     path_ax = axes[0, 1]
@@ -1178,12 +1225,7 @@ def _formisano_line_intersects_bow_shock(position_km: np.ndarray, *, y_sign: flo
     direction = np.array([1.0, y_sign, 0.0]) / np.sqrt(2.0)
     x0, y0, z0 = point
     dx, dy, dz = direction
-    quadratic = (
-        c["a11"] * dx**2
-        + c["a22"] * dy**2
-        + c["a33"] * dz**2
-        + c["a12"] * dx * dy
-    )
+    quadratic = c["a11"] * dx**2 + c["a22"] * dy**2 + c["a33"] * dz**2 + c["a12"] * dx * dy
     linear = (
         2.0 * c["a11"] * x0 * dx
         + 2.0 * c["a22"] * y0 * dy
@@ -1296,7 +1338,9 @@ def helio_swarm_mesocenter(positions: np.ndarray) -> np.ndarray:
 
     sample = _single_sample_positions(positions)
     if sample.shape != (9, 3):
-        raise ValueError(f"3D configuration requires positions for 9 spacecraft; got {sample.shape}")
+        raise ValueError(
+            f"3D configuration requires positions for 9 spacecraft; got {sample.shape}"
+        )
     if not np.all(np.isfinite(sample)):
         raise ValueError("3D configuration positions contain non-finite values")
     return np.mean(sample, axis=0)
@@ -1331,9 +1375,7 @@ def parse_configuration_connections(
     for item in items:
         parts = tuple(part.strip() for part in item.split("-"))
         if len(parts) != 2 or not all(parts):
-            raise ValueError(
-                f"Invalid 3D connection {item!r}; expected LABEL-LABEL, e.g. N2-N5"
-            )
+            raise ValueError(f"Invalid 3D connection {item!r}; expected LABEL-LABEL, e.g. N2-N5")
         first, second = parts
         invalid = [label for label in parts if label not in valid]
         if invalid:
@@ -1370,14 +1412,16 @@ def plot_3d_configuration(
     extent = float(np.max(np.abs(relative)))
     axis_limit = 1.12 * extent if extent > 0.0 else 1.0
 
-    with plt.rc_context({
-        "font.size": 9.0,
-        "axes.titlesize": 11.0,
-        "axes.labelsize": 9.5,
-        "xtick.labelsize": 8.0,
-        "ytick.labelsize": 8.0,
-        "savefig.bbox": "tight",
-    }):
+    with plt.rc_context(
+        {
+            "font.size": 9.0,
+            "axes.titlesize": 11.0,
+            "axes.labelsize": 9.5,
+            "xtick.labelsize": 8.0,
+            "ytick.labelsize": 8.0,
+            "savefig.bbox": "tight",
+        }
+    ):
         figure = plt.figure(figsize=(6.8, 6.25), constrained_layout=True)
         layout_engine = figure.get_layout_engine()
         if layout_engine is not None:
@@ -1394,37 +1438,67 @@ def plot_3d_configuration(
             axis.plot([x, x], [y, high], [z, z], "--", color=color, alpha=0.22, lw=0.65)
             axis.plot([x, x], [y, y], [z, low], "--", color=color, alpha=0.22, lw=0.65)
             axis.scatter(
-                [low, x, x], [y, high, y], [z, z, low], s=18, c=color,
-                alpha=0.48, edgecolors="none", depthshade=False,
+                [low, x, x],
+                [y, high, y],
+                [z, z, low],
+                s=18,
+                c=color,
+                alpha=0.48,
+                edgecolors="none",
+                depthshade=False,
             )
             axis.scatter(
-                x, y, z, s=76 if label == "Hub" else 55, c=color,
-                edgecolors="#202020", linewidths=0.55, depthshade=False, zorder=6,
+                x,
+                y,
+                z,
+                s=76 if label == "Hub" else 55,
+                c=color,
+                edgecolors="#202020",
+                linewidths=0.55,
+                depthshade=False,
+                zorder=6,
             )
 
-        connections = defaults + tuple(pair for pair in extras if pair not in defaults and pair[::-1] not in defaults)
+        connections = defaults + tuple(
+            pair for pair in extras if pair not in defaults and pair[::-1] not in defaults
+        )
         for first, second in connections:
             left, right = index_by_label[first], index_by_label[second]
             color = spacecraft_color(spacecraft_ids[right])
             axis.plot(*relative[[left, right]].T, color=color, lw=1.65, alpha=0.88)
 
-        axis.set(xlim=(-axis_limit, axis_limit), ylim=(-axis_limit, axis_limit),
-                 zlim=(-axis_limit, axis_limit), xlabel=r"$X_{GSE}$ (km)",
-                 ylabel=r"$Y_{GSE}$ (km)", zlabel=r"$Z_{GSE}$ (km)")
+        axis.set(
+            xlim=(-axis_limit, axis_limit),
+            ylim=(-axis_limit, axis_limit),
+            zlim=(-axis_limit, axis_limit),
+            xlabel=r"$X_{GSE}$ (km)",
+            ylabel=r"$Y_{GSE}$ (km)",
+            zlabel=r"$Z_{GSE}$ (km)",
+        )
         axis.set_box_aspect((1, 1, 1))
         axis.view_init(elev=24, azim=-56)
         axis.grid(True, alpha=0.24)
         axis.set_title(f"HelioSwarm Configuration\n{_selected_time_title_label(metadata)}", pad=13)
         figure.text(
-            0.5, 0.064,
+            0.5,
+            0.064,
             r"GSE coordinates; Sunward is $-X_{GSE}$  |  Origin at HelioSwarm mesocenter",
-            ha="center", va="bottom", fontsize=8.0, color="#444444",
+            ha="center",
+            va="bottom",
+            fontsize=8.0,
+            color="#444444",
         )
         legend_handles = [
             Line2D(
-                [0], [0], marker="o", linestyle="none", markersize=6.0,
+                [0],
+                [0],
+                marker="o",
+                linestyle="none",
+                markersize=6.0,
                 markerfacecolor=spacecraft_color(spacecraft_id),
-                markeredgecolor="#202020", markeredgewidth=0.4, label=label,
+                markeredgecolor="#202020",
+                markeredgewidth=0.4,
+                label=label,
             )
             for spacecraft_id, label in zip(spacecraft_ids, display_labels)
         ]
@@ -1453,8 +1527,12 @@ def plot_3d_configuration(
 
 
 def save_3d_configuration(
-    *, output_path: str | Path, config: dict, positions: np.ndarray,
-    spacecraft_ids: Sequence[str], metadata: Mapping[str, Any] | None = None,
+    *,
+    output_path: str | Path,
+    config: dict,
+    positions: np.ndarray,
+    spacecraft_ids: Sequence[str],
+    metadata: Mapping[str, Any] | None = None,
     extra_connections: Sequence[str] | str | None = None,
 ) -> tuple[Path, Path, dict[str, Any]]:
     """Write the reusable 3D configuration plot as PDF and PNG."""
@@ -1462,7 +1540,10 @@ def save_3d_configuration(
     pdf_path, png_path = configuration_3d_paths(output_path, metadata)
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
     figure, diagnostics = plot_3d_configuration(
-        positions, spacecraft_ids, metadata=metadata, extra_connections=extra_connections,
+        positions,
+        spacecraft_ids,
+        metadata=metadata,
+        extra_connections=extra_connections,
     )
     figure.savefig(pdf_path)
     figure.savefig(png_path, dpi=int(config.get("dpi", 150)))
@@ -1660,9 +1741,7 @@ def _plot_baseline_components(
     labels = ("X", "Y", "Z")
     values = np.maximum(np.abs(components), 1.0e-9)
     lo, hi = limits
-    ax.axvspan(
-        lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.24, zorder=0
-    )
+    ax.axvspan(lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.24, zorder=0)
     ax.axvspan(
         KINETIC_SCALE_KM,
         MHD_SCALE_KM,
@@ -1671,9 +1750,7 @@ def _plot_baseline_components(
         zorder=0,
     )
     ax.axvspan(MHD_SCALE_KM, hi, color=LAMBDA_SCALE_COLORS["mhd"], alpha=0.22, zorder=0)
-    ax.axhspan(
-        lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.12, zorder=0
-    )
+    ax.axhspan(lo, KINETIC_SCALE_KM, color=LAMBDA_SCALE_COLORS["kinetic"], alpha=0.12, zorder=0)
     ax.axhspan(
         KINETIC_SCALE_KM,
         MHD_SCALE_KM,
@@ -1713,7 +1790,8 @@ def _label_geometry_summary_panels(axes: Sequence[Any], *, grid_order: bool = Fa
         axes,
         key=lambda axis: (
             (axis.get_subplotspec().rowspan.start, axis.get_subplotspec().colspan.start)
-            if grid_order else (-axis.get_position().y0, axis.get_position().x0)
+            if grid_order
+            else (-axis.get_position().y0, axis.get_position().x0)
         ),
     )
     for label, axis in zip("abcdefgh", ordered):
@@ -1756,9 +1834,7 @@ def geometry_summary_diagnostics(
     metrics = polyhedron_metrics(sample)
     lengths = np.linalg.norm(baselines, axis=1)
     mesocenter = np.mean(sample, axis=0)
-    regular_count = sum(
-        1 for item in metrics if float(item["Q"]) <= REGULAR_POLYHEDRON_Q_LIMIT
-    )
+    regular_count = sum(1 for item in metrics if float(item["Q"]) <= REGULAR_POLYHEDRON_Q_LIMIT)
     if len(baselines) != 36:
         warnings.warn(f"Expected 36 baselines; got {len(baselines)}", stacklevel=2)
     if len(metrics) != 382:
@@ -1792,8 +1868,12 @@ def _shade_polyhedron_quality(ax, *, shape: bool, base_alpha: float) -> None:
     from matplotlib.patches import Wedge
 
     for low, high, multiplier in ((0.0, 0.4, 1.5), (0.4, 0.6, 1.0), (0.6, 0.8, 0.5)):
-        style = dict(facecolor=POLYHEDRON_Q_SHADE_COLOR, edgecolor="none",
-                     alpha=base_alpha * multiplier, zorder=0)
+        style = dict(
+            facecolor=POLYHEDRON_Q_SHADE_COLOR,
+            edgecolor="none",
+            alpha=base_alpha * multiplier,
+            zorder=0,
+        )
         if shape:
             ax.add_patch(Wedge((0, 0), high, 0, 90, width=high - low, **style))
         else:
@@ -1906,8 +1986,14 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
     _shade_polyhedron_quality(ax, shape=True, base_alpha=0.06)
     ax.plot(e, p, "--", color="#555555", lw=1.1)
     for radius in POLYHEDRON_EXTRA_Q_GUIDES:
-        ax.plot(radius * np.cos(theta), radius * np.sin(theta),
-                linestyle=":", color="#777777", lw=1.0, zorder=2)
+        ax.plot(
+            radius * np.cos(theta),
+            radius * np.sin(theta),
+            linestyle=":",
+            color="#777777",
+            lw=1.0,
+            zorder=2,
+        )
     _highlight_plot_polyhedra(ax, _selected_plot_polyhedra(metrics), shape=True)
     ax.set_aspect("auto")
     ax.grid(alpha=0.2, linewidth=0.5)
@@ -1930,7 +2016,7 @@ def _plot_summary_formation(
             alpha=0.55,
             zorder=1,
         )
-    #for point in relative[1:]:
+    # for point in relative[1:]:
     #    ax.plot(*np.stack((relative[0], point)).T, color="#888888", lw=1.2, alpha=0.4)
     # The hull is a visual aid only; the figure also works if SciPy cannot be imported
     # or for a coplanar/coincident formation where no 3D hull exists.
@@ -2075,8 +2161,7 @@ def plot_geometry_summary(
         trajectory = trajectory_source
     else:
         raise ValueError(
-            "context_trajectory must have shape (n_time, 3) or "
-            "(n_spacecraft, n_time, 3)"
+            "context_trajectory must have shape (n_time, 3) or (n_spacecraft, n_time, 3)"
         )
     if len(sample) != len(spacecraft_ids):
         raise ValueError("spacecraft_ids length must match positions")
@@ -2119,7 +2204,9 @@ def plot_geometry_summary(
             "savefig.bbox": "tight",
         }
     ):
-        fig = plt.figure(figsize=(24.0 if variant == "polyhedra" else 31.0, 16.0), constrained_layout=True)
+        fig = plt.figure(
+            figsize=(24.0 if variant == "polyhedra" else 31.0, 16.0), constrained_layout=True
+        )
         layout_engine = fig.get_layout_engine()
         if layout_engine is not None:
             layout_engine.set(
@@ -2169,7 +2256,7 @@ def plot_geometry_summary(
             frameon=False,
             borderaxespad=0.25,
         )
-        #context_ax.set_title(r"Orbit Context:")
+        # context_ax.set_title(r"Orbit Context:")
 
         if variant != "polyhedra":
             baseline_limits = _baseline_component_limits(baselines)
@@ -2195,8 +2282,11 @@ def plot_geometry_summary(
                 _shade_polyhedron_quality(poly_ax, shape=False, base_alpha=0.14)
             else:
                 poly_ax.axvspan(
-                    0.0, REGULAR_POLYHEDRON_Q_LIMIT, color="#90be6d",
-                    alpha=0.14, label="regular region",
+                    0.0,
+                    REGULAR_POLYHEDRON_Q_LIMIT,
+                    color="#90be6d",
+                    alpha=0.14,
+                    label="regular region",
                 )
             scatter = poly_ax.scatter(
                 q_values,
@@ -2280,8 +2370,17 @@ def plot_geometry_summary(
                 (formation_ax, lambda_y_x_ax, context_ax, lambda_z_x_ax, lambda_z_y_ax),
             ):
                 text = axis.text2D if axis is formation_ax else axis.text
-                text(0.035, 0.94, f"({label})", transform=axis.transAxes,
-                     ha="left", va="top", fontsize=24, fontweight="bold", color="#111111")
+                text(
+                    0.035,
+                    0.94,
+                    f"({label})",
+                    transform=axis.transAxes,
+                    ha="left",
+                    va="top",
+                    fontsize=24,
+                    fontweight="bold",
+                    color="#111111",
+                )
         else:
             _label_geometry_summary_panels(
                 [axis for axis in fig.axes if axis.get_subplotspec() is not None],
@@ -2313,14 +2412,34 @@ def plot_geometry_summary(
             scatter.set_alpha(0.38)
             for boundary in POLYHEDRON_EXTRA_Q_GUIDES:
                 poly_ax.axvline(boundary, linestyle=":", color="#777777", lw=1.0, zorder=2)
-            poly_ax.legend(loc="lower right", fontsize=16, frameon=True,
-                           framealpha=0.9, edgecolor="none", handletextpad=0.4)
-            poly_ax.text(REGULAR_POLYHEDRON_Q_LIMIT - 0.04, 0.05, r"regular $Q\leq0.6$",
-                         transform=poly_ax.get_xaxis_transform(), ha="right", va="bottom",
-                         fontsize=14, color="#555555", rotation=90)
+            poly_ax.legend(
+                loc="lower right",
+                fontsize=16,
+                frameon=True,
+                framealpha=0.9,
+                edgecolor="none",
+                handletextpad=0.4,
+            )
+            poly_ax.text(
+                REGULAR_POLYHEDRON_Q_LIMIT - 0.04,
+                0.05,
+                r"regular $Q\leq0.6$",
+                transform=poly_ax.get_xaxis_transform(),
+                ha="right",
+                va="bottom",
+                fontsize=14,
+                color="#555555",
+                rotation=90,
+            )
             if "smallest regular" not in selected:
-                poly_ax.text(0.03, 0.03, "No regular N=4 subset", transform=poly_ax.transAxes,
-                             fontsize=14, color="#555555")
+                poly_ax.text(
+                    0.03,
+                    0.03,
+                    "No regular N=4 subset",
+                    transform=poly_ax.transAxes,
+                    fontsize=14,
+                    color="#555555",
+                )
             diagnostics = dict(diagnostics)
             diagnostics["selected_polyhedra"] = {
                 name: {key: item[key] for key in ("indices", "n_spacecraft", "E", "P", "Q", "L")}
@@ -2363,9 +2482,7 @@ def alfven_visualization_path(output_path: str | Path, config: dict) -> Path:
     """Resolve the truth U/b diagnostic path."""
 
     output = Path(output_path)
-    return Path(
-        config.get("alfven_path", output.with_name(f"{output.stem}_velocity_alfven.png"))
-    )
+    return Path(config.get("alfven_path", output.with_name(f"{output.stem}_velocity_alfven.png")))
 
 
 def observed_alfven_visualization_path(
@@ -2487,9 +2604,7 @@ def save_observed_visualizations(
     geometry_path.parent.mkdir(parents=True, exist_ok=True)
     dpi = int(config.get("dpi", 150))
 
-    timeseries_figure, _ = plot_observed_timeseries(
-        time, truth, observed, spacecraft_ids, mc_index
-    )
+    timeseries_figure, _ = plot_observed_timeseries(time, truth, observed, spacecraft_ids, mc_index)
     timeseries_figure.savefig(observed_path, dpi=dpi)
     plt.close(timeseries_figure)
 

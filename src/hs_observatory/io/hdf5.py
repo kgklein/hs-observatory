@@ -13,7 +13,9 @@ import numpy as np
 def _dataset(group: h5py.Group, name: str, value: np.ndarray) -> h5py.Dataset:
     array = np.asarray(value)
     # gzip and automatic chunking keep large Monte Carlo ensembles compact.
-    return group.create_dataset(name, data=array, compression="gzip", compression_opts=4, chunks=True)
+    return group.create_dataset(
+        name, data=array, compression="gzip", compression_opts=4, chunks=True
+    )
 
 
 def write_observations(
@@ -53,7 +55,9 @@ def write_observations(
         for quantity in ("n", "v", "B"):
             _dataset(time_group, quantity, np.asarray(time[quantity], dtype=float))
         sc_group = handle.create_group("spacecraft")
-        sc_group.create_dataset("id", data=np.asarray(spacecraft_ids, dtype=h5py.string_dtype("utf-8")))
+        sc_group.create_dataset(
+            "id", data=np.asarray(spacecraft_ids, dtype=h5py.string_dtype("utf-8"))
+        )
         position_group = sc_group.create_group("r")
         for quantity in ("n", "v", "B"):
             _dataset(position_group, quantity, np.asarray(position[quantity], dtype=float))
@@ -106,11 +110,7 @@ def read_observations(path: str | Path) -> dict[str, Any]:
             "observed": {q: handle[f"observed/{q}"][...] for q in ("n", "v", "B")},
         }
         if "truth/v_spacecraft_frame" in handle:
-            result["truth"]["v_spacecraft_frame"] = handle[
-                "truth/v_spacecraft_frame"
-            ][...]
+            result["truth"]["v_spacecraft_frame"] = handle["truth/v_spacecraft_frame"][...]
         if "errors" in handle:
-            result["errors"] = {
-                name: handle[f"errors/{name}"][...] for name in handle["errors"]
-            }
+            result["errors"] = {name: handle[f"errors/{name}"][...] for name in handle["errors"]}
     return result

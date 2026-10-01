@@ -374,7 +374,5 @@ visualization:
     # members can straddle this synthetic field's periodic discontinuity.
     hub = 0
     expected_hub = truth[:, hub] + 0.5 * time_offset[hub]
-    np.testing.assert_allclose(
-        observed[:, hub], expected_hub, rtol=0.0, atol=1.0e-12
-    )
+    np.testing.assert_allclose(observed[:, hub], expected_hub, rtol=0.0, atol=1.0e-12)
     assert not np.allclose(observed[:, hub], truth[:, hub])

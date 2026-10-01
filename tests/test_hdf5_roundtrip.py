@@ -11,14 +11,14 @@ def test_hdf5_roundtrip_has_expected_groups_and_shapes(tmp_path):
         "v": np.ones((n_time, n_sc, 3)),
         "B": np.ones((n_time, n_sc, 3)),
     }
-    observed = {name: np.broadcast_to(value, (n_mc, *value.shape)).copy() for name, value in truth.items()}
+    observed = {
+        name: np.broadcast_to(value, (n_mc, *value.shape)).copy() for name, value in truth.items()
+    }
     errors = {name: np.zeros_like(value) for name, value in observed.items()}
     path = tmp_path / "observations.h5"
 
     time = {quantity: np.arange(n_time) for quantity in ("n", "v", "B")}
-    position = {
-        quantity: np.zeros((n_sc, n_time, 3)) for quantity in ("n", "v", "B")
-    }
+    position = {quantity: np.zeros((n_sc, n_time, 3)) for quantity in ("n", "v", "B")}
     write_observations(
         path,
         time=time,

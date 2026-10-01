@@ -52,8 +52,7 @@ def _xml_data_array(name: str, values: np.ndarray, *, components: int = 1) -> li
     clean = _clean_name(name)
     component_text = "" if components == 1 else f' NumberOfComponents="{components}"'
     return [
-        f'{XML_INDENT * 4}<DataArray type="Float64" Name="{clean}"'
-        f'{component_text} format="ascii">',
+        f'{XML_INDENT * 4}<DataArray type="Float64" Name="{clean}"{component_text} format="ascii">',
         f"{XML_INDENT * 5}{_as_ascii(values)}",
         f"{XML_INDENT * 4}</DataArray>",
     ]
@@ -67,9 +66,7 @@ def _structured_points(handle: h5py.File) -> np.ndarray:
         raise ValueError("/grid/full_points must have shape (n_axial, n_u, n_v, 3)")
     required = ("grid/center", "grid/basis_vectors", "grid/axial_values", "grid/transverse_values")
     if any(path not in handle for path in required):
-        raise KeyError(
-            "Structured export requires /grid/full_points or center/basis/axis metadata"
-        )
+        raise KeyError("Structured export requires /grid/full_points or center/basis/axis metadata")
     center = np.asarray(handle["grid/center"], dtype=float)
     basis = np.asarray(handle["grid/basis_vectors"], dtype=float)
     axial_values = np.asarray(handle["grid/axial_values"], dtype=float)
@@ -156,9 +153,7 @@ def _structured_arrays(
     _add_vector_components(scalar_data, reconstructed, suffix="reconstructed")
     actual = _read_first(handle, ("validation/B_actual", "validation/B_true"))
     if actual is not None:
-        actual_full = _full_from_inside(
-            actual, mask, components=3, name="/validation/B_actual"
-        )
+        actual_full = _full_from_inside(actual, mask, components=3, name="/validation/B_actual")
         vector_data["B_actual"] = actual_full
         _add_vector_components(scalar_data, actual_full, suffix="actual")
         bmag_actual = _read_first(handle, ("validation/Bmag_actual",))
@@ -270,9 +265,7 @@ def _write_polydata(
     if lines:
         total_size = sum(len(line) + 1 for line in lines)
         text.append(f"LINES {len(lines)} {total_size}")
-        text.extend(
-            f"{len(line)} {' '.join(str(index) for index in line)}" for line in lines
-        )
+        text.extend(f"{len(line)} {' '.join(str(index) for index in line)}" for line in lines)
     if scalar_data or vector_data:
         text.append(f"POINT_DATA {point_array.shape[0]}")
         for name, values in vector_data.items():
@@ -311,9 +304,7 @@ def _field_arrays(
     if actual is not None:
         vector_data["B_actual"] = actual
         _add_vector_components(scalar_data, actual, suffix="actual")
-        scalar_data["Bmag_actual"] = _read_first(
-            handle, ("validation/Bmag_actual",)
-        )
+        scalar_data["Bmag_actual"] = _read_first(handle, ("validation/Bmag_actual",))
         if scalar_data["Bmag_actual"] is None:
             scalar_data["Bmag_actual"] = np.linalg.norm(actual, axis=-1)
         component_error = _read_first(handle, ("validation/component_error",))

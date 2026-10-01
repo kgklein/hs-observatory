@@ -46,14 +46,10 @@ def test_unordered_pairwise_form_matches_centered_covariance(n_spacecraft):
         field = rng.normal(size=(n_spacecraft, 3))
         centered_positions = positions - np.mean(positions, axis=0)
         centered_field = field - np.mean(field, axis=0)
-        volumetric_tensor = (
-            centered_positions.T @ centered_positions / n_spacecraft
-        )
+        volumetric_tensor = centered_positions.T @ centered_positions / n_spacecraft
         left, right = np.triu_indices(n_spacecraft, k=1)
         pair_covariance = (
-            (field[left] - field[right]).T
-            @ (positions[left] - positions[right])
-            / n_spacecraft**2
+            (field[left] - field[right]).T @ (positions[left] - positions[right]) / n_spacecraft**2
         )
         pairwise = pair_covariance @ np.linalg.inv(volumetric_tensor)
         centered = (
@@ -61,13 +57,8 @@ def test_unordered_pairwise_form_matches_centered_covariance(n_spacecraft):
             @ centered_positions
             @ np.linalg.inv(centered_positions.T @ centered_positions)
         )
-        maximum_difference = max(
-            maximum_difference, float(np.max(np.abs(pairwise - centered)))
-        )
-    print(
-        f"N={n_spacecraft}: max pairwise-centered difference "
-        f"{maximum_difference:.3e}"
-    )
+        maximum_difference = max(maximum_difference, float(np.max(np.abs(pairwise - centered))))
+    print(f"N={n_spacecraft}: max pairwise-centered difference {maximum_difference:.3e}")
     assert maximum_difference < 5.0e-12
 
 
@@ -81,9 +72,7 @@ def test_literal_ordered_pair_sum_is_twice_the_centered_estimator():
     field_difference = field[:, None, :] - field[None, :, :]
     position_difference = positions[:, None, :] - positions[None, :, :]
     ordered = (
-        np.einsum(
-            "abi,abj->ij", field_difference, position_difference
-        )
+        np.einsum("abi,abj->ij", field_difference, position_difference)
         / len(positions) ** 2
         @ np.linalg.inv(volumetric_tensor)
     )
@@ -133,15 +122,12 @@ def test_required_affine_fields_recover_every_tensor_component(
             atol=1.0e-14,
             err_msg=f"{name}, {configuration_name}",
         )
-        curl, _magnitude, divergence = gradient_curl_divergence(
-            estimate.gradient
-        )
+        curl, _magnitude, divergence = gradient_curl_divergence(estimate.gradient)
         assert divergence == pytest.approx(expected_divergence, abs=1.0e-14)
         np.testing.assert_allclose(curl, expected_curl, rtol=2.0e-14, atol=1.0e-14)
         np.testing.assert_allclose(
             estimate.fitted_field,
-            estimate.mean_field
-            + (positions - estimate.barycenter) @ estimate.gradient.T,
+            estimate.mean_field + (positions - estimate.barycenter) @ estimate.gradient.T,
             rtol=2.0e-14,
             atol=1.0e-14,
         )
@@ -152,17 +138,11 @@ def test_four_point_estimator_matches_independent_affine_system_for_any_field():
     for name in ("regular_tetrahedron", "irregular_tetrahedron"):
         positions = _configurations()[name]
         field = rng.normal(size=(4, 3))
-        generalized = estimate_gradient_least_squares(
-            positions, field
-        ).gradient
+        generalized = estimate_gradient_least_squares(positions, field).gradient
         design = np.column_stack((np.ones(4), positions))
         reciprocal = np.linalg.solve(design, field).T[:, 1:]
-        generalized_curl, _magnitude, generalized_divergence = (
-            gradient_curl_divergence(generalized)
-        )
-        reciprocal_curl, _magnitude, reciprocal_divergence = (
-            gradient_curl_divergence(reciprocal)
-        )
+        generalized_curl, _magnitude, generalized_divergence = gradient_curl_divergence(generalized)
+        reciprocal_curl, _magnitude, reciprocal_divergence = gradient_curl_divergence(reciprocal)
         print(
             name,
             "max dG",
@@ -172,15 +152,9 @@ def test_four_point_estimator_matches_independent_affine_system_for_any_field():
             "ddiv",
             abs(generalized_divergence - reciprocal_divergence),
         )
-        np.testing.assert_allclose(
-            generalized, reciprocal, rtol=2.0e-14, atol=2.0e-14
-        )
-        np.testing.assert_allclose(
-            generalized_curl, reciprocal_curl, rtol=2.0e-14, atol=2.0e-14
-        )
-        assert generalized_divergence == pytest.approx(
-            reciprocal_divergence, abs=2.0e-14
-        )
+        np.testing.assert_allclose(generalized, reciprocal, rtol=2.0e-14, atol=2.0e-14)
+        np.testing.assert_allclose(generalized_curl, reciprocal_curl, rtol=2.0e-14, atol=2.0e-14)
+        assert generalized_divergence == pytest.approx(reciprocal_divergence, abs=2.0e-14)
 
 
 def test_periodic_grid_gradient_matches_transparent_centered_difference():
@@ -197,16 +171,14 @@ def test_periodic_grid_gradient_matches_transparent_centered_difference():
                     for derivative_axis in range(3):
                         lower = index.copy()
                         upper = index.copy()
-                        lower[derivative_axis] = (
-                            lower[derivative_axis] - 1
-                        ) % magnetic.shape[derivative_axis]
-                        upper[derivative_axis] = (
-                            upper[derivative_axis] + 1
-                        ) % magnetic.shape[derivative_axis]
+                        lower[derivative_axis] = (lower[derivative_axis] - 1) % magnetic.shape[
+                            derivative_axis
+                        ]
+                        upper[derivative_axis] = (upper[derivative_axis] + 1) % magnetic.shape[
+                            derivative_axis
+                        ]
                         expected[ix, iy, iz, field_component, derivative_axis] = (
                             magnetic[tuple(upper)][field_component]
                             - magnetic[tuple(lower)][field_component]
                         ) / (2.0 * spacing[derivative_axis])
-    np.testing.assert_array_equal(
-        periodic_grid_gradient(magnetic, box), expected
-    )
+    np.testing.assert_array_equal(periodic_grid_gradient(magnetic, box), expected)

@@ -88,9 +88,7 @@ def load_plume_row(
         raise ValueError("row_index_base must be 0 or 1")
     zero_based_index = int(row_index) - row_index_base
     if zero_based_index < 0:
-        raise IndexError(
-            f"row_index {row_index} is invalid for row_index_base {row_index_base}"
-        )
+        raise IndexError(f"row_index {row_index} is invalid for row_index_base {row_index_base}")
     expanded_path = Path(path).expanduser()
     if not expanded_path.is_file():
         raise FileNotFoundError(f"PLUME mode file not found: {expanded_path}")
@@ -109,8 +107,7 @@ def complex_from_pair(row: np.ndarray, col_re: int, col_im: int) -> complex:
     values = np.asarray(row, dtype=float)
     if max(col_re, col_im) >= values.size:
         raise ValueError(
-            f"PLUME row has {values.size} columns; requested complex pair "
-            f"({col_re}, {col_im})"
+            f"PLUME row has {values.size} columns; requested complex pair ({col_re}, {col_im})"
         )
     return complex(values[col_re], values[col_im])
 
@@ -132,9 +129,7 @@ def _species_number(output_species: str | int, n_components: int) -> int:
     if isinstance(output_species, bool) or not isinstance(output_species, int):
         raise NotImplementedError("output_species must be 'ref' or a one-based integer")
     if not 1 <= output_species <= n_components:
-        raise ValueError(
-            f"output_species must lie between 1 and n_components={n_components}"
-        )
+        raise ValueError(f"output_species must lie between 1 and n_components={n_components}")
     return output_species
 
 
@@ -159,21 +154,14 @@ def parse_plume_eigenmode(
         dtype=complex,
     )
     v_complex = np.asarray(
-        [
-            _complex_for_name(values, columns, f"U_{species}_{axis}")
-            for axis in "xyz"
-        ],
+        [_complex_for_name(values, columns, f"U_{species}_{axis}") for axis in "xyz"],
         dtype=complex,
     )
     return PlumeEigenmode(
         k_perp_rho_ref=float(values[int(columns["k_perp_rho_ref"])]),
         k_parallel_rho_ref=float(values[int(columns["k_parallel_rho_ref"])]),
-        omega_r_over_omega_ref=float(
-            values[int(columns["omega_r_over_Omega_ref"])]
-        ),
-        gamma_over_omega_ref=float(
-            values[int(columns["gamma_over_Omega_ref"])]
-        ),
+        omega_r_over_omega_ref=float(values[int(columns["omega_r_over_Omega_ref"])]),
+        gamma_over_omega_ref=float(values[int(columns["gamma_over_Omega_ref"])]),
         B_complex=B_complex,
         v_complex=v_complex,
         n_complex=_complex_for_name(values, columns, f"n_{species}"),
@@ -256,9 +244,7 @@ class PlumeSingleModeField(FieldModel):
             raise ValueError("field.plume.amplitude.B_rms_nT must be positive and finite")
 
         row = load_plume_row(self.path, self.row_index, self.row_index_base)
-        self.mode = parse_plume_eigenmode(
-            row, self.n_components, self.output_species
-        )
+        self.mode = parse_plume_eigenmode(row, self.n_components, self.output_species)
         try:
             self.T_ref_eV = float(plume["T_ref_eV"])
             self.B_ref_nT = float(plume["B_ref_nT"])
@@ -346,9 +332,7 @@ class PlumeSingleModeField(FieldModel):
         elif time.shape == (n_time, n_spacecraft):
             time_by_spacecraft = time
         else:
-            raise ValueError(
-                "time must have shape (n_time,) or (n_time, n_spacecraft)"
-            )
+            raise ValueError("time must have shape (n_time,) or (n_time, n_spacecraft)")
         positions_time_first = np.swapaxes(position, 0, 1)
         phase = (
             np.einsum("tsd,d->ts", positions_time_first, self.k_1_per_km)
@@ -359,9 +343,7 @@ class PlumeSingleModeField(FieldModel):
         if quantity == "n":
             fluctuation = np.real(self.n_complex_scaled * oscillation)
             return self.background_n + fluctuation
-        eigenfunction = (
-            self.v_complex_scaled if quantity == "v" else self.B_complex_scaled
-        )
+        eigenfunction = self.v_complex_scaled if quantity == "v" else self.B_complex_scaled
         background = self.background_v if quantity == "v" else self.background_B
         fluctuation = np.real(oscillation[..., None] * eigenfunction)
         return background + fluctuation

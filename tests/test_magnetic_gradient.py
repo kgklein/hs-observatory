@@ -128,9 +128,7 @@ def test_fft_spherical_average_matches_direct_at_grid_centers():
     values = rng.normal(size=(*shape, 2))
     indices = np.array([[0, 2, 3], [5, 7, 1], [11, 9, 7]])
     centers = indices * box / np.asarray(shape)
-    fft_average, fft_count, fft_wrapped = periodic_spherical_average_fft(
-        values, centers, 1.6, box
-    )
+    fft_average, fft_count, fft_wrapped = periodic_spherical_average_fft(values, centers, 1.6, box)
     for sample, center in enumerate(centers):
         direct, count, wrapped = periodic_spherical_average(values, center, 1.6, box)
         assert np.allclose(fft_average[sample], direct, rtol=1.0e-12, atol=1.0e-12)
@@ -152,9 +150,15 @@ def test_fft_spherical_average_preserves_constant_field_off_grid():
 def test_configuration_selection_uses_q_quality_and_expected_scale_ranges():
     positions = np.array(
         [
-            [0, 0, 0], [50, 0, 0], [0, 50, 0], [0, 0, 50],
-            [900, 0, 0], [0, 900, 0], [0, 0, 900],
-            [2200, 0, 0], [0, 2200, 2200],
+            [0, 0, 0],
+            [50, 0, 0],
+            [0, 50, 0],
+            [0, 0, 50],
+            [900, 0, 0],
+            [0, 900, 0],
+            [0, 0, 900],
+            [2200, 0, 0],
+            [0, 2200, 2200],
         ],
         dtype=float,
     )
@@ -214,9 +218,15 @@ def test_end_to_end_hdf5_analysis_and_product_only_plot(tmp_path):
     }
     points = np.array(
         [
-            [0, 0, 0], [50, 0, 0], [0, 50, 0], [0, 0, 50],
-            [900, 0, 0], [0, 900, 0], [0, 0, 900],
-            [2200, 0, 0], [0, 2200, 2200],
+            [0, 0, 0],
+            [50, 0, 0],
+            [0, 50, 0],
+            [0, 0, 50],
+            [900, 0, 0],
+            [0, 900, 0],
+            [0, 0, 900],
+            [2200, 0, 0],
+            [0, 2200, 2200],
         ],
         dtype=float,
     )
@@ -333,8 +343,7 @@ def test_end_to_end_hdf5_analysis_and_product_only_plot(tmp_path):
             np.linalg.norm(ideal - coarse, axis=-1) / normalization,
         )
         expected_measurement = (
-            np.linalg.norm(measured - ideal[np.newaxis, :, :], axis=-1)
-            / normalization
+            np.linalg.norm(measured - ideal[np.newaxis, :, :], axis=-1) / normalization
         )
         np.testing.assert_allclose(
             decomposition["measurement_error_median"],

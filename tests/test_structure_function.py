@@ -375,13 +375,14 @@ def test_run_all_spacetime_uses_observed_position_offsets(tmp_path):
     observed_counts = np.asarray(result["products"]["observed"]["counts"])
     np.testing.assert_array_equal(truth_counts[0], [16, 32, 0])
     np.testing.assert_array_equal(observed_counts[0], [0, 16, 32])
-    assert result["products"]["observed"]["spacetime_pair_counts"][
-        "skipped_nonpositive_separation"
-    ][0] == 18
+    assert (
+        result["products"]["observed"]["spacetime_pair_counts"]["skipped_nonpositive_separation"][0]
+        == 18
+    )
     assert result["metadata"]["increment_mode"] == "all_spacetime_pairs"
-    assert "observed positions use /errors/position_offset on nominal r" in result["metadata"][
-        "notes"
-    ]
+    assert (
+        "observed positions use /errors/position_offset on nominal r" in result["metadata"]["notes"]
+    )
 
 
 def test_plot_helper_accepts_serialized_result(tmp_path):
@@ -466,16 +467,18 @@ def test_summary_row_uses_sampled_truth_and_mc_only_percentiles():
     assert len(axes) == 3
     # Six orders, with alternating sampled-truth and MC-median curves.
     assert len(axes[0].lines) == 12
-    np.testing.assert_allclose(axes[0].lines[0].get_ydata(), [100.0, 100.0 * 2 ** (1 / 3),
-                                                             100.0 * 4 ** (1 / 3)])
+    np.testing.assert_allclose(
+        axes[0].lines[0].get_ydata(), [100.0, 100.0 * 2 ** (1 / 3), 100.0 * 4 ** (1 / 3)]
+    )
     np.testing.assert_allclose(
         axes[0].lines[1].get_ydata(), 2.5 * np.array([1.0, 2 ** (1 / 3), 4 ** (1 / 3)])
     )
     # The exponent panel uses all seven fitted orders, independent of max_order=6.
     np.testing.assert_array_equal(axes[1].lines[0].get_xdata(), np.arange(1, 8))
-    np.testing.assert_allclose(axes[1].lines[-1].get_ydata(), 1.0 - np.log2(
-        0.9 ** (np.arange(1, 8) / 3.0) + 0.1 ** (np.arange(1, 8) / 3.0)
-    ))
+    np.testing.assert_allclose(
+        axes[1].lines[-1].get_ydata(),
+        1.0 - np.log2(0.9 ** (np.arange(1, 8) / 3.0) + 0.1 ** (np.arange(1, 8) / 3.0)),
+    )
     gaussian = axes[2].lines[-1]
     assert gaussian.get_linestyle() == "--"
     np.testing.assert_allclose(gaussian.get_ydata(), [5.0 / 3.0, 5.0 / 3.0])
@@ -517,9 +520,7 @@ def test_structure_function_overlay_from_config(tmp_path, monkeypatch):
     import json
 
     for case in (400, 401, 402):
-        (tmp_path / f"{case}.json").write_text(
-            json.dumps(_summary_plot_result()), encoding="utf-8"
-        )
+        (tmp_path / f"{case}.json").write_text(json.dumps(_summary_plot_result()), encoding="utf-8")
     config = tmp_path / "combined.yaml"
     config.write_text(
         """cases:

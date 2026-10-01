@@ -16,9 +16,7 @@ def _write_config(
     frame: str | None,
     velocity_error: str = "{model: none}",
 ) -> Path:
-    measurement = (
-        "" if frame is None else f"measurement:\n  velocity_frame: {frame}\n"
-    )
+    measurement = "" if frame is None else f"measurement:\n  velocity_frame: {frame}\n"
     path.write_text(
         f"""
 spacecraft:
@@ -55,28 +53,19 @@ visualization:
 
 def test_velocity_measurement_frame_defaults_to_spacecraft(tmp_path):
     output = tmp_path / "default.h5"
-    config = _write_config(
-        tmp_path / "default.yaml", output, frame=None
-    )
+    config = _write_config(tmp_path / "default.yaml", output, frame=None)
 
     generate_from_config(config)
 
     with h5py.File(output) as handle:
         assert handle["metadata"].attrs["velocity_observed_frame"] == "spacecraft"
-        assert (
-            handle["metadata"].attrs["truth_visualization_velocity_frame"]
-            == "spacecraft"
-        )
-        assert np.array_equal(
-            handle["observed/v"][0], handle["truth/v_spacecraft_frame"][...]
-        )
+        assert handle["metadata"].attrs["truth_visualization_velocity_frame"] == "spacecraft"
+        assert np.array_equal(handle["observed/v"][0], handle["truth/v_spacecraft_frame"][...])
 
 
 def test_truth_visualization_uses_spacecraft_frame_by_default(tmp_path, monkeypatch):
     output = tmp_path / "visualization-default.h5"
-    config = _write_config(
-        tmp_path / "visualization-default.yaml", output, frame="spacecraft"
-    )
+    config = _write_config(tmp_path / "visualization-default.yaml", output, frame="spacecraft")
     config.write_text(
         config.read_text(encoding="utf-8").replace(
             "visualization:\n  enabled: false",
@@ -102,25 +91,16 @@ def test_truth_visualization_uses_spacecraft_frame_by_default(tmp_path, monkeypa
 
 def test_cli_can_override_truth_visualization_to_plasma(tmp_path, capsys):
     output = tmp_path / "visualization-plasma.h5"
-    config = _write_config(
-        tmp_path / "visualization-plasma.yaml", output, frame="spacecraft"
-    )
+    config = _write_config(tmp_path / "visualization-plasma.yaml", output, frame="spacecraft")
 
-    assert generate_main(
-        [str(config), "--truth-velocity-frame", "plasma"]
-    ) == 0
+    assert generate_main([str(config), "--truth-velocity-frame", "plasma"]) == 0
     assert str(output) in capsys.readouterr().out
     with h5py.File(output) as handle:
-        assert (
-            handle["metadata"].attrs["truth_visualization_velocity_frame"]
-            == "plasma"
-        )
+        assert handle["metadata"].attrs["truth_visualization_velocity_frame"] == "plasma"
 
 
 @pytest.mark.parametrize("frame", ["spacecraft", "plasma"])
-def test_constant_spacecraft_velocity_truth_observed_frame_and_metadata(
-    tmp_path, frame
-):
+def test_constant_spacecraft_velocity_truth_observed_frame_and_metadata(tmp_path, frame):
     output = tmp_path / f"{frame}.h5"
     config = _write_config(tmp_path / f"{frame}.yaml", output, frame=frame)
 
@@ -155,9 +135,7 @@ def test_velocity_error_is_added_to_selected_spacecraft_frame(tmp_path):
         observed = handle["observed/v"][...]
         selected_truth = handle["truth/v_spacecraft_frame"][...]
         realized_error = handle["errors/v"][...]
-        np.testing.assert_allclose(
-            observed - selected_truth[np.newaxis, ...], realized_error
-        )
+        np.testing.assert_allclose(observed - selected_truth[np.newaxis, ...], realized_error)
         assert not np.allclose(observed, handle["truth/v"][...])
 
 
@@ -167,13 +145,9 @@ def test_spacecraft_configuration_broadcasts_supported_velocity_shapes():
     position = np.zeros((2, 3, 3))
     constant = SpacecraftConfiguration(ids, time, position, velocity=[1.0, 2.0, 3.0])
     canonical_values = np.arange(18, dtype=float).reshape(2, 3, 3)
-    canonical = SpacecraftConfiguration(
-        ids, time, position, velocity=canonical_values
-    )
+    canonical = SpacecraftConfiguration(ids, time, position, velocity=canonical_values)
     time_first_values = np.arange(18, dtype=float).reshape(3, 2, 3)
-    time_first = SpacecraftConfiguration(
-        ids, time, position, velocity=time_first_values
-    )
+    time_first = SpacecraftConfiguration(ids, time, position, velocity=time_first_values)
 
     assert constant.velocity.shape == (2, 3, 3)
     assert np.all(constant.velocity == [1.0, 2.0, 3.0])
@@ -183,9 +157,7 @@ def test_spacecraft_configuration_broadcasts_supported_velocity_shapes():
 
 def test_spacecraft_frame_requires_available_spacecraft_velocity(tmp_path, monkeypatch):
     output = tmp_path / "missing.h5"
-    config = _write_config(
-        tmp_path / "missing.yaml", output, frame="spacecraft"
-    )
+    config = _write_config(tmp_path / "missing.yaml", output, frame="spacecraft")
 
     def configuration_without_velocity(_config, time):
         return SpacecraftConfiguration(
@@ -203,13 +175,9 @@ def test_spacecraft_frame_requires_available_spacecraft_velocity(tmp_path, monke
         generate_from_config(config)
 
 
-def test_time_dependent_spacecraft_velocity_is_aligned_with_field_output(
-    tmp_path, monkeypatch
-):
+def test_time_dependent_spacecraft_velocity_is_aligned_with_field_output(tmp_path, monkeypatch):
     output = tmp_path / "time-dependent.h5"
-    config = _write_config(
-        tmp_path / "time-dependent.yaml", output, frame="spacecraft"
-    )
+    config = _write_config(tmp_path / "time-dependent.yaml", output, frame="spacecraft")
 
     def time_dependent_configuration(_config, time):
         ids = ("H", "N1")

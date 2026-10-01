@@ -54,10 +54,7 @@ def _visit(
     if isinstance(obj, h5py.Dataset):
         summary = _numeric_summary(obj, max_elements=max_summary_elements)
         attrs = _format_attrs(obj.attrs, max_attrs=max_attrs)
-        print(
-            f"{indent}{label} dataset shape={obj.shape} dtype={obj.dtype}"
-            f"{summary}{attrs}"
-        )
+        print(f"{indent}{label} dataset shape={obj.shape} dtype={obj.dtype}{summary}{attrs}")
     else:
         attrs = _format_attrs(obj.attrs, max_attrs=max_attrs)
         print(f"{indent}{label}/ group{attrs}")

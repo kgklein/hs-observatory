@@ -159,17 +159,15 @@ def configuration_from_cdf(
     )
 
 
-def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> SpacecraftConfiguration:
+def load_spacecraft_configuration(
+    config: dict[str, Any], time: np.ndarray
+) -> SpacecraftConfiguration:
     """Load a CDF configuration, optionally falling back to synthetic geometry."""
 
     source = str(config.get("source", "synthetic")).lower()
     configured_velocity = config.get("velocity_km_s")
     if source in {"synthetic", "synthetic_fallback"}:
-        velocity = (
-            (0.0, 0.0, 0.0)
-            if configured_velocity is None
-            else configured_velocity
-        )
+        velocity = (0.0, 0.0, 0.0) if configured_velocity is None else configured_velocity
         return synthetic_configuration(time, velocity_km_s=velocity)
     if source != "cdf":
         raise ValueError(f"Unknown spacecraft source: {source}")
@@ -177,11 +175,7 @@ def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> S
     cdf_path = config.get("cdf_path", config.get("cdf_directory"))
     if not cdf_path:
         if config.get("fallback_synthetic", False):
-            velocity = (
-                (0.0, 0.0, 0.0)
-                if configured_velocity is None
-                else configured_velocity
-            )
+            velocity = (0.0, 0.0, 0.0) if configured_velocity is None else configured_velocity
             return synthetic_configuration(time, velocity_km_s=velocity)
         raise ValueError("CDF spacecraft source requires cdf_path or cdf_directory")
     try:
@@ -194,11 +188,7 @@ def load_spacecraft_configuration(config: dict[str, Any], time: np.ndarray) -> S
     except (FileNotFoundError, ImportError, ValueError) as exc:
         if not config.get("fallback_synthetic", False):
             raise
-        velocity = (
-            (0.0, 0.0, 0.0)
-            if configured_velocity is None
-            else configured_velocity
-        )
+        velocity = (0.0, 0.0, 0.0) if configured_velocity is None else configured_velocity
         fallback = synthetic_configuration(time, velocity_km_s=velocity)
         fallback.metadata["fallback_reason"] = str(exc)
         fallback.metadata["requested_cdf_path"] = str(cdf_path)

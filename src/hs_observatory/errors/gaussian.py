@@ -16,9 +16,7 @@ from hs_observatory.errors.ornstein_uhlenbeck import (
 class NoError(ErrorModel):
     name = "none"
 
-    def apply(
-        self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None
-    ):
+    def apply(self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None):
         del time
         del rng
         observed = np.broadcast_to(truth, (n_mc, *truth.shape)).copy()
@@ -33,9 +31,7 @@ class AbsoluteGaussianError(ErrorModel):
         if np.any(self.sigma < 0):
             raise ValueError("Gaussian sigma values must be non-negative")
 
-    def apply(
-        self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None
-    ):
+    def apply(self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None):
         del time
         shape = (n_mc, *truth.shape)
         error = rng.normal(size=shape) * self.sigma
@@ -50,9 +46,7 @@ class RelativeGaussianError(ErrorModel):
         if self.sigma < 0:
             raise ValueError("Relative Gaussian sigma must be non-negative")
 
-    def apply(
-        self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None
-    ):
+    def apply(self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None):
         del time
         error = rng.normal(size=(n_mc, *truth.shape)) * (self.sigma * np.abs(truth))[None, ...]
         return truth[None, ...] + error, error
@@ -66,9 +60,7 @@ class VectorComponentGaussianError(AbsoluteGaussianError):
         if self.sigma.shape != (3,):
             raise ValueError("Vector-component sigma must contain three values")
 
-    def apply(
-        self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None
-    ):
+    def apply(self, truth: np.ndarray, rng: np.random.Generator, n_mc: int, *, time=None):
         if truth.shape[-1] != 3:
             raise ValueError("Vector-component error requires a final dimension of length three")
         return super().apply(truth, rng, n_mc, time=time)

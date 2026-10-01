@@ -49,8 +49,7 @@ class DiagnosticsAnalysis(AnalysisMethod):
         for quantity in ("n", "v", "B"):
             r = data["spacecraft"]["r"][quantity]  # (spacecraft, time_quantity, component)
             separations = [
-                np.linalg.norm(r[i] - r[j], axis=-1)
-                for i, j in combinations(range(len(r)), 2)
+                np.linalg.norm(r[i] - r[j], axis=-1) for i, j in combinations(range(len(r)), 2)
             ]
             separation_array = np.asarray(separations)
             result["spacecraft_separation"][quantity] = {
