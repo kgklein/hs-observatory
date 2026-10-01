@@ -82,7 +82,7 @@ Keep the command running while browsing; saved documentation edits reload automa
 Press **Ctrl+C** to stop the preview.
 The install command is only needed when setting up the documentation dependencies.
 See [documentation development](docs/developer/documentation.md#preview-the-site-locally)
-for more preview options and build checks.
+for more preview options and build checks; *we are working on implementing ruff and lint.*
 
 ## Citation, contributions and license
 
