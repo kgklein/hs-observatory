@@ -22,8 +22,10 @@ use the equivalent activation command for your platform.
 An editable installation makes the checkout available to Python and
 installs the `hsobs-*` commands into the active environment.
 
-Runtime dependencies are NumPy, PyYAML, h5py, cdflib, Matplotlib, and cmcrameri.
+Runtime dependencies are NumPy, SciPy, PyYAML, h5py, cdflib, Matplotlib, and cmcrameri.
 There is no need to install documentation tools to generate or analyze observations.
+SciPy supports shock-timing fits and continuous RBF length-scale optimization.
+Explicit RBF cross-validation uses a logarithmic grid search without SciPy.
 
 ## HelioSwarm Trajectories
 
@@ -33,15 +35,6 @@ and can be downloaded separately from the software installation.
 
 ## Optional dependencies
 
-For shock-timing fits and continuous SciPy-based RBF length-scale optimization:
-
-```bash
-python3 -m pip install -e ".[analysis]"
-```
-
-Many analyses work without this extra, but shock timing requires SciPy.
-Explicit RBF cross-validation uses a logarithmic grid search without SciPy,
-and the standalone `scripts/audit_magnetic_gradient_divergence.py` requires SciPy.
 BP inputs additionally require `simulation-bp`.
 
 For the existing test and lint tools:

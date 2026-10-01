@@ -1,0 +1,51 @@
+analysis:
+  method: timesync
+
+input:
+  path: outputs/synthetic_observations_simulation_sampled_observatory.h5
+
+output:
+  path: outputs/timesync_simulation_sampled_observatory.h5
+
+timesync:
+  data_group: truth
+  # For the first Monte Carlo observed realization instead:
+  # data_group: observed
+  # mc_index: 0
+  t0_index: 10
+  delta_t: 20.0
+  sample_time_stride: 1
+
+  time_interp: linear
+  allow_nearest_fallback: true
+  idw_power: 2.0
+  axis_source: barycenter_path
+  min_spacecraft_per_plane: 7
+  coordinate_units: km
+
+  grid:
+    radius: 1000.0
+    radius_padding: 200.0
+    n_axial: 50
+    n_transverse: 41
+    axial_padding: 0.0
+
+  plot:
+    enabled: true
+    path: outputs/timesync_simulation_sampled_observatory.png
+    component_mode: delta
+    background_mode: metadata
+    magnitude_cmap: batlow
+    error_cmap: imola
+    dpi: 150
+
+  reference:
+    enabled: true
+    generation_config: configs/example_generate_simulation_sampled_observatory.yaml
+
+  averaged_error_plot:
+    enabled: true
+    path: outputs/timesync_simulation_sampled_observatory_uv_error.png
+    error_cmap: imola
+    dpi: 150
+    capped: true

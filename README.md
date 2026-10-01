@@ -28,8 +28,7 @@ python -m pip install -e .
 
 The base installation includes
 [`cmcrameri`](https://zenodo.org/records/8409685), which is used throughout for
-perceptually uniform colour maps. Install the `analysis` extra for features that
-require SciPy.
+perceptually uniform colour maps, and SciPy for analysis features such as shock timing.
 The activation command is for a POSIX shell.
 See [installation](docs/getting-started/installation.md) for
 checkout instructions, other environments, optional dependencies and external inputs.

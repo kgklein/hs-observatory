@@ -3,7 +3,7 @@
 | Summary | Details |
 | --- | --- |
 | Purpose | Recover a planar shock propagation normal, speed and crossing time. |
-| Required inputs | Observed n/v/B and nominal trajectories; SciPy (`.[analysis]`); optional shock metadata for validation. |
+| Required inputs | Observed n/v/B and nominal trajectories; SciPy (installed with the package); optional shock metadata for validation. |
 | Entry points | `hsobs-analyze configs/example_analyze_shock_timing.yaml` after shock generation. |
 | Outputs | Detection/inversion HDF5 and four PDF/PNG figure families. |
 

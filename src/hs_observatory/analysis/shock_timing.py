@@ -257,7 +257,7 @@ def detect_transition(
         from scipy.optimize import least_squares
     except ImportError as exc:
         raise ImportError(
-            "Shock timing requires SciPy. Install it with: python -m pip install scipy"
+            "Shock timing requires SciPy; reinstall hs-observatory with its dependencies"
         ) from exc
 
     try:
@@ -320,7 +320,7 @@ def fit_combined_transition(
         from scipy.optimize import least_squares
     except ImportError as exc:
         raise ImportError(
-            "Shock timing requires SciPy. Install it with: python -m pip install scipy"
+            "Shock timing requires SciPy; reinstall hs-observatory with its dependencies"
         ) from exc
 
     try:

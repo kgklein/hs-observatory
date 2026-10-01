@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [
   "numpy>=1.24",
+  "scipy>=1.10",
   "PyYAML>=6.0",
   "h5py>=3.8",
   "cdflib>=1.2",
@@ -22,7 +23,6 @@ dependencies = [
 dev = ["pytest>=7.4", "ruff>=0.5"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10"]
 simulation-bp = ["adios2>=2.10"]
-analysis = ["scipy"]
 
 [project.scripts]
 hsobs-generate = "hs_observatory.cli:generate_main"

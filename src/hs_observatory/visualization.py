@@ -1932,7 +1932,7 @@ def _plot_summary_formation(
         )
     #for point in relative[1:]:
     #    ax.plot(*np.stack((relative[0], point)).T, color="#888888", lw=1.2, alpha=0.4)
-    # The hull is a visual aid only; the figure also works without optional SciPy
+    # The hull is a visual aid only; the figure also works if SciPy cannot be imported
     # or for a coplanar/coincident formation where no 3D hull exists.
     try:
         from scipy.spatial import ConvexHull, QhullError

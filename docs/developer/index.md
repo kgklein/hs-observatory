@@ -47,9 +47,8 @@ ruff check src tests
 Tests cover field shapes, seeded error reproducibility, OU stationary statistics and vector geometry, coordinate-offset sampling, HDF5 round trips, synthetic CDF fallback, visualization, generation, diagnostics, static spatial decorrelation, and single-spacecraft FFT spectra.
 The commands above preserve the original general developer guidance, not a
 claim that those checks were run for this migration. Follow repository task
-instructions and use focused checks for a scoped change. The existing CI installs
-`.[dev]`, but shock-timing fitting tests require SciPy from `.[analysis]`; this
-preexisting dependency mismatch needs a separate packaging/CI decision.
+instructions and use focused checks for a scoped change. CI installs `.[dev]`,
+which includes the runtime dependencies needed by shock-timing fitting tests.
 
 ## Scientific and documentation review
 
