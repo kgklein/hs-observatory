@@ -33,12 +33,15 @@ magnetic_gradient:
     large:
       enabled: true
       l_min_km: 1500.0
+    best_multi:
+      enabled: false
     all_nine:
       enabled: true
 
   truth:
     pointwise_barycenter: true
     derivative_order: 2
+    coarse_average_method: fft
     periodic_boundaries: auto
 
   divergence_ratio:

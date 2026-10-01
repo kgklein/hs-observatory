@@ -940,10 +940,12 @@ def _save_tetrahedra_geometry(result: Mapping[str, Any], output: Path, plt) -> N
     axis.set(xlim=(-limit, limit), ylim=(-limit, limit), zlim=(-limit, limit),
              xlabel=r"$\Delta X_{GSE}$ (km)", ylabel=r"$\Delta Y_{GSE}$ (km)",
              zlabel=r"$\Delta Z_{GSE}$ (km)", title="Mesocentric Formation and Projections")
-    axis.set_box_aspect((1, 1, 1)); axis.view_init(elev=24, azim=-56)
+    axis.set_box_aspect((1, 1, 1))
+    axis.view_init(elev=24, azim=-56)
 
     metric_by_subset = {tuple(item["indices"]): item for item in metrics}
-    ql = fig.add_subplot(grid[0, 2]); ep = fig.add_subplot(grid[1, 2])
+    ql = fig.add_subplot(grid[0, 2])
+    ep = fig.add_subplot(grid[1, 2])
     ql.scatter([item["Q"] for item in metrics], [item["L"] for item in metrics],
                s=10, color="0.72", alpha=0.5)
     ep.scatter([item["E"] for item in metrics], [item["P"] for item in metrics],
@@ -1030,7 +1032,8 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     axes[-1, 0].set_xlabel("Time (s)")
     fig.tight_layout()
     for path in _plot_paths(output, plot, "detection"):
-        path.parent.mkdir(parents=True, exist_ok=True); fig.savefig(path, dpi=plot["dpi"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=plot["dpi"])
     plt.close(fig)
 
     labels = list(result["solutions"])
@@ -1148,7 +1151,8 @@ def _save_figures(result: Mapping[str, Any], output: Path):
             ax.hlines(percentile_high, x - cap, x + cap, color=color,
                       linewidth=1.0, alpha=0.82)
         ax.set_xticks(range(len(labels)), labels, rotation=45, ha="right")
-        ax.set_ylabel(ylabel.replace("error", "RMSE")); ax.set_yscale("log")
+        ax.set_ylabel(ylabel.replace("error", "RMSE"))
+        ax.set_yscale("log")
         ax.grid(alpha=0.25, which="both")
     axes[0, 0].legend(fontsize=7)
     spread_name = "absolute error" if truth_available else "absolute quantity"
@@ -1158,7 +1162,8 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     )
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.965))
     for path in _plot_paths(output, plot, "accuracy"):
-        path.parent.mkdir(parents=True, exist_ok=True); fig.savefig(path, dpi=plot["dpi"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=plot["dpi"])
     plt.close(fig)
 
     selected_outlines = {}
@@ -1202,11 +1207,13 @@ def _save_figures(result: Mapping[str, Any], output: Path):
         rates = [np.mean(result["solutions"][label][method]["status"] != 0)
                  for method in ("four_spacecraft", "ols", "wls")]
         axes[2].plot((0, 1, 2), rates, marker="o", label=label)
-    axes[0].set_xscale("log"); axes[0].set_xlabel("Scaled design condition number")
+    axes[0].set_xscale("log")
+    axes[0].set_xlabel("Scaled design condition number")
     axes[0].set_ylabel("Median angular error (deg)" if truth_available else "Median speed (km/s)")
     axes[0].set_yscale("log")
     axes[0].set_title("Conditioning and Accuracy")
-    axes[1].set_xscale("log"); axes[1].set_yscale("log")
+    axes[1].set_xscale("log")
+    axes[1].set_yscale("log")
     axes[1].set_xlabel("Configuration size L (km)")
     axes[1].set_ylabel(
         "Median angular error (deg)" if truth_available else "Median speed (km/s)"
@@ -1215,7 +1222,8 @@ def _save_figures(result: Mapping[str, Any], output: Path):
     axes[2].set_xticks((0, 1, 2), ("Four-point", "OLS", "WLS"))
     axes[2].set_ylabel("Failure fraction")
     axes[2].set_title("Reconstruction Failures")
-    axes[3].set_xscale("log"); axes[3].set_yscale("log")
+    axes[3].set_xscale("log")
+    axes[3].set_yscale("log")
     axes[3].set_xlabel("Configuration size L (km)")
     axes[3].set_ylabel("Scaled design condition number")
     axes[3].set_title("Joint Geometry Reliability")
@@ -1245,10 +1253,13 @@ def _save_figures(result: Mapping[str, Any], output: Path):
             handles=selection_handles, title="Selected tetrahedra",
             fontsize=7, title_fontsize=7, loc="center left",
         )
-    for ax in axes: ax.grid(alpha=0.25)
-    axes[2].legend(fontsize=7); fig.tight_layout()
+    for ax in axes:
+        ax.grid(alpha=0.25)
+    axes[2].legend(fontsize=7)
+    fig.tight_layout()
     for path in _plot_paths(output, plot, "geometry"):
-        path.parent.mkdir(parents=True, exist_ok=True); fig.savefig(path, dpi=plot["dpi"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=plot["dpi"])
     plt.close(fig)
     _save_tetrahedra_geometry(result, output, plt)
 

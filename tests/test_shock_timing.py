@@ -180,11 +180,14 @@ def _observation(path, *, n_mc=2, include_truth=True):
                 base = 5 + 12 * fraction
                 values = base[None] + rng.normal(0, 0.08, (n_mc, *base.shape))
             elif quantity == "v":
-                base = np.zeros((len(time), 9, 3)); base[..., 0] = 400 - 300 * fraction
+                base = np.zeros((len(time), 9, 3))
+                base[..., 0] = 400 - 300 * fraction
                 values = base[None] + rng.normal(0, 0.5, (n_mc, *base.shape))
             else:
-                base = np.zeros((len(time), 9, 3)); base[..., 0] = 0.5
-                base[..., 1] = 5 + 12 * fraction; base[..., 2] = 1 + 2.5 * fraction
+                base = np.zeros((len(time), 9, 3))
+                base[..., 0] = 0.5
+                base[..., 1] = 5 + 12 * fraction
+                base[..., 2] = 1 + 2.5 * fraction
                 values = base[None] + rng.normal(0, 0.03, (n_mc, *base.shape))
             observed.create_dataset(quantity, data=values)
     return path
