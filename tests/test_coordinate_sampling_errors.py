@@ -61,15 +61,8 @@ visualization:
 
     expected = np.empty_like(observed)
     for mc_index in range(2):
-        shifted_x = (
-            nominal_x.T
-            + 2.0 * time_offset[mc_index][None, :]
-            + x_offset[mc_index][None, :]
-        )
-        phase = (
-            0.1 * shifted_x
-            - 0.5 * (nominal_time[:, None] + time_offset[mc_index][None, :])
-        )
+        shifted_x = nominal_x.T + 2.0 * time_offset[mc_index][None, :] + x_offset[mc_index][None, :]
+        phase = 0.1 * shifted_x - 0.5 * (nominal_time[:, None] + time_offset[mc_index][None, :])
         expected[mc_index] = np.sin(phase)
 
     assert np.allclose(observed, expected)

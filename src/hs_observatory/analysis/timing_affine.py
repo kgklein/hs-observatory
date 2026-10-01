@@ -26,8 +26,16 @@ def affine_projection_bases(positions: np.ndarray) -> dict[str, np.ndarray]:
     trace[0, [3, 7, 11]] = 1
     _, _, right = np.linalg.svd(trace, full_matrices=True)
     trace_free = right[1:].T
-    records = {key: [] for key in ("non_affine_basis", "divergence_basis", "df_basis",
-                                  "affine_singular_values", "df_singular_values")}
+    records = {
+        key: []
+        for key in (
+            "non_affine_basis",
+            "divergence_basis",
+            "df_basis",
+            "affine_singular_values",
+            "df_singular_values",
+        )
+    }
     samples = points[:1] if geometry_is_static(points) else points
     for sample in samples:
         geometry = geometry_diagnostics(sample)
@@ -37,7 +45,7 @@ def affine_projection_bases(positions: np.ndarray) -> dict[str, np.ndarray]:
         design = np.zeros((9, 3, 12))
         design[:, :, :3] = np.eye(3)
         for component in range(3):
-            design[:, component, 3 + 3*component:6 + 3*component] = centered
+            design[:, component, 3 + 3 * component : 6 + 3 * component] = centered
         design = design.reshape(27, 12)
         u_aff, s_aff, _ = np.linalg.svd(design, full_matrices=True)
         u_df, s_df, _ = np.linalg.svd(design @ trace_free, full_matrices=True)
@@ -53,8 +61,9 @@ def affine_projection_bases(positions: np.ndarray) -> dict[str, np.ndarray]:
             raise ValueError("Divergence subspace must have rank one")
         divergence = u_div[:, :1]
         full = np.column_stack((non_affine, divergence))
-        if (not np.allclose(full.T @ full, np.eye(16), atol=1e-10, rtol=0)
-                or not np.allclose(full.T @ (design @ trace_free), 0, atol=1e-10)):
+        if not np.allclose(full.T @ full, np.eye(16), atol=1e-10, rtol=0) or not np.allclose(
+            full.T @ (design @ trace_free), 0, atol=1e-10
+        ):
             raise ValueError("Affine residual bases failed orthogonality checks")
         for key, value in zip(records, (non_affine, divergence, full, s_aff, s_df)):
             records[key].append(value)
@@ -74,7 +83,7 @@ def quadratic_parameter_basis() -> np.ndarray:
     for k in range(3):
         for i in range(3):
             pair = pairs.index(tuple(sorted((i, k))))
-            constraints[k + 1, 12 + 6*i + pair] = 1
+            constraints[k + 1, 12 + 6 * i + pair] = 1
     _, singular, right = np.linalg.svd(constraints, full_matrices=True)
     if np.count_nonzero(singular > 1e-12) != 4:
         raise ValueError("Quadratic divergence constraints must have rank four")
@@ -90,18 +99,27 @@ def quadratic_design_matrix(positions: np.ndarray) -> np.ndarray:
     if geometry.characteristic_size <= 0:
         raise ValueError("Quadratic design requires a positive observatory length")
     x = (points - geometry.barycenter) / geometry.characteristic_size
-    quadratic = np.column_stack((.5*x[:, 0]**2, x[:, 0]*x[:, 1], x[:, 0]*x[:, 2],
-                                  .5*x[:, 1]**2, x[:, 1]*x[:, 2], .5*x[:, 2]**2))
+    quadratic = np.column_stack(
+        (
+            0.5 * x[:, 0] ** 2,
+            x[:, 0] * x[:, 1],
+            x[:, 0] * x[:, 2],
+            0.5 * x[:, 1] ** 2,
+            x[:, 1] * x[:, 2],
+            0.5 * x[:, 2] ** 2,
+        )
+    )
     design = np.zeros((9, 3, 30))
     design[:, :, :3] = np.eye(3)
     for i in range(3):
-        design[:, i, 3 + 3*i:6 + 3*i] = x
-        design[:, i, 12 + 6*i:18 + 6*i] = quadratic
+        design[:, i, 3 + 3 * i : 6 + 3 * i] = x
+        design[:, i, 12 + 6 * i : 18 + 6 * i] = quadratic
     return design.reshape(27, 30) @ quadratic_parameter_basis()
 
 
-def quadratic_projection_bases(positions: np.ndarray, *,
-                               condition_number_max: float = 1e10) -> dict[str, np.ndarray]:
+def quadratic_projection_bases(
+    positions: np.ndarray, *, condition_number_max: float = 1e10
+) -> dict[str, np.ndarray]:
     """Cache a single residual direction for static relative geometry.
 
     Reject rank loss or severe design conditioning; never discard extra singular
@@ -113,8 +131,15 @@ def quadratic_projection_bases(positions: np.ndarray, *,
     if not np.isfinite(condition_number_max) or condition_number_max < 1:
         raise ValueError("quadratic_condition_number_max must be finite and at least one")
     samples = points[:1] if geometry_is_static(points) else points
-    records = {key: [] for key in ("quadratic_basis", "quadratic_singular_values",
-                                  "quadratic_condition_number", "quadratic_rank")}
+    records = {
+        key: []
+        for key in (
+            "quadratic_basis",
+            "quadratic_singular_values",
+            "quadratic_condition_number",
+            "quadratic_rank",
+        )
+    }
     for index, sample in enumerate(samples):
         design = quadratic_design_matrix(sample)
         left, singular, _ = np.linalg.svd(design, full_matrices=True)
@@ -127,8 +152,9 @@ def quadratic_projection_bases(positions: np.ndarray, *,
                 f"condition_number={condition:.6g}, limit={condition_number_max:.6g}"
             )
         q = left[:, 26:]
-        if (not np.allclose(q.T @ q, np.eye(1), atol=1e-12, rtol=0)
-                or not np.allclose(q.T @ design, 0, atol=1e-12*singular[0], rtol=0)):
+        if not np.allclose(q.T @ q, np.eye(1), atol=1e-12, rtol=0) or not np.allclose(
+            q.T @ design, 0, atol=1e-12 * singular[0], rtol=0
+        ):
             raise ValueError(f"Quadratic basis orthogonality failed at geometry sample {index}")
         for key, value in zip(records, (q, singular, condition, rank)):
             records[key].append(value)
@@ -145,13 +171,17 @@ def project_field(basis: np.ndarray, field: np.ndarray) -> np.ndarray:
     return np.einsum("tqr,tq->tr", basis, field.reshape(len(field), 27))
 
 
-def calibrate_affine_realization(time, positions, measured, node_indices, sigma_t,
-                                 bases, method, sigma_B):
+def calibrate_affine_realization(
+    time, positions, measured, node_indices, sigma_t, bases, method, sigma_B
+):
     """Use the shared solver and interpolation, fitting measured data only."""
     from hs_observatory.analysis.timing_calibrate import solve_timing
 
-    basis_key = {"all_nine_divergence": "divergence_basis",
-                 "all_nine_df_affine": "df_basis", "all_nine_df_quadratic": "quadratic_basis"}[method]
+    basis_key = {
+        "all_nine_divergence": "divergence_basis",
+        "all_nine_df_affine": "df_basis",
+        "all_nine_df_quadratic": "quadratic_basis",
+    }[method]
     basis = bases[basis_key]
     before = project_field(basis, measured)
     derivative = np.gradient(measured, time, axis=0, edge_order=1)
@@ -176,7 +206,8 @@ def calibrate_affine_realization(time, positions, measured, node_indices, sigma_
             coordinates = project_field(bases[f"{component}_basis"], field)
             residuals[f"{component}_residual_{label}"] = coordinates
             result[f"{component}_chi2_{label}"] = float(
-                np.sum((coordinates[common] / sigma_B)**2))
+                np.sum((coordinates[common] / sigma_B) ** 2)
+            )
         target = "quadratic" if method == "all_nine_df_quadratic" else "divergence"
         data = result[f"{target}_chi2_{label}"]
         if method == "all_nine_df_affine":
@@ -184,21 +215,26 @@ def calibrate_affine_realization(time, positions, measured, node_indices, sigma_
         result[f"data_chi2_{label}"] = data
         result[f"chi2_{label}"] = data + result[f"prior_chi2_{label}"]
         result[f"normalized_residual_rms_{label}"] = np.sqrt(
-            data / (common.sum() * basis.shape[-1]))
+            data / (common.sum() * basis.shape[-1])
+        )
     residuals.update(fit_valid=result["fit_valid"], comparison_valid=common)
     result.update(
         projection_residuals=residuals,
-        measured_B=measured, corrected_B=aligned.field, corrected_B_valid=aligned.valid,
+        measured_B=measured,
+        corrected_B=aligned.field,
+        corrected_B_valid=aligned.valid,
         comparison_row_count=int(common.sum() * basis.shape[-1]),
         fit_row_count=int(result["fit_valid"].sum()),
-        chi2_increased=bool(result["chi2_after"] > result["chi2_before"]
-                            + 1e-12 * max(1., result["chi2_before"])),
+        chi2_increased=bool(
+            result["chi2_after"] > result["chi2_before"] + 1e-12 * max(1.0, result["chi2_before"])
+        ),
     )
     return result
 
 
-def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
-                        start_time_s=None, stop_time_s=None):
+def plot_affine_product(
+    product_path, output_path, *, mc_index=0, dpi=300, start_time_s=None, stop_time_s=None
+):
     """Projection diagnostics, using the same MC layout and Node colors."""
     from pathlib import Path
 
@@ -221,8 +257,11 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
         time = handle["time/analysis_time"][...]
         mask = _plot_time_mask(time, start_time_s, stop_time_s)
         method = handle["metadata"].attrs["calibration_method"]
-        diagnostics = {key: value[...] for key, value in handle["diagnostics"].items()
-                       if isinstance(value, h5py.Dataset)}
+        diagnostics = {
+            key: value[...]
+            for key, value in handle["diagnostics"].items()
+            if isinstance(value, h5py.Dataset)
+        }
         singular = handle["diagnostics/weighted_jacobian/singular_values"][mc_index]
         components = projection_components(handle["projection"])
         if components == ("quadratic",):
@@ -230,14 +269,21 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
             design_condition = handle["projection/quadratic_condition_number"][...]
         curves = {}
         for component in components:
-            curves[component] = [handle[f"projection/ideal_{component}_residual"][...],
-                                 handle[f"projection/{component}_residual_before"][mc_index],
-                                 handle[f"projection/{component}_residual_after"][mc_index]]
+            curves[component] = [
+                handle[f"projection/ideal_{component}_residual"][...],
+                handle[f"projection/{component}_residual_before"][mc_index],
+                handle[f"projection/{component}_residual_after"][mc_index],
+            ]
     fig, axes = plt.subplots(4, 2, figsize=(12, 13), constrained_layout=True)
     fig.suptitle(method)
     for column, node in enumerate(nodes):
-        axes[0, 0].scatter(injected[:, column], recovered[:, column], s=12,
-                           color=SPACECRAFT_COLORS.get(node), label=node)
+        axes[0, 0].scatter(
+            injected[:, column],
+            recovered[:, column],
+            s=12,
+            color=SPACECRAFT_COLORS.get(node),
+            label=node,
+        )
     bounds = [min(injected.min(), recovered.min()), max(injected.max(), recovered.max())]
     axes[0, 0].plot(bounds, bounds, "k--")
     axes[0, 0].set(xlabel="Injected offset [ms]", ylabel="Recovered offset [ms]")
@@ -256,23 +302,28 @@ def plot_affine_product(product_path, output_path, *, mc_index=0, dpi=300,
     for column, component in enumerate(components):
         for label in ("before", "after"):
             axes[2, column].plot(diagnostics[f"{component}_chi2_{label}"], "o-", label=label)
-        axes[2, column].set(xlabel="MC realization", ylabel="Residual power / σB²",
-                            title=component.replace("_", " "))
+        axes[2, column].set(
+            xlabel="MC realization",
+            ylabel="Residual power / σB²",
+            title=component.replace("_", " "),
+        )
         axes[2, column].legend()
         for label, residual in zip(("Ideal", "Measured", "Corrected"), curves[component]):
             axes[3, column].plot(time[mask], np.linalg.norm(residual[mask], axis=1), label=label)
-        axes[3, column].set(xlabel="Time [s]", ylabel="Residual norm [nT]",
-                            title=f"MC {mc_index}")
+        axes[3, column].set(xlabel="Time [s]", ylabel="Residual norm [nT]", title=f"MC {mc_index}")
         axes[3, column].legend()
     if components == ("quadratic",):
         axes[2, 1].semilogy(np.arange(1, 27), np.median(design_singular, axis=0), "o-")
-        axes[2, 1].set(xlabel="Design singular-value index", ylabel="Scaled design singular value",
-                        title="Median quadratic design spectrum")
+        axes[2, 1].set(
+            xlabel="Design singular-value index",
+            ylabel="Scaled design singular value",
+            title="Median quadratic design spectrum",
+        )
         condition = np.broadcast_to(design_condition, time.shape)
         axes[3, 1].semilogy(time[mask], condition[mask])
         axes[3, 1].set(xlabel="Time [s]", ylabel="Quadratic design condition number")
     for ax in axes.flat:
-        ax.grid(alpha=.2)
+        ax.grid(alpha=0.2)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -299,11 +350,20 @@ def plot_timing_method_comparison(product_paths, output_path, *, dpi=300):
             with h5py.File(path, "r") as handle:
                 if not handle["metadata"].attrs.get("complete", False):
                     raise ValueError("Timing-calibration product is incomplete")
-                for key in ("spacecraft/id", "spacecraft/node_id", "spacecraft/positions",
-                            "time/analysis_time", "timing/injected_offset_s", "magnetic_field/ideal"):
+                for key in (
+                    "spacecraft/id",
+                    "spacecraft/node_id",
+                    "spacecraft/positions",
+                    "time/analysis_time",
+                    "timing/injected_offset_s",
+                    "magnetic_field/ideal",
+                ):
                     if not np.array_equal(handle[key][...], reference[key][...]):
                         raise ValueError(f"Comparison requires identical inputs: {key}")
-                measured, baseline = handle["magnetic_field/measured"], reference["magnetic_field/measured"]
+                measured, baseline = (
+                    handle["magnetic_field/measured"],
+                    reference["magnetic_field/measured"],
+                )
                 if measured.shape != baseline.shape or any(
                     not np.array_equal(measured[mc], baseline[mc], equal_nan=True)
                     for mc in range(len(measured))
@@ -316,15 +376,22 @@ def plot_timing_method_comparison(product_paths, output_path, *, dpi=300):
                     scales = [r["sigma_B"] for r in records if r["sigma_B"] is not None]
                     if scales and attrs["sigma_B_nT"] != scales[0]:
                         raise ValueError("Projection comparison requires identical sigma_B_nT")
-                records.append({
-                    "method": (attrs.get("calibration_method", "polyhedron")
-                               + (" / instrument noise" if "instrument_noise" in handle else "")),
-                    "sigma_B": attrs.get("sigma_B_nT") if "projection" in handle else None,
-                    "bias": handle["mc_summary/bias_s"][...] * 1000,
-                    "rmse": handle["mc_summary/rmse_s"][...] * 1000,
-                    "rms": np.sqrt(np.mean(handle["timing/recovered_offset_s"][...]**2, axis=1))*1000,
-                    "singular": handle["diagnostics/weighted_jacobian/singular_values"][...],
-                })
+                records.append(
+                    {
+                        "method": (
+                            attrs.get("calibration_method", "polyhedron")
+                            + (" / instrument noise" if "instrument_noise" in handle else "")
+                        ),
+                        "sigma_B": attrs.get("sigma_B_nT") if "projection" in handle else None,
+                        "bias": handle["mc_summary/bias_s"][...] * 1000,
+                        "rmse": handle["mc_summary/rmse_s"][...] * 1000,
+                        "rms": np.sqrt(
+                            np.mean(handle["timing/recovered_offset_s"][...] ** 2, axis=1)
+                        )
+                        * 1000,
+                        "singular": handle["diagnostics/weighted_jacobian/singular_values"][...],
+                    }
+                )
         nodes = reference["spacecraft/node_id"].asstr()[...]
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
     for record in records:
@@ -332,14 +399,15 @@ def plot_timing_method_comparison(product_paths, output_path, *, dpi=300):
             ax.plot(nodes, record[key], "o-", label=record["method"])
             ax.set(xlabel="Node", ylabel=f"Recovery {key} [ms]")
         axes[1, 0].plot(record["rms"], "o-", label=record["method"])
-        axes[1, 1].plot(np.arange(1, 9), np.median(record["singular"], axis=0),
-                        "o-", label=record["method"])
+        axes[1, 1].plot(
+            np.arange(1, 9), np.median(record["singular"], axis=0), "o-", label=record["method"]
+        )
     axes[1, 0].set(xlabel="MC realization", ylabel="RMS recovered offset across Nodes [ms]")
     axes[1, 1].set(xlabel="Singular-value index", ylabel="Median weighted Jacobian [1/s]")
     if any(np.any(record["singular"] > 0) for record in records):
         axes[1, 1].set_yscale("log")
     for ax in axes.flat:
-        ax.grid(alpha=.2)
+        ax.grid(alpha=0.2)
         ax.legend(fontsize=8)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -45,8 +45,7 @@ def test_rejects_flat_and_ambiguous_channels():
     rng = np.random.default_rng(8)
     flat = rng.normal(0.0, 0.1, len(time))
     assert (
-        detect_transition(time, flat, *settings()).status
-        == DETECTION_STATUS["no_detectable_shock"]
+        detect_transition(time, flat, *settings()).status == DETECTION_STATUS["no_detectable_shock"]
     )
     multiple = flat + 3.0 * (time >= 6.0) - 3.0 * (time >= 14.0)
     assert (
@@ -88,16 +87,13 @@ def test_exact_timing_and_equal_weight_wls_agree():
     q = np.array([-0.01, 0.001, -0.0005])
     reference = initial.mean(axis=0)
     true_tref = 20.0
-    crossing = np.array([
-        (true_tref + q @ (point - reference)) / (1.0 - q @ velocity)
-        for point in initial
-    ])
+    crossing = np.array(
+        [(true_tref + q @ (point - reference)) / (1.0 - q @ velocity) for point in initial]
+    )
     positions = initial + crossing[:, None] * velocity
 
     ols = solve_planar_timing(crossing, positions, reference, 20.0)
-    wls = solve_planar_timing(
-        crossing, positions, reference, 20.0, uncertainties=np.ones(9) * 0.1
-    )
+    wls = solve_planar_timing(crossing, positions, reference, 20.0, uncertainties=np.ones(9) * 0.1)
 
     assert ols.success and wls.success
     np.testing.assert_allclose(ols.q, q, atol=1.0e-12)
@@ -121,11 +117,15 @@ def test_timing_rejects_missing_rank_and_condition():
 def test_truth_converts_generator_normal_and_moving_crossings():
     metadata = {
         "field_model": "shock",
-        "field_metadata": json.dumps({
-            "normal_gse": [1, 0, 0], "velocity_gse_km_s": [-100, 0, 0],
-            "mesocenter_gse_km": [0, 0, 0], "reference_time_s": 0,
-            "distance_from_mesocenter_km": 2000,
-        }),
+        "field_metadata": json.dumps(
+            {
+                "normal_gse": [1, 0, 0],
+                "velocity_gse_km_s": [-100, 0, 0],
+                "mesocenter_gse_km": [0, 0, 0],
+                "reference_time_s": 0,
+                "distance_from_mesocenter_km": 2000,
+            }
+        ),
     }
     time = np.linspace(0, 30, 301)
     trajectory = np.zeros((2, len(time), 3))
@@ -143,26 +143,41 @@ def test_truth_converts_generator_normal_and_moving_crossings():
 
 def _observation(path, *, n_mc=2, include_truth=True):
     ids = ["H", *(f"N{i}" for i in range(1, 9))]
-    offsets = np.array([
-        [0, 0, 0], [250, 0, 0], [-200, 80, 30], [50, 350, -40],
-        [20, -300, 100], [120, 80, 450], [-80, -50, -400],
-        [550, 200, 150], [-500, -180, -120],
-    ], dtype=float)
+    offsets = np.array(
+        [
+            [0, 0, 0],
+            [250, 0, 0],
+            [-200, 80, 30],
+            [50, 350, -40],
+            [20, -300, 100],
+            [120, 80, 450],
+            [-80, -50, -400],
+            [550, 200, 150],
+            [-500, -180, -120],
+        ],
+        dtype=float,
+    )
     offsets -= offsets.mean(axis=0)
-    grids = {"n": np.arange(0, 40.0001, 0.125),
-             "v": np.arange(0, 40.0001, 0.125),
-             "B": np.arange(0, 40.0001, 0.03125)}
+    grids = {
+        "n": np.arange(0, 40.0001, 0.125),
+        "v": np.arange(0, 40.0001, 0.125),
+        "B": np.arange(0, 40.0001, 0.03125),
+    }
     crossings = 20.0 - offsets[:, 0] / 100.0
     rng = np.random.default_rng(11)
     with h5py.File(path, "w") as handle:
         meta = handle.create_group("metadata")
         meta.attrs["field_model"] = "shock" if include_truth else "unknown"
         if include_truth:
-            meta.attrs["field_metadata"] = json.dumps({
-                "normal_gse": [1, 0, 0], "velocity_gse_km_s": [-100, 0, 0],
-                "mesocenter_gse_km": [0, 0, 0], "reference_time_s": 0,
-                "distance_from_mesocenter_km": 2000,
-            })
+            meta.attrs["field_metadata"] = json.dumps(
+                {
+                    "normal_gse": [1, 0, 0],
+                    "velocity_gse_km_s": [-100, 0, 0],
+                    "mesocenter_gse_km": [0, 0, 0],
+                    "reference_time_s": 0,
+                    "distance_from_mesocenter_km": 2000,
+                }
+            )
         time_group = handle.create_group("time")
         spacecraft = handle.create_group("spacecraft")
         spacecraft.create_dataset("id", data=np.asarray(ids, dtype=h5py.string_dtype()))
@@ -170,12 +185,12 @@ def _observation(path, *, n_mc=2, include_truth=True):
         observed = handle.create_group("observed")
         for quantity, time in grids.items():
             time_group.create_dataset(quantity, data=time)
-            positions.create_dataset(quantity, data=np.broadcast_to(
-                offsets[:, None, :], (9, len(time), 3)
-            ))
-            fraction = 0.5 * (1 + np.tanh(
-                2.197224577 * (time[:, None] - crossings[None, :]) / 0.25
-            ))
+            positions.create_dataset(
+                quantity, data=np.broadcast_to(offsets[:, None, :], (9, len(time), 3))
+            )
+            fraction = 0.5 * (
+                1 + np.tanh(2.197224577 * (time[:, None] - crossings[None, :]) / 0.25)
+            )
             if quantity == "n":
                 base = 5 + 12 * fraction
                 values = base[None] + rng.normal(0, 0.08, (n_mc, *base.shape))
@@ -223,14 +238,16 @@ def test_end_to_end_mc_hdf5_and_truth_optional(tmp_path):
         assert highlighted["worst/indices"].shape == (4,)
         assert highlighted["best"].attrs["rmse"] <= highlighted["worst"].attrs["rmse"]
 
-    result["settings"]["plot"].update({
-        "enabled": True,
-        "detection_base": str(tmp_path / "detection"),
-        "accuracy_base": str(tmp_path / "accuracy"),
-        "geometry_base": str(tmp_path / "geometry"),
-        "tetrahedra_geometry_base": str(tmp_path / "tetrahedra_geometry"),
-        "dpi": 30,
-    })
+    result["settings"]["plot"].update(
+        {
+            "enabled": True,
+            "detection_base": str(tmp_path / "detection"),
+            "accuracy_base": str(tmp_path / "accuracy"),
+            "geometry_base": str(tmp_path / "geometry"),
+            "tetrahedra_geometry_base": str(tmp_path / "tetrahedra_geometry"),
+            "dpi": 30,
+        }
+    )
     write_shock_timing_product(result, tmp_path / "timing_with_plots.h5")
     for stem in ("detection", "accuracy", "geometry", "tetrahedra_geometry"):
         assert (tmp_path / f"{stem}.pdf").stat().st_size > 100

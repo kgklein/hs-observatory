@@ -99,7 +99,9 @@ def _read_variable(
         position = np.asarray(position_node, dtype=float)
 
     if position.ndim != 3 or position.shape[-1] != 3:
-        raise ValueError(f"Spacecraft positions for {variable} must have shape (spacecraft, time, 3)")
+        raise ValueError(
+            f"Spacecraft positions for {variable} must have shape (spacecraft, time, 3)"
+        )
     expected_value_shape = (position.shape[1], position.shape[0])
     if variable in {"v", "B"}:
         expected_value_shape = (*expected_value_shape, 3)
@@ -138,7 +140,9 @@ def _pair_products(
         correlation = fluctuation[:, left] * fluctuation[:, right]
         if settings["normalize"]:
             denominator = float(np.mean(fluctuation**2))
-            correlation = correlation / denominator if denominator > 0 else np.full_like(correlation, np.nan)
+            correlation = (
+                correlation / denominator if denominator > 0 else np.full_like(correlation, np.nan)
+            )
         result["correlation"] = correlation.reshape(-1)
         difference = values[:, left] - values[:, right]
         result["structure_function"] = (difference**2).reshape(-1)
@@ -180,8 +184,12 @@ def _bin_edges(separations: list[np.ndarray], settings: dict[str, Any]) -> np.nd
     if settings["binning"] == "log" and np.any(all_separations <= 0):
         raise ValueError("Logarithmic separation bins require strictly positive separations")
 
-    r_min = float(np.min(all_separations)) if settings["r_min"] is None else float(settings["r_min"])
-    r_max = float(np.max(all_separations)) if settings["r_max"] is None else float(settings["r_max"])
+    r_min = (
+        float(np.min(all_separations)) if settings["r_min"] is None else float(settings["r_min"])
+    )
+    r_max = (
+        float(np.max(all_separations)) if settings["r_max"] is None else float(settings["r_max"])
+    )
     if settings["binning"] == "log" and r_min <= 0:
         raise ValueError("r_min must be positive for logarithmic bins")
     if r_max < r_min:
@@ -233,9 +241,7 @@ def _binned_statistics(
     return {"count": counts, "mean": mean, "std": std, "stderr": stderr}
 
 
-def compute_static_decorrelation(
-    input_path: str | Path, config: dict[str, Any]
-) -> dict[str, Any]:
+def compute_static_decorrelation(input_path: str | Path, config: dict[str, Any]) -> dict[str, Any]:
     settings = _settings(config)
     pair_data: dict[str, dict[str, np.ndarray]] = {}
     with h5py.File(input_path, "r") as handle:
@@ -243,9 +249,7 @@ def compute_static_decorrelation(
             values, position = _read_variable(handle, variable, settings)
             pair_data[variable] = _pair_products(values, position, variable, settings)
 
-    edges = _bin_edges(
-        [products["separation"] for products in pair_data.values()], settings
-    )
+    edges = _bin_edges([products["separation"] for products in pair_data.values()], settings)
     result: dict[str, Any] = {
         "metadata": {
             "method": "static_decorrelation",
@@ -283,9 +287,7 @@ def compute_static_decorrelation(
             component_stats.pop("count")
             result["correlation"][f"{variable}_components"] = component_stats
         if settings["compute_structure_function"]:
-            structure_stats = _binned_statistics(
-                separation, products["structure_function"], edges
-            )
+            structure_stats = _binned_statistics(separation, products["structure_function"], edges)
             structure_stats.pop("count")
             result["structure_function"][variable] = structure_stats
     return result
@@ -334,9 +336,7 @@ def plot_static_decorrelation(result: dict[str, Any]):
         component_name = f"{variable}_components"
         if component_name in result["correlation"]:
             component_mean = result["correlation"][component_name]["mean"]
-            for component, label, color in zip(
-                range(3), component_labels, COMPONENT_COLORS
-            ):
+            for component, label, color in zip(range(3), component_labels, COMPONENT_COLORS):
                 correlation_axis.plot(
                     separation,
                     component_mean[:, component],
@@ -346,7 +346,9 @@ def plot_static_decorrelation(result: dict[str, Any]):
                     label=f"{variable}{label}",
                 )
         correlation_axis.axhline(0.0, color="#777777", linewidth=0.8, alpha=0.6)
-        correlation_axis.set_ylabel("Normalized correlation" if configuration["normalize"] else "Pair product")
+        correlation_axis.set_ylabel(
+            "Normalized correlation" if configuration["normalize"] else "Pair product"
+        )
         correlation_axis.set_title(f"{variable}: simultaneous correlation")
         correlation_axis.legend(fontsize=8, ncol=2)
         correlation_axis.grid(alpha=0.25)
@@ -406,11 +408,7 @@ def _diagnostic_plot_settings(
         raise ValueError("decorrelation.visualization must be a mapping")
     enabled = bool(visualization.get("enabled", True))
     output = Path(output_path)
-    path = Path(
-        visualization.get(
-            "path", output.with_name(f"{output.stem}_diagnostic.png")
-        )
-    )
+    path = Path(visualization.get("path", output.with_name(f"{output.stem}_diagnostic.png")))
     dpi = int(visualization.get("dpi", 150))
     if dpi <= 0:
         raise ValueError("decorrelation.visualization.dpi must be positive")
@@ -441,9 +439,7 @@ class StaticDecorrelationAnalysis(AnalysisMethod):
                 )
             for name in ("bin_edges", "bin_lower", "bin_upper", "bin_centers"):
                 dataset = handle.create_dataset(name, data=result[name])
-                dataset.attrs["units"] = result["metadata"]["configuration"][
-                    "separation_units"
-                ]
+                dataset.attrs["units"] = result["metadata"]["configuration"]["separation_units"]
             counts = handle.create_group("counts")
             for variable, values in result["counts"].items():
                 counts.create_dataset(variable, data=values)

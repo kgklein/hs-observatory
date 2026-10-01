@@ -36,7 +36,7 @@ def test_pairs_minimum_boundaries_tie_and_chronological_sort(script, monkeypatch
     result = script.find_minimum(Path("cdf-dir"), target)
     np.testing.assert_array_equal(result["offset_days"], [-10, 0, 10])
     # For points x=0..8, the mean square across the 36 pairs is 15.
-    np.testing.assert_allclose(result["rms"], np.sqrt(15)*np.array([1, 3, 1]))
+    np.testing.assert_allclose(result["rms"], np.sqrt(15) * np.array([1, 3, 1]))
     assert result["best"] == 0
     assert result["maximum"] == 1
     assert result["sources"] == [records[3][3], records[3][2], records[3][1]]
@@ -56,9 +56,16 @@ def test_invalid_records_and_na_slots(script, monkeypatch):
     assert result["excluded"] == 4
 
 
-@pytest.mark.parametrize("text", ["2030-06-01", "2030-06-01T00:00:00",
-                                  "2030-06-01T00:00:00Z", "2030-06-01T02:00:00+02:00",
-                                  "2030-05-31T17:00:00-07:00"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2030-06-01",
+        "2030-06-01T00:00:00",
+        "2030-06-01T00:00:00Z",
+        "2030-06-01T02:00:00+02:00",
+        "2030-05-31T17:00:00-07:00",
+    ],
+)
 def test_utc_normalization(script, text):
     assert script.parse_time(text) == np.datetime64("2030-06-01T00:00:00", "ns")
 
@@ -69,8 +76,10 @@ def test_invalid_time(script, text):
         script.parse_time(text)
 
 
-@pytest.mark.parametrize("labels", [["H"]*9, ["H", *[f"N{i}" for i in range(1, 8)]],
-                                    ["H", *[f"N{i}" for i in range(1, 10)]]])
+@pytest.mark.parametrize(
+    "labels",
+    [["H"] * 9, ["H", *[f"N{i}" for i in range(1, 8)]], ["H", *[f"N{i}" for i in range(1, 10)]]],
+)
 def test_invalid_labels(script, monkeypatch, labels):
     target, records = mock_records(script, monkeypatch, [0])
     records[2] = labels
@@ -91,8 +100,12 @@ def test_empty_window_and_no_valid_positions(script, monkeypatch):
 def test_csv_and_summary_partial_coverage(script, monkeypatch, tmp_path, capsys):
     mock_records(script, monkeypatch, [-1, 0, 1], [2, 1, 3])
     output = tmp_path / "nested" / "minimum.csv"
-    assert script.main(["--cdf-path", "cdf-directory", "--time", "2030-06-01",
-                        "--output", str(output)]) == 0
+    assert (
+        script.main(
+            ["--cdf-path", "cdf-directory", "--time", "2030-06-01", "--output", str(output)]
+        )
+        == 0
+    )
     captured = capsys.readouterr()
     assert "Minimum UTC time: 2030-06-01T00:00:00.000000000Z" in captured.out
     assert "Offset from designated time: +0 days" in captured.out
@@ -124,6 +137,7 @@ def test_default_output_and_full_coverage(script, monkeypatch, tmp_path, capsys)
 def test_cli_error_and_help(script, monkeypatch, capsys):
     def missing(path):
         raise FileNotFoundError("CDF source does not exist")
+
     monkeypatch.setattr(script, "read_cdf_positions", missing)
     with pytest.raises(SystemExit) as failure:
         script.main(["--cdf-path", "missing.cdf", "--time", "2030-06-01"])

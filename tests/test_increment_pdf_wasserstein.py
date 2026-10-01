@@ -25,7 +25,11 @@ def _write_product(path: Path, lag_centers: np.ndarray | None = None) -> Path:
         dtype=float,
     )
     lag_edges = np.concatenate(
-        ([lag_centers[0] * 0.75], 0.5 * (lag_centers[:-1] + lag_centers[1:]), [lag_centers[-1] * 1.25])
+        (
+            [lag_centers[0] * 0.75],
+            0.5 * (lag_centers[:-1] + lag_centers[1:]),
+            [lag_centers[-1] * 1.25],
+        )
     )
     x_edges = np.array([0.0, 0.3, 0.9, 1.8, 3.0])
     x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
@@ -99,9 +103,7 @@ def test_rayleigh_reference_is_geometric_mean_and_finite_range_normalized():
     fine_edges = np.linspace(0.0, 8.0, 40_001)
     fine_centers = 0.5 * (fine_edges[:-1] + fine_edges[1:])
     fine_density = geometric_mean_normalized_rayleigh_pdf_on_bins(fine_edges)
-    log_mean = np.sum(
-        np.log(fine_centers) * fine_density * np.diff(fine_edges)
-    )
+    log_mean = np.sum(np.log(fine_centers) * fine_density * np.diff(fine_edges))
     assert np.exp(log_mean) == pytest.approx(1.0, rel=1.0e-4)
 
 

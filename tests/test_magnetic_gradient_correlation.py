@@ -66,9 +66,7 @@ def test_pearson_correlation_affine_sign_missing_and_validity():
 
 def test_gradient_component_correlations_preserve_tensor_orientation():
     rng = np.random.default_rng(42)
-    expected = np.array(
-        [[-0.9, -0.65, -0.4], [-0.15, 0.1, 0.35], [0.6, 0.8, 0.95]]
-    )
+    expected = np.array([[-0.9, -0.65, -0.4], [-0.15, 0.1, 0.35], [0.6, 0.8, 0.95]])
     reference = np.empty((128, 3, 3))
     estimate = np.empty_like(reference)
     for component in np.ndindex((3, 3)):
@@ -81,12 +79,8 @@ def test_gradient_component_correlations_preserve_tensor_orientation():
         z /= np.sqrt(np.mean(z**2))
         correlation = expected[component]
         reference[(slice(None), *component)] = x
-        estimate[(slice(None), *component)] = (
-            correlation * x + np.sqrt(1.0 - correlation**2) * z
-        )
-    result = gradient_component_correlation(
-        reference, estimate, minimum_valid_samples=30
-    )
+        estimate[(slice(None), *component)] = correlation * x + np.sqrt(1.0 - correlation**2) * z
+    result = gradient_component_correlation(reference, estimate, minimum_valid_samples=30)
     np.testing.assert_allclose(result.pearson_r, expected, atol=1.0e-14)
     assert result.pearson_r[0, 1] == pytest.approx(expected[0, 1])
 
@@ -115,12 +109,8 @@ def test_configuration_selection_and_deterministic_tie_breaking():
         "n4_lex_later": _metadata([0, 2, 3, 4], chi=0.1, condition=2.0, size=50.0),
         "n4_condition": _metadata([0, 1, 2, 3], chi=0.1, condition=1.0, size=70.0),
         "n4_second": _metadata([1, 2, 3, 4], chi=0.2, condition=1.0, size=60.0),
-        "multi_size_larger": _metadata(
-            [0, 1, 2, 3, 4], chi=0.15, condition=2.0, size=90.0
-        ),
-        "multi_size_smaller": _metadata(
-            [0, 1, 2, 3, 5], chi=0.15, condition=2.0, size=80.0
-        ),
+        "multi_size_larger": _metadata([0, 1, 2, 3, 4], chi=0.15, condition=2.0, size=90.0),
+        "multi_size_smaller": _metadata([0, 1, 2, 3, 5], chi=0.15, condition=2.0, size=80.0),
         "nine": _metadata(list(range(9)), chi=0.4, condition=4.0, size=200.0),
     }
     selected = select_correlation_configurations(configurations)
@@ -189,9 +179,7 @@ def _write_configuration(
     truth = group.create_group("truth")
     truth.create_dataset("coarse_gradient", data=coarse)
     truth.create_dataset("coarse_curl", data=_curl(coarse))
-    truth.create_dataset(
-        "coarse_curl_magnitude", data=np.linalg.norm(_curl(coarse), axis=-1)
-    )
+    truth.create_dataset("coarse_curl_magnitude", data=np.linalg.norm(_curl(coarse), axis=-1))
     truth.create_dataset("coarse_valid", data=np.ones(n_time, dtype=bool))
     true = group.create_group("true_estimate")
     true.create_dataset("gradient", data=ideal)
@@ -201,9 +189,7 @@ def _write_configuration(
     observed = group.create_group("measured")
     observed.create_dataset("gradient", data=measured)
     observed.create_dataset("curl", data=_curl(measured))
-    observed.create_dataset(
-        "curl_magnitude", data=np.linalg.norm(_curl(measured), axis=-1)
-    )
+    observed.create_dataset("curl_magnitude", data=np.linalg.norm(_curl(measured), axis=-1))
     observed.create_dataset("valid", data=np.ones((3, n_time), dtype=bool))
 
 
@@ -263,9 +249,7 @@ def test_realization_correlations_are_summarized_after_calculation(tmp_path):
             }
         },
     )
-    gradient = result["configurations"]["most_regular_n4"]["measured_vs_ideal"][
-        "gradient"
-    ]
+    gradient = result["configurations"]["most_regular_n4"]["measured_vs_ideal"]["gradient"]
     assert gradient["pearson_r"].shape == (3, 3, 3)
     assert gradient["pearson_r"][0, 0, 0] == pytest.approx(1.0)
     assert gradient["pearson_r"][1, 0, 0] == pytest.approx(-1.0)
@@ -289,24 +273,22 @@ def test_hdf5_product_and_all_plots_are_source_independent(tmp_path):
             },
         },
     )
-    product = write_magnetic_gradient_correlation_product(
-        result, tmp_path / "correlations.h5"
-    )
+    product = write_magnetic_gradient_correlation_product(result, tmp_path / "correlations.h5")
     with h5py.File(product) as handle:
         assert set(handle["configurations"]) == set(CORRELATION_SELECTION_ORDER)
         assert (
             handle["metadata"].attrs["tensor_index_convention"]
             == "gradient[field_component, derivative_direction]"
         )
-        measured = handle[
-            "configurations/most_regular_n4/measured_vs_ideal/gradient/pearson_r"
-        ]
+        measured = handle["configurations/most_regular_n4/measured_vs_ideal/gradient/pearson_r"]
         assert measured.shape == (3, 3, 3)
         assert measured.compression == "gzip"
         assert np.isnan(measured[:, 2, 2]).all()
         figure, axes = plt.subplots(2, 4)
         _draw_heatmap_grid(figure, axes, handle)
-        assert all(image.get_clim() == (-1.0, 1.0) for axis in axes.ravel() for image in axis.images)
+        assert all(
+            image.get_clim() == (-1.0, 1.0) for axis in axes.ravel() for image in axis.images
+        )
         assert axes[0, 0].images[0].cmap.name == "coolwarm_r"
         assert [tick.get_text() for tick in axes[0, 0].get_yticklabels()] == [
             "$B_x$",
@@ -322,21 +304,13 @@ def test_hdf5_product_and_all_plots_are_source_independent(tmp_path):
 
     source.unlink()
     outputs = (
-        plot_magnetic_gradient_correlation_heatmaps(
-            product, tmp_path / "heatmaps.png", dpi=60
-        ),
-        plot_magnetic_gradient_correlation_summary(
-            product, tmp_path / "summary.png", dpi=60
-        ),
+        plot_magnetic_gradient_correlation_heatmaps(product, tmp_path / "heatmaps.png", dpi=60),
+        plot_magnetic_gradient_correlation_summary(product, tmp_path / "summary.png", dpi=60),
         plot_magnetic_gradient_measured_vs_ideal_heatmaps(
             product, tmp_path / "measured_heatmaps.png", dpi=60
         ),
-        plot_magnetic_gradient_correlation_combined(
-            product, tmp_path / "combined.png", dpi=60
-        ),
-        plot_magnetic_gradient_correlation_diagnostic(
-            product, tmp_path / "diagnostic.png", dpi=60
-        ),
+        plot_magnetic_gradient_correlation_combined(product, tmp_path / "combined.png", dpi=60),
+        plot_magnetic_gradient_correlation_diagnostic(product, tmp_path / "diagnostic.png", dpi=60),
     )
     assert all(output.stat().st_size > 0 for output in outputs)
     requested_cmaps: list[str] = []

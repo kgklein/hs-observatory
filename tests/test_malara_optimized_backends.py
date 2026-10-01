@@ -32,9 +32,7 @@ def test_cached_evaluation_matches_reference_and_preserves_shapes() -> None:
     cached_trajectory = evaluator.evaluate_vector_cached(trajectory)
     reference_trajectory = evaluator.evaluate_vector(trajectory)
     assert cached_trajectory.shape == (2, 9, 3)
-    np.testing.assert_allclose(
-        cached_trajectory, reference_trajectory, rtol=1.0e-12, atol=1.0e-12
-    )
+    np.testing.assert_allclose(cached_trajectory, reference_trajectory, rtol=1.0e-12, atol=1.0e-12)
 
 
 def test_cache_hits_increase_and_clear_resets_cache() -> None:
@@ -105,9 +103,7 @@ def test_cached_and_parallel_backends_preserve_periodicity() -> None:
     )
 
     cached = evaluator.evaluate_vector_cached(positions)
-    parallel = evaluator.evaluate_vector_parallel(
-        positions, chunk_size=2, n_workers=2
-    )
+    parallel = evaluator.evaluate_vector_parallel(positions, chunk_size=2, n_workers=2)
     expected = np.broadcast_to(cached[0], cached.shape)
     np.testing.assert_allclose(cached, expected, rtol=1.0e-12, atol=1.0e-12)
     np.testing.assert_allclose(parallel, expected, rtol=1.0e-12, atol=1.0e-12)

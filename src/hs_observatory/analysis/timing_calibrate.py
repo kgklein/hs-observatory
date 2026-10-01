@@ -56,15 +56,22 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         not isinstance(allowed_n, list)
         or any(type(n) is not int or not 4 <= n <= 9 for n in allowed_n)
     ):
-        raise ValueError("polyhedron_filter.allowed_n must be a list of integers from 4 to 9 or null")
+        raise ValueError(
+            "polyhedron_filter.allowed_n must be a list of integers from 4 to 9 or null"
+        )
     maximum = polyhedron_filter.get("max_condition_number")
     if maximum is not None and (
-        isinstance(maximum, bool) or not isinstance(maximum, (int, float))
-        or not np.isfinite(maximum) or maximum <= 0
+        isinstance(maximum, bool)
+        or not isinstance(maximum, (int, float))
+        or not np.isfinite(maximum)
+        or maximum <= 0
     ):
-        raise ValueError("polyhedron_filter.max_condition_number must be finite and positive or null")
+        raise ValueError(
+            "polyhedron_filter.max_condition_number must be finite and positive or null"
+        )
     settings["polyhedron_filter"] = {
-        "allowed_n": allowed_n, "max_condition_number": maximum,
+        "allowed_n": allowed_n,
+        "max_condition_number": maximum,
     }
     use_ideal = config.get("use_ideal_divergence", False)
     if not isinstance(use_ideal, bool):
@@ -77,8 +84,12 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("Polyhedron influence requires use_ideal_divergence: false")
     settings["polyhedron_influence"] = influence
     method = config.get("calibration_method", "polyhedron")
-    if method not in {"polyhedron", "all_nine_divergence", "all_nine_df_affine",
-                      "all_nine_df_quadratic"}:
+    if method not in {
+        "polyhedron",
+        "all_nine_divergence",
+        "all_nine_df_affine",
+        "all_nine_df_quadratic",
+    }:
         raise ValueError("Unknown timing calibration_method")
     settings["calibration_method"] = method
     normalization = config.get("divergence_normalization", "ideal_divergence")
@@ -89,21 +100,33 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
     settings["divergence_normalization"] = normalization
     if method != "polyhedron":
         if use_ideal or influence:
-            raise ValueError("Polynomial projection forbids use_ideal_divergence and polyhedron_influence")
-        if any(config.get(key) is not None for key in
-               ("polyhedra", "configuration_selection", "polyhedron_filter")):
+            raise ValueError(
+                "Polynomial projection forbids use_ideal_divergence and polyhedron_influence"
+            )
+        if any(
+            config.get(key) is not None
+            for key in ("polyhedra", "configuration_selection", "polyhedron_filter")
+        ):
             raise ValueError("All-nine projection does not support polyhedron selection/filtering")
         sigma_B = config.get("sigma_B_nT")
-        if (isinstance(sigma_B, bool) or not isinstance(sigma_B, (int, float))
-                or not np.isfinite(sigma_B) or sigma_B <= 0
-                or sigma_B > np.sqrt(np.finfo(float).max)
-                or sigma_B < np.sqrt(np.nextafter(0., 1.))):
+        if (
+            isinstance(sigma_B, bool)
+            or not isinstance(sigma_B, (int, float))
+            or not np.isfinite(sigma_B)
+            or sigma_B <= 0
+            or sigma_B > np.sqrt(np.finfo(float).max)
+            or sigma_B < np.sqrt(np.nextafter(0.0, 1.0))
+        ):
             raise ValueError("Polynomial projection requires finite positive sigma_B_nT")
         settings["sigma_B_nT"] = float(sigma_B)
         if method == "all_nine_df_quadratic":
             maximum = config.get("quadratic_condition_number_max", 1e10)
-            if (isinstance(maximum, bool) or not isinstance(maximum, (int, float))
-                    or not np.isfinite(maximum) or maximum < 1):
+            if (
+                isinstance(maximum, bool)
+                or not isinstance(maximum, (int, float))
+                or not np.isfinite(maximum)
+                or maximum < 1
+            ):
                 raise ValueError("quadratic_condition_number_max must be finite and at least one")
             settings["quadratic_condition_number_max"] = float(maximum)
     if not settings["store_all_realizations"]:
@@ -143,7 +166,9 @@ def select_polyhedra(
 
 
 def _filter_polyhedra(
-    positions: np.ndarray, candidates: Mapping[str, np.ndarray], options: Mapping[str, Any],
+    positions: np.ndarray,
+    candidates: Mapping[str, np.ndarray],
+    options: Mapping[str, Any],
 ) -> tuple[dict[str, np.ndarray], dict[str, float]]:
     """Intersect candidates using the same representative geometry as timing influence."""
 
@@ -155,9 +180,9 @@ def _filter_polyhedra(
             continue
         points = positions[:, indices]
         samples = points[:1] if geometry_is_static(points) else points
-        condition = float(np.median([
-            geometry_diagnostics(sample).condition_number for sample in samples
-        ]))
+        condition = float(
+            np.median([geometry_diagnostics(sample).condition_number for sample in samples])
+        )
         if maximum is not None and not condition <= maximum:
             continue
         selected[name] = indices
@@ -180,8 +205,7 @@ def divergence_variance(divergence: np.ndarray, floor: float) -> tuple[np.ndarra
     valid = np.isfinite(divergence)
     count = valid.sum(axis=0)
     raw = np.full(divergence.shape[1], np.nan)
-    np.divide((np.where(valid, divergence, 0.0) ** 2).sum(axis=0), count,
-              out=raw, where=count > 0)
+    np.divide((np.where(valid, divergence, 0.0) ** 2).sum(axis=0), count, out=raw, where=count > 0)
     return raw, np.maximum(raw, floor_squared)
 
 
@@ -216,8 +240,12 @@ def _spectrum(matrix: np.ndarray) -> dict[str, Any]:
 
 
 def solve_timing(
-    divergence: np.ndarray, jacobian: np.ndarray, variance: np.ndarray, sigma_t: float,
-    *, ideal_divergence: np.ndarray | None = None,
+    divergence: np.ndarray,
+    jacobian: np.ndarray,
+    variance: np.ndarray,
+    sigma_t: float,
+    *,
+    ideal_divergence: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Solve the explicitly augmented linear least-squares system, not normal equations.
 
@@ -233,8 +261,12 @@ def solve_timing(
         if np.shape(ideal_divergence) != np.shape(divergence):
             raise ValueError("ideal_divergence must have the same shape as measured divergence")
         divergence = np.asarray(divergence) - np.asarray(ideal_divergence)
-    valid = (np.isfinite(divergence) & np.all(np.isfinite(jacobian), axis=-1)
-             & np.isfinite(variance)[None, :] & (variance[None, :] > 0))
+    valid = (
+        np.isfinite(divergence)
+        & np.all(np.isfinite(jacobian), axis=-1)
+        & np.isfinite(variance)[None, :]
+        & (variance[None, :] > 0)
+    )
     if not np.any(valid):
         raise ValueError("No valid timing-calibration fit rows")
     rows = jacobian[valid]
@@ -281,12 +313,15 @@ def solve_timing(
 def solve_timing_with_variance(divergence, jacobian, variance, sigma_t, *, ideal_divergence=None):
     """Adapt time-dependent row variances to the unchanged least-squares solver."""
     if np.ndim(variance) == 1:
-        return solve_timing(divergence, jacobian, variance, sigma_t,
-                            ideal_divergence=ideal_divergence)
+        return solve_timing(
+            divergence, jacobian, variance, sigma_t, ideal_divergence=ideal_divergence
+        )
     grid = np.broadcast_to(variance, divergence.shape)
     result = solve_timing(
-        divergence.reshape(1, -1), jacobian.reshape(1, -1, jacobian.shape[-1]),
-        grid.ravel(), sigma_t,
+        divergence.reshape(1, -1),
+        jacobian.reshape(1, -1, jacobian.shape[-1]),
+        grid.ravel(),
+        sigma_t,
         ideal_divergence=None if ideal_divergence is None else ideal_divergence.reshape(1, -1),
     )
     result["fit_valid"] = result["fit_valid"].reshape(divergence.shape)
@@ -307,21 +342,26 @@ def calibrate_realization(
 ) -> dict[str, Any]:
     """Fit once, resample B, then independently evaluate corrected divergence."""
 
-    before = np.column_stack([
-        divergence_series(response, measured[:, indices])
-        for indices, response in zip(polyhedra, responses)
-    ])
+    before = np.column_stack(
+        [
+            divergence_series(response, measured[:, indices])
+            for indices, response in zip(polyhedra, responses)
+        ]
+    )
     jacobian = timing_jacobian(time, measured, polyhedra, responses, node_indices)
-    result = solve_timing_with_variance(before, jacobian, variance, sigma_t,
-                                        ideal_divergence=ideal_divergence)
+    result = solve_timing_with_variance(
+        before, jacobian, variance, sigma_t, ideal_divergence=ideal_divergence
+    )
     del jacobian
     offsets = np.zeros(9)
     offsets[node_indices] = -result["correction_s"]
     aligned = align_spacecraft_samples(time, offsets, positions.swapaxes(0, 1), measured)
-    after = np.column_stack([
-        divergence_series(response, aligned.field[:, indices])
-        for indices, response in zip(polyhedra, responses)
-    ])
+    after = np.column_stack(
+        [
+            divergence_series(response, aligned.field[:, indices])
+            for indices, response in zip(polyhedra, responses)
+        ]
+    )
     valid = result["fit_valid"] & np.isfinite(after)
     if not np.any(valid):
         raise ValueError("No common valid rows remain after timing correction")
@@ -336,18 +376,30 @@ def calibrate_realization(
         result[f"divergence_chi2_{label}"] = objective
         result[f"chi2_{label}"] = objective + result[f"prior_chi2_{label}"]
         total = result[f"chi2_{label}"]
-        result[f"divergence_objective_fraction_{label}"] = objective / total if total > 0 else np.nan
+        result[f"divergence_objective_fraction_{label}"] = (
+            objective / total if total > 0 else np.nan
+        )
         result[f"prior_objective_fraction_{label}"] = (
-            result[f"prior_chi2_{label}"] / total if total > 0 else np.nan)
+            result[f"prior_chi2_{label}"] / total if total > 0 else np.nan
+        )
         result[f"normalized_divergence_rms_{label}"] = np.sqrt(contribution / valid.sum())
         per_polyhedron = np.full(len(polyhedra), np.nan)
-        np.divide(normalized_squared.sum(axis=0), valid.sum(axis=0),
-                  out=per_polyhedron, where=valid.sum(axis=0) > 0)
+        np.divide(
+            normalized_squared.sum(axis=0),
+            valid.sum(axis=0),
+            out=per_polyhedron,
+            where=valid.sum(axis=0) > 0,
+        )
         result[f"polyhedron_rms_{label}"] = np.sqrt(per_polyhedron)
     result.update(
-        measured_B=measured, corrected_B=aligned.field, corrected_B_valid=aligned.valid,
-        measured_divergence=before, corrected_divergence=after, comparison_valid=valid,
-        comparison_row_count=int(valid.sum()), fit_row_count=int(result["fit_valid"].sum()),
+        measured_B=measured,
+        corrected_B=aligned.field,
+        corrected_B_valid=aligned.valid,
+        measured_divergence=before,
+        corrected_divergence=after,
+        comparison_valid=valid,
+        comparison_row_count=int(valid.sum()),
+        fit_row_count=int(result["fit_valid"].sum()),
         chi2_increased=bool(result["chi2_after"] > result["chi2_before"]),
     )
     return result
@@ -426,7 +478,8 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             from hs_observatory.analysis.timing_affine import quadratic_projection_bases
 
             projection = quadratic_projection_bases(
-                positions, condition_number_max=settings["quadratic_condition_number_max"],
+                positions,
+                condition_number_max=settings["quadratic_condition_number_max"],
             )
         else:
             projection = affine_projection_bases(positions)
@@ -440,12 +493,16 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             raise ValueError("At least one polyhedron must be selected")
         candidate_count = len(selected)
         selected, conditions = _filter_polyhedra(positions, selected, settings["polyhedron_filter"])
-        responses = [gradient_response_coefficients(positions[:, indices], **settings["gradient"])
-                     for indices in selected.values()]
-        ideal_divergence = np.column_stack([
-            divergence_series(response, ideal[:, indices])
-            for indices, response in zip(selected.values(), responses)
-        ])
+        responses = [
+            gradient_response_coefficients(positions[:, indices], **settings["gradient"])
+            for indices in selected.values()
+        ]
+        ideal_divergence = np.column_stack(
+            [
+                divergence_series(response, ideal[:, indices])
+                for indices, response in zip(selected.values(), responses)
+            ]
+        )
         raw, variance = divergence_variance(ideal_divergence, floor)
         ideal_reference_variance = variance
         if settings["divergence_normalization"] == "instrument_noise":
@@ -455,34 +512,55 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
             noise["ideal_reference_variance"] = ideal_reference_variance
     nodes = np.asarray([i for i, name in enumerate(ids) if name != "H"])
     result = {
-        "source": source, "time": time, "positions": positions, "ideal_B": ideal,
-        "spacecraft_ids": ids, "node_indices": nodes, "selected": selected,
+        "source": source,
+        "time": time,
+        "positions": positions,
+        "ideal_B": ideal,
+        "spacecraft_ids": ids,
+        "node_indices": nodes,
+        "selected": selected,
         "condition_numbers": conditions,
-        "responses": responses, "ideal_divergence": ideal_divergence,
-        "raw_variance": raw, "variance": variance, "sigma_t": sigma_t,
-        "offsets": offsets[:, nodes], "n_mc": observed_shape[0], "settings": settings,
+        "responses": responses,
+        "ideal_divergence": ideal_divergence,
+        "raw_variance": raw,
+        "variance": variance,
+        "sigma_t": sigma_t,
+        "offsets": offsets[:, nodes],
+        "n_mc": observed_shape[0],
+        "settings": settings,
         "metadata": {
-            "method": "timing-calibrate", "source_file": str(source),
+            "method": "timing-calibrate",
+            "source_file": str(source),
             "created_utc": datetime.now(timezone.utc).isoformat(),
-            "code_version": __version__, "git_commit": _git_commit(), "schema_version": "1",
+            "code_version": __version__,
+            "git_commit": _git_commit(),
+            "schema_version": "1",
             "generation_config_yaml": metadata["config_yaml"],
-            "analysis_config_yaml": config.get("_analysis_config_yaml", yaml.safe_dump(dict(config))),
+            "analysis_config_yaml": config.get(
+                "_analysis_config_yaml", yaml.safe_dump(dict(config))
+            ),
             "analysis_config_path": config.get("_analysis_config_path", ""),
-            "sigma_t_s": sigma_t, "sigma_d_floor_nT_per_km": floor,
+            "sigma_t_s": sigma_t,
+            "sigma_d_floor_nT_per_km": floor,
             "use_ideal_divergence": settings["use_ideal_divergence"],
-            "chi2_target": ("measured_minus_ideal" if settings["use_ideal_divergence"]
-                            else "absolute_divergence"),
+            "chi2_target": (
+                "measured_minus_ideal"
+                if settings["use_ideal_divergence"]
+                else "absolute_divergence"
+            ),
             "normalized_divergence_rms_target": "absolute_divergence",
             "sign_convention": "measured=B_ideal(t+tau); corrected=B_measured(t+c); recovered_tau=-c",
-            "hub_id": "H", "shared_ideal_applies_to_all_mc": True,
+            "hub_id": "H",
+            "shared_ideal_applies_to_all_mc": True,
             "covariance": "SVD of augmented design via QR; no residual variance rescaling",
             "comparison": "before/after use identical comparison_valid rows; fit uses fit_valid",
             "settings": settings,
             "polyhedron_filter": {
                 **settings["polyhedron_filter"],
-                "candidate_count": candidate_count, "retained_count": len(selected),
+                "candidate_count": candidate_count,
+                "retained_count": len(selected),
                 "condition_number_convention": "first sample for static relative geometry; "
-                                               "median over analysis time otherwise",
+                "median over analysis time otherwise",
             },
         },
     }
@@ -490,13 +568,15 @@ def compute_timing_calibration(input_path: str | Path, config: Mapping[str, Any]
         result["noise"] = noise
         result["metadata"].update(
             divergence_normalization="instrument_noise",
-            sigma_B_nT=noise["sigma_B_nT"], schema_version="2",
+            sigma_B_nT=noise["sigma_B_nT"],
+            schema_version="2",
         )
         result["metadata"].pop("sigma_d_floor_nT_per_km")
     if projection is not None:
         result["projection"] = projection
         result["metadata"].update(
-            schema_version="2", calibration_method=settings["calibration_method"],
+            schema_version="2",
+            calibration_method=settings["calibration_method"],
             sigma_B_nT=settings["sigma_B_nT"],
             chi2_target=settings["calibration_method"],
             residual_space="common scalar whitening: B / sigma_B_nT",
@@ -517,17 +597,30 @@ def _realizations(result: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
                 from hs_observatory.analysis.timing_affine import calibrate_affine_realization
 
                 yield calibrate_affine_realization(
-                    result["time"], result["positions"], handle["observed/B"][mc],
-                    result["node_indices"], result["sigma_t"], result["projection"],
-                    result["settings"]["calibration_method"], result["settings"]["sigma_B_nT"],
+                    result["time"],
+                    result["positions"],
+                    handle["observed/B"][mc],
+                    result["node_indices"],
+                    result["sigma_t"],
+                    result["projection"],
+                    result["settings"]["calibration_method"],
+                    result["settings"]["sigma_B_nT"],
                 )
                 continue
             yield calibrate_realization(
-                result["time"], result["positions"], handle["observed/B"][mc],
-                list(result["selected"].values()), result["responses"], result["node_indices"],
-                result["variance"], result["sigma_t"],
-                ideal_divergence=(result["ideal_divergence"]
-                                  if result["settings"]["use_ideal_divergence"] else None),
+                result["time"],
+                result["positions"],
+                handle["observed/B"][mc],
+                list(result["selected"].values()),
+                result["responses"],
+                result["node_indices"],
+                result["variance"],
+                result["sigma_t"],
+                ideal_divergence=(
+                    result["ideal_divergence"]
+                    if result["settings"]["use_ideal_divergence"]
+                    else None
+                ),
             )
 
 
@@ -546,8 +639,13 @@ def _store(
 
 
 def _store_mc(
-    group: h5py.Group, name: str, value: Any, mc: int, count: int,
-    settings: Mapping[str, Any], units: str = "1",
+    group: h5py.Group,
+    name: str,
+    value: Any,
+    mc: int,
+    count: int,
+    settings: Mapping[str, Any],
+    units: str = "1",
 ) -> None:
     array = np.asarray(value)
     if name not in group:
@@ -558,7 +656,9 @@ def _store_mc(
             options["compression"] = settings["compression"]
             if settings["compression"] == "gzip":
                 options["compression_opts"] = settings["compression_level"]
-        dataset = group.create_dataset(name, shape=(count, *array.shape), dtype=array.dtype, **options)
+        dataset = group.create_dataset(
+            name, shape=(count, *array.shape), dtype=array.dtype, **options
+        )
         dataset.attrs["units"] = units
     group[name][mc] = array
 
@@ -579,9 +679,10 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
         metadata.attrs["complete"] = False
         _store(handle.create_group("time"), "analysis_time", result["time"], settings, "s")
         spacecraft = handle.create_group("spacecraft")
-        for name, values in (("id", result["spacecraft_ids"]), ("node_id", [
-            result["spacecraft_ids"][i] for i in result["node_indices"]
-        ])):
+        for name, values in (
+            ("id", result["spacecraft_ids"]),
+            ("node_id", [result["spacecraft_ids"][i] for i in result["node_indices"]]),
+        ):
             spacecraft.create_dataset(name, data=np.asarray(values, dtype=h5py.string_dtype()))
         _store(spacecraft, "node_indices", result["node_indices"], settings)
         _store(spacecraft, "positions", result["positions"], settings, "km")
@@ -595,14 +696,24 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
             group.attrs["number_of_spacecraft"] = len(indices)
             _store(group, "condition_number", result["condition_numbers"][name], settings)
             _store(group, "spacecraft_indices", indices, settings)
-            group.create_dataset("spacecraft_ids", data=np.asarray(
-                [result["spacecraft_ids"][i] for i in indices], dtype=h5py.string_dtype()))
-            _store(group, "ideal_divergence", result["ideal_divergence"][:, column], settings, "nT/km")
-            for key, values in (("sigma_d_squared_raw", result["raw_variance"]),
-                                ("sigma_d_squared", result["variance"])):
+            group.create_dataset(
+                "spacecraft_ids",
+                data=np.asarray(
+                    [result["spacecraft_ids"][i] for i in indices], dtype=h5py.string_dtype()
+                ),
+            )
+            _store(
+                group, "ideal_divergence", result["ideal_divergence"][:, column], settings, "nT/km"
+            )
+            for key, values in (
+                ("sigma_d_squared_raw", result["raw_variance"]),
+                ("sigma_d_squared", result["variance"]),
+            ):
                 _store(group, key, values[..., column], settings, "(nT/km)^2")
             if "noise" in result:
-                _store(group, "sigma_d", np.sqrt(result["variance"][..., column]), settings, "nT/km")
+                _store(
+                    group, "sigma_d", np.sqrt(result["variance"][..., column]), settings, "nT/km"
+                )
         if "noise" in result:
             from hs_observatory.analysis.timing_noise import write_noise
 
@@ -619,74 +730,145 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
             quadratic = components == ("quadratic",)
             projection.attrs.update(
                 axes="geometry sample, measurement component, residual coordinate",
-                static_geometry=len(result["projection"][
-                    "quadratic_basis" if quadratic else "df_basis"]) == 1,
+                static_geometry=len(
+                    result["projection"]["quadratic_basis" if quadratic else "df_basis"]
+                )
+                == 1,
             )
             if quadratic:
-                projection.attrs.update(quadratic_design_rank=26, quadratic_residual_rank=1,
-                                        quadratic_condition_number_max=
-                                        settings["quadratic_condition_number_max"])
+                projection.attrs.update(
+                    quadratic_design_rank=26,
+                    quadratic_residual_rank=1,
+                    quadratic_condition_number_max=settings["quadratic_condition_number_max"],
+                )
             else:
-                projection.attrs.update(affine_rank=12, df_rank=11, non_affine_rank=15,
-                                        divergence_rank=1, df_residual_rank=16)
+                projection.attrs.update(
+                    affine_rank=12,
+                    df_rank=11,
+                    non_affine_rank=15,
+                    divergence_rank=1,
+                    df_residual_rank=16,
+                )
             for key, value in result["projection"].items():
                 _store(projection, key, value, settings)
             for component in components:
-                _store(projection, f"ideal_{component}_residual",
-                       project_field(result["projection"][f"{component}_basis"], result["ideal_B"]),
-                       settings, "nT")
+                _store(
+                    projection,
+                    f"ideal_{component}_residual",
+                    project_field(result["projection"][f"{component}_basis"], result["ideal_B"]),
+                    settings,
+                    "nT",
+                )
         timing = handle.create_group("timing")
         _store(timing, "injected_offset_s", result["offsets"], settings, "s")
         diagnostics = handle.create_group("diagnostics")
         for mc, realization in enumerate(_realizations(result)):
             for key in ("correction_s", "recovered_offset_s", "covariance_s2"):
-                _store_mc(timing, key, realization[key], mc, result["n_mc"], settings,
-                          "s^2" if key == "covariance_s2" else "s")
-            _store_mc(timing, "recovery_error_s",
-                      realization["recovered_offset_s"] - result["offsets"][mc],
-                      mc, result["n_mc"], settings, "s")
+                _store_mc(
+                    timing,
+                    key,
+                    realization[key],
+                    mc,
+                    result["n_mc"],
+                    settings,
+                    "s^2" if key == "covariance_s2" else "s",
+                )
+            _store_mc(
+                timing,
+                "recovery_error_s",
+                realization["recovered_offset_s"] - result["offsets"][mc],
+                mc,
+                result["n_mc"],
+                settings,
+                "s",
+            )
             if "projection_residuals" in realization:
                 for key, value in realization["projection_residuals"].items():
-                    _store_mc(projection, key, value, mc, result["n_mc"], settings,
-                              "nT" if "residual" in key else "1")
-            for name, key, units in (("measured", "measured_B", "nT"),
-                                     ("corrected", "corrected_B", "nT"),
-                                     ("corrected_valid", "corrected_B_valid", "1")):
+                    _store_mc(
+                        projection,
+                        key,
+                        value,
+                        mc,
+                        result["n_mc"],
+                        settings,
+                        "nT" if "residual" in key else "1",
+                    )
+            for name, key, units in (
+                ("measured", "measured_B", "nT"),
+                ("corrected", "corrected_B", "nT"),
+                ("corrected_valid", "corrected_B_valid", "1"),
+            ):
                 _store_mc(fields, name, realization[key], mc, result["n_mc"], settings, units)
             for column, name in enumerate(names):
                 group = configurations[name]
-                for key in ("measured_divergence", "corrected_divergence", "fit_valid", "comparison_valid"):
+                for key in (
+                    "measured_divergence",
+                    "corrected_divergence",
+                    "fit_valid",
+                    "comparison_valid",
+                ):
                     units = "nT/km" if "divergence" in key else "1"
-                    _store_mc(group, key, realization[key][:, column], mc, result["n_mc"], settings, units)
+                    _store_mc(
+                        group, key, realization[key][:, column], mc, result["n_mc"], settings, units
+                    )
                 for label in ("before", "after"):
-                    _store_mc(group, f"normalized_divergence_rms_{label}",
-                              realization[f"polyhedron_rms_{label}"][column], mc,
-                              result["n_mc"], settings)
+                    _store_mc(
+                        group,
+                        f"normalized_divergence_rms_{label}",
+                        realization[f"polyhedron_rms_{label}"][column],
+                        mc,
+                        result["n_mc"],
+                        settings,
+                    )
             for key, value in realization.items():
                 if key in {"jacobian", "weighted_jacobian"}:
                     subgroup = diagnostics.require_group(key)
                     for diagnostic, item in value.items():
-                        units = ("1/s" if key == "weighted_jacobian" else
-                                 "nT/s" if "projection" in result else "nT/(km s)")
-                        _store_mc(subgroup, diagnostic, item, mc, result["n_mc"], settings,
-                                  units if diagnostic == "singular_values" else "1")
+                        units = (
+                            "1/s"
+                            if key == "weighted_jacobian"
+                            else "nT/s"
+                            if "projection" in result
+                            else "nT/(km s)"
+                        )
+                        _store_mc(
+                            subgroup,
+                            diagnostic,
+                            item,
+                            mc,
+                            result["n_mc"],
+                            settings,
+                            units if diagnostic == "singular_values" else "1",
+                        )
                 elif np.isscalar(value) or key == "augmented_singular_values":
-                    _store_mc(diagnostics, key, value, mc, result["n_mc"], settings,
-                              "1/s" if key == "augmented_singular_values" else "1")
+                    _store_mc(
+                        diagnostics,
+                        key,
+                        value,
+                        mc,
+                        result["n_mc"],
+                        settings,
+                        "1/s" if key == "augmented_singular_values" else "1",
+                    )
             if realization["chi2_increased"]:
-                warnings.warn(f"MC {mc}: resampled corrected chi-square exceeds baseline", stacklevel=2)
+                warnings.warn(
+                    f"MC {mc}: resampled corrected chi-square exceeds baseline", stacklevel=2
+                )
             if (mc + 1) % max(1, result["n_mc"] // 10) == 0:
                 print(f"Timing-calibration MC progress: {mc + 1}/{result['n_mc']}", flush=True)
         summary = handle.create_group("mc_summary")
         recovered = timing["recovered_offset_s"][...]
         error = recovered - result["offsets"]
-        for name, values in (("mean_recovered_offset_s", recovered.mean(axis=0)),
-                             ("bias_s", error.mean(axis=0)),
-                             ("rmse_s", np.sqrt(np.mean(error**2, axis=0))),
-                             ("std_recovered_offset_s", recovered.std(axis=0))):
+        for name, values in (
+            ("mean_recovered_offset_s", recovered.mean(axis=0)),
+            ("bias_s", error.mean(axis=0)),
+            ("rmse_s", np.sqrt(np.mean(error**2, axis=0))),
+            ("std_recovered_offset_s", recovered.std(axis=0)),
+        ):
             _store(summary, name, values, settings, "s")
-        rms_key = ("normalized_residual_rms" if "projection" in result
-                   else "normalized_divergence_rms")
+        rms_key = (
+            "normalized_residual_rms" if "projection" in result else "normalized_divergence_rms"
+        )
         before = diagnostics[f"{rms_key}_before"][...]
         after = diagnostics[f"{rms_key}_after"][...]
         reduction = np.full_like(before, np.nan)
@@ -694,8 +876,12 @@ def write_timing_calibration_product(result: Mapping[str, Any], output_path: str
         _store(summary, "fractional_rms_reduction", reduction, settings)
         _store(summary, "percentiles", [25.0, 50.0, 75.0], settings, "%")
         finite = reduction[np.isfinite(reduction)]
-        _store(summary, "fractional_rms_reduction_percentiles",
-               np.percentile(finite, [25, 50, 75]) if finite.size else np.full(3, np.nan), settings)
+        _store(
+            summary,
+            "fractional_rms_reduction_percentiles",
+            np.percentile(finite, [25, 50, 75]) if finite.size else np.full(3, np.nan),
+            settings,
+        )
         for key in ("chi2_before", "chi2_after"):
             summary[key] = diagnostics[key]  # Full empirical distributions, without duplication.
         metadata.attrs["complete"] = True
@@ -735,8 +921,13 @@ def _plot_time_mask(
 
 
 def plot_timing_calibration_product(
-    product_path: str | Path, output_path: str | Path, *, mc_index: int = 0, dpi: int = 300,
-    start_time_s: float | None = None, stop_time_s: float | None = None,
+    product_path: str | Path,
+    output_path: str | Path,
+    *,
+    mc_index: int = 0,
+    dpi: int = 300,
+    start_time_s: float | None = None,
+    stop_time_s: float | None = None,
 ) -> Path:
     """Plot a compact diagnostic figure using only the saved analysis product."""
 
@@ -745,8 +936,14 @@ def plot_timing_calibration_product(
     if is_projection:
         from hs_observatory.analysis.timing_affine import plot_affine_product
 
-        return plot_affine_product(product_path, output_path, mc_index=mc_index, dpi=dpi,
-                                   start_time_s=start_time_s, stop_time_s=stop_time_s)
+        return plot_affine_product(
+            product_path,
+            output_path,
+            mc_index=mc_index,
+            dpi=dpi,
+            start_time_s=start_time_s,
+            stop_time_s=stop_time_s,
+        )
 
     import matplotlib.pyplot as plt
 
@@ -774,18 +971,28 @@ def plot_timing_calibration_product(
         examples = []
         for name in selected:
             group = configurations[name]
-            examples.append((
-                ", ".join(group["spacecraft_ids"].asstr()[...]),
-                float(np.median(np.sqrt(group["sigma_d_squared"][()]))),
-                [group["ideal_divergence"][...][time_mask],
-                 group["measured_divergence"][mc_index][time_mask],
-                 group["corrected_divergence"][mc_index][time_mask]],
-            ))
+            examples.append(
+                (
+                    ", ".join(group["spacecraft_ids"].asstr()[...]),
+                    float(np.median(np.sqrt(group["sigma_d_squared"][()]))),
+                    [
+                        group["ideal_divergence"][...][time_mask],
+                        group["measured_divergence"][mc_index][time_mask],
+                        group["corrected_divergence"][mc_index][time_mask],
+                    ],
+                )
+            )
     fig, axes = plt.subplots(4, 2, figsize=(12, 13), constrained_layout=True)
     ax = axes[0, 0]
     for column, name in enumerate(ids):
-        ax.scatter(injected[:, column], recovered[:, column], s=12, alpha=0.65,
-                   color=SPACECRAFT_COLORS.get(name), label=name)
+        ax.scatter(
+            injected[:, column],
+            recovered[:, column],
+            s=12,
+            alpha=0.65,
+            color=SPACECRAFT_COLORS.get(name),
+            label=name,
+        )
     bounds = [min(injected.min(), recovered.min()), max(injected.max(), recovered.max())]
     ax.plot(bounds, bounds, "k--", linewidth=1)
     ax.set(xlabel="Injected offset [ms]", ylabel="Recovered offset [ms]")
@@ -801,17 +1008,23 @@ def plot_timing_calibration_product(
     axes[1, 1].plot(np.arange(1, 9), singular, "o-")
     if np.any(singular > 0):
         axes[1, 1].set_yscale("log")
-    axes[1, 1].set(xlabel="Singular-value index", ylabel="Weighted Jacobian singular value [1/s]",
-                   title=f"MC {mc_index}")
+    axes[1, 1].set(
+        xlabel="Singular-value index",
+        ylabel="Weighted Jacobian singular value [1/s]",
+        title=f"MC {mc_index}",
+    )
     for ax, (members, sigma, curves) in zip(axes[2:].flat, examples):
         for label, curve in zip(("Ideal", "Measured", "Corrected"), curves):
             ax.plot(time, curve, linewidth=0.9, label=label)
-        ax.set(xlabel="Time [s]", ylabel="Divergence [nT/km]",
-               title=f"{members}\nσd = {sigma:.3g} nT/km; MC {mc_index}")
+        ax.set(
+            xlabel="Time [s]",
+            ylabel="Divergence [nT/km]",
+            title=f"{members}\nσd = {sigma:.3g} nT/km; MC {mc_index}",
+        )
         ax.legend(fontsize=8)
         if len(time) > 1:
             ax.set_xlim(time[0], time[-1])
-    for ax in list(axes[2:].flat)[len(examples):]:
+    for ax in list(axes[2:].flat)[len(examples) :]:
         ax.set_visible(False)
     for ax in axes.flat:
         if ax.get_visible():
@@ -862,8 +1075,13 @@ def plot_timing_calibration_timeseries(
             "Shifted": fields["corrected"][mc_index][time_mask][:, nodes],
         }
 
-    labels = {"x": r"$B_x$", "y": r"$B_y$", "z": r"$B_z$",
-              "magnitude": r"$|B|$", "all": r"$B_x, B_y, B_z$"}
+    labels = {
+        "x": r"$B_x$",
+        "y": r"$B_y$",
+        "z": r"$B_z$",
+        "magnitude": r"$|B|$",
+        "all": r"$B_x, B_y, B_z$",
+    }
     styles = {"Ideal": "-", "Measured": ":", "Shifted": "--"}
     colors = {"Ideal": "black", "Measured": "tab:orange", "Shifted": "tab:blue"}
     fig, axes = plt.subplots(4, 2, figsize=(14, 12), sharex=True, constrained_layout=True)
@@ -874,13 +1092,28 @@ def plot_timing_calibration_timeseries(
             if component == "all":
                 component_colors = ("tab:blue", "tab:orange", "tab:green")
                 for index, (axis, color) in enumerate(zip("xyz", component_colors)):
-                    ax.plot(time, values[:, node, index], color=color,
-                            linestyle=styles[label], linewidth=1.1, label=f"{label} B{axis}")
+                    ax.plot(
+                        time,
+                        values[:, node, index],
+                        color=color,
+                        linestyle=styles[label],
+                        linewidth=1.1,
+                        label=f"{label} B{axis}",
+                    )
             else:
-                series = (np.linalg.norm(values[:, node], axis=-1) if component == "magnitude"
-                          else values[:, node, "xyz".index(component)])
-                ax.plot(time, series, color=colors[label], linestyle=styles[label],
-                        linewidth=1.1, label=label)
+                series = (
+                    np.linalg.norm(values[:, node], axis=-1)
+                    if component == "magnitude"
+                    else values[:, node, "xyz".index(component)]
+                )
+                ax.plot(
+                    time,
+                    series,
+                    color=colors[label],
+                    linestyle=styles[label],
+                    linewidth=1.1,
+                    label=label,
+                )
         ax.set_title(name, color=SPACECRAFT_COLORS[name])
         ax.set_ylabel(f"{labels[component]} [nT]")
         ax.grid(alpha=0.2)

@@ -87,9 +87,7 @@ def pdf_to_cdf(pdf: np.ndarray, bins: np.ndarray) -> np.ndarray:
     return np.cumsum(normalized * widths)
 
 
-def wasserstein_from_binned_pdfs(
-    pdf_a: np.ndarray, pdf_b: np.ndarray, bins: np.ndarray
-) -> float:
+def wasserstein_from_binned_pdfs(pdf_a: np.ndarray, pdf_b: np.ndarray, bins: np.ndarray) -> float:
     """Approximate one-dimensional W1 from shared binned-PDF CDFs."""
 
     first = np.asarray(pdf_a, dtype=float)
@@ -119,9 +117,7 @@ def geometric_mean_normalized_rayleigh_pdf_on_bins(
     values = np.asarray(bins, dtype=float)
     n_pdf = values.size - 1 if bins_are_edges else values.size
     centers, widths = _bin_geometry(values, n_pdf)
-    edges = np.concatenate(
-        ([centers[0] - 0.5 * widths[0]], centers + 0.5 * widths)
-    )
+    edges = np.concatenate(([centers[0] - 0.5 * widths[0]], centers + 0.5 * widths))
     positive_edges = np.maximum(edges, 0.0)
     rate = np.exp(-np.euler_gamma)
     cdf = 1.0 - np.exp(-rate * positive_edges**2)
@@ -140,9 +136,7 @@ def rayleigh_normalized_wasserstein(
 
     if denominator_tolerance < 0.0:
         raise ValueError("denominator_tolerance must be non-negative")
-    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(
-        np.asarray(bins, dtype=float)
-    )
+    rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(np.asarray(bins, dtype=float))
     denominator = wasserstein_from_binned_pdfs(rayleigh, pdf_true, bins)
     if denominator <= denominator_tolerance:
         warnings.warn(
@@ -335,10 +329,14 @@ def compute_increment_pdf_wasserstein_diagnostics(
             messages,
         )
         reference = replacement
-    if selected_values and not np.allclose(selected_values, selected_values[0], rtol=1e-6, atol=1e-6):
+    if selected_values and not np.allclose(
+        selected_values, selected_values[0], rtol=1e-6, atol=1e-6
+    ):
         _warn(
             "Selected lag grids differ across cases; nearest lags were selected independently: "
-            + ", ".join(f"{case}={entry['selected_lag_km']:.6g} km" for case, entry in cases.items()),
+            + ", ".join(
+                f"{case}={entry['selected_lag_km']:.6g} km" for case, entry in cases.items()
+            ),
             messages,
         )
     return {
@@ -439,9 +437,7 @@ def plot_increment_pdf_wasserstein_publication(
             figsize=(16.3, 5.2),
             gridspec_kw={"width_ratios": [1.45, 1.2, 1.0]},
         )
-        figure.subplots_adjust(
-            left=0.055, right=0.985, bottom=0.16, top=0.88, wspace=0.32
-        )
+        figure.subplots_adjust(left=0.055, right=0.985, bottom=0.16, top=0.88, wspace=0.32)
     else:
         figure, (pdf_axis, distance_axis) = plt.subplots(
             1,
@@ -450,9 +446,7 @@ def plot_increment_pdf_wasserstein_publication(
             gridspec_kw={"width_ratios": [1.45, 1.0]},
         )
         difference_axis = None
-        figure.subplots_adjust(
-            left=0.08, right=0.98, bottom=0.16, top=0.88, wspace=0.34
-        )
+        figure.subplots_adjust(left=0.08, right=0.98, bottom=0.16, top=0.88, wspace=0.34)
     colors = plt.cm.tab10(np.linspace(0.0, 0.9, max(1, len(loaded))))
     color_by_case = {case: colors[index] for index, case in enumerate(loaded)}
 
@@ -473,7 +467,9 @@ def plot_increment_pdf_wasserstein_publication(
         label="normalized Rayleigh",
         zorder=0,
     )
-    pdf_axis.plot(x, truth, color="black", linestyle="-", linewidth=2.3, label="sampled truth", zorder=5)
+    pdf_axis.plot(
+        x, truth, color="black", linestyle="-", linewidth=2.3, label="sampled truth", zorder=5
+    )
 
     for case, product in loaded.items():
         entry = diagnostics["cases"][case]
@@ -488,14 +484,25 @@ def plot_increment_pdf_wasserstein_publication(
         if emphasized or show_individual_bands:
             selected = np.isfinite(lower) & np.isfinite(upper) & (upper > 0.0)
             pdf_axis.fill_between(
-                product["x_centers"], lower, upper, where=selected, color=color,
-                alpha=0.22 if emphasized else 0.09, linewidth=0, zorder=1,
+                product["x_centers"],
+                lower,
+                upper,
+                where=selected,
+                color=color,
+                alpha=0.22 if emphasized else 0.09,
+                linewidth=0,
+                zorder=1,
             )
         selected = np.isfinite(median) & (median > 0.0)
         pdf_axis.plot(
-            product["x_centers"][selected], median[selected], color=color,
-            linestyle="--" if emphasized else "-", linewidth=2.2 if emphasized else 1.15,
-            alpha=1.0 if emphasized else 0.82, label=entry["label"], zorder=4 if emphasized else 2,
+            product["x_centers"][selected],
+            median[selected],
+            color=color,
+            linestyle="--" if emphasized else "-",
+            linewidth=2.2 if emphasized else 1.15,
+            alpha=1.0 if emphasized else 0.82,
+            label=entry["label"],
+            zorder=4 if emphasized else 2,
         )
         if difference_axis is not None:
             case_truth = product["truth_density"][index]
@@ -560,9 +567,15 @@ def plot_increment_pdf_wasserstein_publication(
             )
             continue
         distance_axis.errorbar(
-            median, position, xerr=[[median - lower], [upper - median]], fmt="o",
-            color=color_by_case[case], markersize=7 if emphasized else 5,
-            elinewidth=2.2 if emphasized else 1.4, capsize=3, zorder=3,
+            median,
+            position,
+            xerr=[[median - lower], [upper - median]],
+            fmt="o",
+            color=color_by_case[case],
+            markersize=7 if emphasized else 5,
+            elinewidth=2.2 if emphasized else 1.4,
+            capsize=3,
+            zorder=3,
         )
     if wasserstein_x_max is None or wasserstein_x_max >= 1.0:
         distance_axis.axvline(1.0, color="0.35", linestyle="--", linewidth=1.2, zorder=0)
@@ -571,9 +584,7 @@ def plot_increment_pdf_wasserstein_publication(
     distance_axis.invert_yaxis()
     distance_axis.set_xlabel(r"$D_W^R$")
     distance_panel_label = "c" if show_difference_panel else "b"
-    distance_axis.set_title(
-        f"({distance_panel_label}) PDF mismatch by error case"
-    )
+    distance_axis.set_title(f"({distance_panel_label}) PDF mismatch by error case")
     distance_axis.set_xscale("log")
     if wasserstein_x_max is not None:
         distance_axis.set_xlim(wasserstein_x_min, wasserstein_x_max)
@@ -584,9 +595,7 @@ def plot_increment_pdf_wasserstein_publication(
     output = Path(output_path)
     if append_lag_to_filename:
         filename_lag = lag_label.replace(",", "")
-        output = output.with_name(
-            f"{output.stem}-lambda-{filename_lag}{output.suffix}"
-        )
+        output = output.with_name(f"{output.stem}-lambda-{filename_lag}{output.suffix}")
     output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output, dpi=dpi, bbox_inches="tight")
     plt.close(figure)
@@ -624,25 +633,35 @@ def write_increment_pdf_wasserstein_csv(
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     columns = [
-        "case", "label", "lag_km", "DW_R_p25", "DW_R_p50", "DW_R_p75",
-        "DW_R_median_pdf", "rayleigh_truth_w1", "n_mc_valid", "n_mc_total",
+        "case",
+        "label",
+        "lag_km",
+        "DW_R_p25",
+        "DW_R_p50",
+        "DW_R_p75",
+        "DW_R_median_pdf",
+        "rayleigh_truth_w1",
+        "n_mc_valid",
+        "n_mc_total",
     ]
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns)
         writer.writeheader()
         for case, entry in diagnostics["cases"].items():
-            writer.writerow({
-                "case": case,
-                "label": entry["label"],
-                "lag_km": entry["selected_lag_km"],
-                "DW_R_p25": entry["DW_R_p25"],
-                "DW_R_p50": entry["DW_R_p50"],
-                "DW_R_p75": entry["DW_R_p75"],
-                "DW_R_median_pdf": entry["DW_R_median_pdf"],
-                "rayleigh_truth_w1": entry["rayleigh_truth_w1"],
-                "n_mc_valid": entry["n_mc_valid"],
-                "n_mc_total": entry["n_mc_total"],
-            })
+            writer.writerow(
+                {
+                    "case": case,
+                    "label": entry["label"],
+                    "lag_km": entry["selected_lag_km"],
+                    "DW_R_p25": entry["DW_R_p25"],
+                    "DW_R_p50": entry["DW_R_p50"],
+                    "DW_R_p75": entry["DW_R_p75"],
+                    "DW_R_median_pdf": entry["DW_R_median_pdf"],
+                    "rayleigh_truth_w1": entry["rayleigh_truth_w1"],
+                    "n_mc_valid": entry["n_mc_valid"],
+                    "n_mc_total": entry["n_mc_total"],
+                }
+            )
     return output
 
 

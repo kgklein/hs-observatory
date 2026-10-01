@@ -149,9 +149,7 @@ def pearson_correlation_1d(
             np.nan,
         )
 
-    denominator = np.sqrt(
-        float(np.sum(x_centered**2)) * float(np.sum(y_centered**2))
-    )
+    denominator = np.sqrt(float(np.sum(x_centered**2)) * float(np.sum(y_centered**2)))
     pearson_r = float(np.sum(x_centered * y_centered) / denominator)
     pearson_r = float(np.clip(pearson_r, -1.0, 1.0))
     normalized_rmse = float(np.sqrt(np.mean((y_used - x_used) ** 2)) / x_std)
@@ -210,12 +208,10 @@ def _component_correlation(
         output_float["pearson_r"][component] = result.pearson_r
         valid_count[component] = result.valid_count
         output_float["valid_fraction"][component] = result.valid_fraction
-        output_float["reference_standard_deviation"][
-            component
-        ] = result.reference_standard_deviation
-        output_float["estimate_standard_deviation"][
-            component
-        ] = result.estimate_standard_deviation
+        output_float["reference_standard_deviation"][component] = (
+            result.reference_standard_deviation
+        )
+        output_float["estimate_standard_deviation"][component] = result.estimate_standard_deviation
         valid_output[component] = result.valid
         invalid_reason[component] = result.reason
         output_float["normalized_rmse"][component] = result.normalized_rmse
@@ -351,11 +347,7 @@ def select_correlation_configurations(
     if len(n4) < 2:
         raise ValueError("correlation selection requires two saved N=4 configurations")
     intermediate_multi = sorted(
-        (
-            item
-            for item in items
-            if 4 < int(item[1]["number_of_spacecraft"]) < 9
-        ),
+        (item for item in items if 4 < int(item[1]["number_of_spacecraft"]) < 9),
         key=key,
     )
     if not intermediate_multi:
@@ -486,12 +478,8 @@ def _realization_comparison(
             label = f"q{int(percentile):02d}" if percentile.is_integer() else f"q{percentile:g}"
             result[quantity][f"pearson_r_{label}"] = values
         valid_realizations = np.isfinite(pearson_r)
-        result[quantity]["valid_realization_count"] = np.count_nonzero(
-            valid_realizations, axis=0
-        )
-        result[quantity]["valid_realization_fraction"] = np.mean(
-            valid_realizations, axis=0
-        )
+        result[quantity]["valid_realization_count"] = np.count_nonzero(valid_realizations, axis=0)
+        result[quantity]["valid_realization_fraction"] = np.mean(valid_realizations, axis=0)
 
     result["curl_magnitude"] = {}
     for metric in (
@@ -570,20 +558,15 @@ def compute_magnetic_gradient_correlations(
     shape_metric = str(selection.get("shape_metric", "chi"))
     scale_warning = float(selection.get("max_pair_scale_ratio_warning", 2.0))
     minimum_valid_samples = int(correlation.get("minimum_valid_samples", 30))
-    minimum_standard_deviation = float(
-        correlation.get("minimum_standard_deviation", 1.0e-15)
-    )
+    minimum_standard_deviation = float(correlation.get("minimum_standard_deviation", 1.0e-15))
     percentiles = tuple(
-        float(value)
-        for value in correlation.get("measured_percentiles", (5.0, 50.0, 95.0))
+        float(value) for value in correlation.get("measured_percentiles", (5.0, 50.0, 95.0))
     )
     if len(percentiles) != 3 or not 0 <= percentiles[0] < percentiles[1] < percentiles[2] <= 100:
         raise ValueError("measured_percentiles must contain three increasing values")
     if percentiles[1] != 50.0:
         raise ValueError("the middle measured percentile must be 50")
-    compute_measured_vs_coarse = bool(
-        correlation.get("compute_measured_vs_coarse", True)
-    )
+    compute_measured_vs_coarse = bool(correlation.get("compute_measured_vs_coarse", True))
 
     source = Path(gradient_product_path)
     with h5py.File(source, "r") as handle:
@@ -591,9 +574,7 @@ def compute_magnetic_gradient_correlations(
             name: _configuration_metadata(name, group)
             for name, group in handle["configurations"].items()
         }
-        selected = select_correlation_configurations(
-            available_metadata, shape_metric=shape_metric
-        )
+        selected = select_correlation_configurations(available_metadata, shape_metric=shape_metric)
         first_size = selected["most_regular_n4"]["characteristic_size"]
         second_size = selected["second_regular_n4"]["characteristic_size"]
         pair_scale_ratio = max(first_size, second_size) / min(first_size, second_size)
@@ -620,21 +601,11 @@ def compute_magnetic_gradient_correlations(
             coarse_curl = np.asarray(group["truth/coarse_curl"], dtype=float)
             ideal_curl = np.asarray(group["true_estimate/curl"], dtype=float)
             measured_curl = np.asarray(group["measured/curl"], dtype=float)
-            coarse_curl_magnitude = np.asarray(
-                group["truth/coarse_curl_magnitude"], dtype=float
-            )
-            ideal_curl_magnitude = np.asarray(
-                group["true_estimate/curl_magnitude"], dtype=float
-            )
-            measured_curl_magnitude = np.asarray(
-                group["measured/curl_magnitude"], dtype=float
-            )
-            coarse_valid = global_valid & np.asarray(
-                group["truth/coarse_valid"], dtype=bool
-            )
-            ideal_valid = global_valid & np.asarray(
-                group["true_estimate/valid"], dtype=bool
-            )
+            coarse_curl_magnitude = np.asarray(group["truth/coarse_curl_magnitude"], dtype=float)
+            ideal_curl_magnitude = np.asarray(group["true_estimate/curl_magnitude"], dtype=float)
+            measured_curl_magnitude = np.asarray(group["measured/curl_magnitude"], dtype=float)
+            coarse_valid = global_valid & np.asarray(group["truth/coarse_valid"], dtype=bool)
+            ideal_valid = global_valid & np.asarray(group["true_estimate/valid"], dtype=bool)
             measured_valid = np.asarray(group["measured/valid"], dtype=bool)
             measured_valid &= global_valid[None, :]
 
@@ -684,9 +655,7 @@ def compute_magnetic_gradient_correlations(
             configurations[selection_name] = product
 
         diagnostic_options = dict(options.get("diagnostic", {}))
-        diagnostic_selection = str(
-            diagnostic_options.get("configuration", "most_regular_n4")
-        )
+        diagnostic_selection = str(diagnostic_options.get("configuration", "most_regular_n4"))
         if diagnostic_selection not in configurations:
             raise ValueError(f"unknown diagnostic configuration {diagnostic_selection!r}")
         component = tuple(int(value) for value in diagnostic_options.get("component", (0, 0)))
@@ -703,19 +672,11 @@ def compute_magnetic_gradient_correlations(
             "component": np.asarray(component, dtype=np.int8),
             "realization": realization,
             "time": time,
-            "coarse": np.asarray(group["truth/coarse_gradient"])[
-                :, component[0], component[1]
-            ],
-            "ideal": np.asarray(group["true_estimate/gradient"])[
-                :, component[0], component[1]
-            ],
-            "measured": np.asarray(measured_dataset)[
-                realization, :, component[0], component[1]
-            ],
-            "coarse_valid": global_valid
-            & np.asarray(group["truth/coarse_valid"], dtype=bool),
-            "ideal_valid": global_valid
-            & np.asarray(group["true_estimate/valid"], dtype=bool),
+            "coarse": np.asarray(group["truth/coarse_gradient"])[:, component[0], component[1]],
+            "ideal": np.asarray(group["true_estimate/gradient"])[:, component[0], component[1]],
+            "measured": np.asarray(measured_dataset)[realization, :, component[0], component[1]],
+            "coarse_valid": global_valid & np.asarray(group["truth/coarse_valid"], dtype=bool),
+            "ideal_valid": global_valid & np.asarray(group["true_estimate/valid"], dtype=bool),
             "measured_valid": global_valid
             & np.asarray(group["measured/valid"][realization], dtype=bool),
         }
@@ -737,9 +698,9 @@ def compute_magnetic_gradient_correlations(
             "minimum_standard_deviation": minimum_standard_deviation,
             "max_pair_scale_ratio_warning": scale_warning,
             "n_time": len(time),
-            "n_mc": next(
-                iter(configurations.values())
-            )["measured_vs_ideal"]["gradient"]["pearson_r"].shape[0],
+            "n_mc": next(iter(configurations.values()))["measured_vs_ideal"]["gradient"][
+                "pearson_r"
+            ].shape[0],
             "warnings": warning_messages,
         },
         "configurations": configurations,
@@ -777,16 +738,23 @@ def _write_nested(
         else:
             attrs: dict[str, Any] = {}
             if name in {"pearson_r", "pearson_r_lower", "pearson_r_median", "pearson_r_upper"}:
-                attrs = {"definition": "Pearson product-moment correlation coefficient", "units": "1"}
+                attrs = {
+                    "definition": "Pearson product-moment correlation coefficient",
+                    "units": "1",
+                }
             elif name == "normalized_rmse":
                 attrs = {"definition": "RMSE(estimate-reference) / std(reference)", "units": "1"}
             elif name == "regression_slope":
-                attrs = {"definition": "slope b in estimate = intercept + b * reference", "units": "1"}
+                attrs = {
+                    "definition": "slope b in estimate = intercept + b * reference",
+                    "units": "1",
+                }
             elif name == "regression_intercept":
-                attrs = {"definition": "intercept a in estimate = a + slope * reference", "units": "nT/km"}
-            _create_dataset(
-                group, name, value, compression=compression, attrs=attrs
-            )
+                attrs = {
+                    "definition": "intercept a in estimate = a + slope * reference",
+                    "units": "nT/km",
+                }
+            _create_dataset(group, name, value, compression=compression, attrs=attrs)
 
 
 def write_magnetic_gradient_correlation_product(
@@ -803,9 +771,7 @@ def write_magnetic_gradient_correlation_product(
         metadata_group = handle.create_group("metadata")
         for name, value in result["metadata"].items():
             if name == "measured_percentiles":
-                _create_dataset(
-                    metadata_group, name, value, compression=None, attrs={"units": "%"}
-                )
+                _create_dataset(metadata_group, name, value, compression=None, attrs={"units": "%"})
             elif name == "warnings":
                 _create_dataset(metadata_group, name, value, compression=None)
             else:
@@ -848,9 +814,7 @@ def write_magnetic_gradient_correlation_product(
             attrs = {"units": "s"} if name == "time" else {}
             if name in {"coarse", "ideal", "measured"}:
                 attrs = {"units": "nT/km"}
-            _create_dataset(
-                diagnostic, name, value, compression=compression, attrs=attrs
-            )
+            _create_dataset(diagnostic, name, value, compression=compression, attrs=attrs)
     return output
 
 
@@ -883,9 +847,7 @@ def print_correlation_summary(result: Mapping[str, Any]) -> None:
     invalid_measured = 0
     zero_variance = 0
     for product in result["configurations"].values():
-        invalid_ideal += int(
-            np.count_nonzero(~product["ideal_vs_coarse"]["gradient"]["valid"])
-        )
+        invalid_ideal += int(np.count_nonzero(~product["ideal_vs_coarse"]["gradient"]["valid"]))
         invalid_measured += int(
             np.count_nonzero(~product["measured_vs_ideal"]["gradient"]["valid"])
         )
@@ -934,10 +896,7 @@ def print_correlation_summary(result: Mapping[str, Any]) -> None:
 
 
 def _decode_strings(dataset: h5py.Dataset) -> list[str]:
-    return [
-        item.decode("utf-8") if isinstance(item, bytes) else str(item)
-        for item in dataset[...]
-    ]
+    return [item.decode("utf-8") if isinstance(item, bytes) else str(item) for item in dataset[...]]
 
 
 def _configuration_title(group: h5py.Group, selection_name: str) -> str:
@@ -974,12 +933,8 @@ def _draw_heatmap_grid(
     for column, selection_name in enumerate(CORRELATION_SELECTION_ORDER):
         group = handle[f"configurations/{selection_name}"]
         matrices = (
-            np.asarray(
-                group["ideal_vs_coarse/gradient/pearson_r"], dtype=float
-            ),
-            np.asarray(
-                group["measured_vs_ideal/gradient/pearson_r_median"], dtype=float
-            ),
+            np.asarray(group["ideal_vs_coarse/gradient/pearson_r"], dtype=float),
+            np.asarray(group["measured_vs_ideal/gradient/pearson_r_median"], dtype=float),
         )
         for row, matrix in enumerate(matrices):
             axis = axes[row, column]
@@ -1065,9 +1020,7 @@ def plot_magnetic_gradient_measured_vs_ideal_heatmaps(
     with h5py.File(product_path, "r") as handle:
         figure = plt.figure(figsize=(13.8, 7.2))
         grid = figure.add_gridspec(2, 4, height_ratios=(1.0, 0.72))
-        axes = np.asarray(
-            [[figure.add_subplot(grid[0, column]) for column in range(4)]]
-        )
+        axes = np.asarray([[figure.add_subplot(grid[0, column]) for column in range(4)]])
         summary_axis = figure.add_subplot(grid[1, :])
         colormap = plt.get_cmap("coolwarm_r").copy()
         colormap.set_bad("#dedede")
@@ -1075,9 +1028,7 @@ def plot_magnetic_gradient_measured_vs_ideal_heatmaps(
         image = None
         for column, selection_name in enumerate(CORRELATION_SELECTION_ORDER):
             group = handle[f"configurations/{selection_name}"]
-            matrix = np.asarray(
-                group["measured_vs_ideal/gradient/pearson_r_median"], dtype=float
-            )
+            matrix = np.asarray(group["measured_vs_ideal/gradient/pearson_r_median"], dtype=float)
             axis = axes[0, column]
             image = axis.imshow(
                 np.ma.masked_invalid(matrix),
@@ -1087,9 +1038,7 @@ def plot_magnetic_gradient_measured_vs_ideal_heatmaps(
                 aspect="equal",
             )
             axis.set_title(_configuration_title(group, selection_name), fontsize=9)
-            axis.set_xticks(
-                range(3), (r"$\partial_x$", r"$\partial_y$", r"$\partial_z$")
-            )
+            axis.set_xticks(range(3), (r"$\partial_x$", r"$\partial_y$", r"$\partial_z$"))
             axis.set_yticks(range(3), (r"$B_x$", r"$B_y$", r"$B_z$"))
             if column:
                 axis.tick_params(labelleft=False)
@@ -1114,9 +1063,7 @@ def plot_magnetic_gradient_measured_vs_ideal_heatmaps(
             colorbar_axis = figure.add_axes((0.925, 0.53, 0.018, 0.34))
             colorbar = figure.colorbar(image, cax=colorbar_axis)
             colorbar.set_label(r"Pearson correlation, $\mathcal{R}$")
-        _draw_summary_panel(
-            summary_axis, handle, include_ideal=False, y_limits=(0.7, 1.0)
-        )
+        _draw_summary_panel(summary_axis, handle, include_ideal=False, y_limits=(0.7, 1.0))
         figure.suptitle(
             "Measured-versus-Ideal Magnetic-Gradient Component Recovery\n"
             r"$\mathrm{median}_m\left(\mathcal{R}^{M,T,(m)}_{jk}\right)$, "
@@ -1160,9 +1107,7 @@ def _draw_summary_panel(
         measured_upper = []
         for selection_name in CORRELATION_SELECTION_ORDER:
             group = handle[f"configurations/{selection_name}"]
-            ideal_values.append(
-                float(group[f"ideal_vs_coarse/summary/{name}"][()])
-            )
+            ideal_values.append(float(group[f"ideal_vs_coarse/summary/{name}"][()]))
             summary = group[f"measured_vs_ideal/summary/{name}"]
             measured_median.append(float(summary["median"][()]))
             measured_lower.append(float(summary["lower"][()]))
@@ -1243,10 +1188,7 @@ def plot_magnetic_gradient_correlation_combined(
         figure = plt.figure(figsize=(14.0, 10.2))
         grid = figure.add_gridspec(3, 4, height_ratios=(1.0, 1.0, 0.85))
         axes = np.asarray(
-            [
-                [figure.add_subplot(grid[row, column]) for column in range(4)]
-                for row in range(2)
-            ]
+            [[figure.add_subplot(grid[row, column]) for column in range(4)] for row in range(2)]
         )
         summary_axis = figure.add_subplot(grid[2, :])
         _draw_heatmap_grid(
@@ -1348,12 +1290,8 @@ def plot_magnetic_gradient_correlation_diagnostic(
         ideal_slope = float(ideal_metrics["regression_slope"][index])
         ideal_intercept = float(ideal_metrics["regression_intercept"][index])
         measured_r = float(measured_metrics["pearson_r"][(realization, *index)])
-        measured_slope = float(
-            measured_metrics["regression_slope"][(realization, *index)]
-        )
-        measured_intercept = float(
-            measured_metrics["regression_intercept"][(realization, *index)]
-        )
+        measured_slope = float(measured_metrics["regression_slope"][(realization, *index)])
+        measured_intercept = float(measured_metrics["regression_intercept"][(realization, *index)])
 
     figure = plt.figure(figsize=(11.5, 7.8))
     grid = figure.add_gridspec(2, 2)
@@ -1436,13 +1374,9 @@ def plot_magnetic_gradient_correlations_from_config(
         )
     measured_heatmaps = dict(plot.get("measured_vs_ideal_heatmaps", {}))
     if measured_heatmaps.get("enabled", False):
-        outputs[
-            "measured_vs_ideal_heatmaps"
-        ] = plot_magnetic_gradient_measured_vs_ideal_heatmaps(
+        outputs["measured_vs_ideal_heatmaps"] = plot_magnetic_gradient_measured_vs_ideal_heatmaps(
             product_path,
-            measured_heatmaps.get(
-                "output", "gradient_correlation_measured_vs_ideal_heatmaps.png"
-            ),
+            measured_heatmaps.get("output", "gradient_correlation_measured_vs_ideal_heatmaps.png"),
             dpi=int(measured_heatmaps.get("dpi", 300)),
         )
     summary = dict(plot.get("summary", {}))

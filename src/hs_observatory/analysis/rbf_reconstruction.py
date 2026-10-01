@@ -275,7 +275,7 @@ def choose_sigma_rippa(
         "method": method,
         "best_index": best_index,
     }
-    
+
 
 def explicit_loocv_cost(
     positions: np.ndarray,
@@ -294,9 +294,7 @@ def explicit_loocv_cost(
     for index in range(sample_positions.shape[0]):
         keep = np.ones(sample_positions.shape[0], dtype=bool)
         keep[index] = False
-        matrix = _multiquadric_matrix(
-            sample_positions[keep], sample_positions[keep], float(sigma)
-        )
+        matrix = _multiquadric_matrix(sample_positions[keep], sample_positions[keep], float(sigma))
         if smoothing:
             matrix = matrix + float(smoothing) * np.eye(matrix.shape[0])
         coefficients, _solver = _solve_coefficients(matrix, sample_B[keep])
@@ -490,12 +488,8 @@ def compute_sigma_cache_key(
         "sigma_initial": None if sigma_initial is None else float(sigma_initial),
         "sigma_min": None if sigma_min is None else float(sigma_min),
         "sigma_max": None if sigma_max is None else float(sigma_max),
-        "sigma_subsample_max": (
-            None if sigma_subsample_max is None else int(sigma_subsample_max)
-        ),
-        "sigma_random_seed": (
-            None if sigma_random_seed is None else int(sigma_random_seed)
-        ),
+        "sigma_subsample_max": (None if sigma_subsample_max is None else int(sigma_subsample_max)),
+        "sigma_random_seed": (None if sigma_random_seed is None else int(sigma_random_seed)),
         "rippa_mode": str(rippa_mode).lower(),
         "rippa_components": _normalized_components(rippa_components),
         "coordinate_units": str(coordinate_units),
@@ -503,9 +497,7 @@ def compute_sigma_cache_key(
         "hash_tolerance": hash_tolerance,
     }
     settings_hash = _hash_json(settings)
-    combined_hash = _hash_json(
-        {"position_hash": position_hash, "settings_hash": settings_hash}
-    )
+    combined_hash = _hash_json({"position_hash": position_hash, "settings_hash": settings_hash})
     return {
         "cache_key": combined_hash,
         "position_hash": position_hash,
@@ -743,10 +735,7 @@ def get_or_compute_sigma(
             "cache_path": None if cache_path is None else str(cache_path),
         }
     )
-    print(
-        "Computed RBF sigma "
-        f"{selection['selected_sigma']} (key {selection['cache_key'][:12]})"
-    )
+    print(f"Computed RBF sigma {selection['selected_sigma']} (key {selection['cache_key'][:12]})")
     if cache_path is not None and save_cache:
         cache_metadata = dict(metadata or {})
         cache_metadata["sample_positions"] = positions
@@ -1005,9 +994,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     if data_group in {"mc", "monte_carlo", "measurement", "measurements", "noisy"}:
         data_group = "observed"
     if data_group not in {"truth", "observed"}:
-        raise ValueError(
-            "rbf_reconstruction.data_group must be 'truth' or 'observed'"
-        )
+        raise ValueError("rbf_reconstruction.data_group must be 'truth' or 'observed'")
     mc_index_config = config.get("mc_index", 0)
     if data_group == "observed" and str(mc_index_config).lower() == "all":
         raise NotImplementedError(
@@ -1038,8 +1025,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         auto_sigma = sigma_selection != "manual"
     if sigma_selection not in {"manual", "rippa_grid", "explicit_loocv"}:
         raise ValueError(
-            "rbf_reconstruction.sigma_selection must be manual, rippa_grid, "
-            "or explicit_loocv"
+            "rbf_reconstruction.sigma_selection must be manual, rippa_grid, or explicit_loocv"
         )
     sigma_grid = str(config.get("sigma_grid", "log")).lower()
     if sigma_grid not in {"log", "linear"}:
@@ -1051,29 +1037,23 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     error_cmap = str(plot.get("error_cmap", "imola"))
     if magnitude_cmap not in MAGNITUDE_CMAP_NAMES:
         raise ValueError(
-            "rbf_reconstruction.plot.magnitude_cmap must be one of "
-            f"{sorted(MAGNITUDE_CMAP_NAMES)}"
+            f"rbf_reconstruction.plot.magnitude_cmap must be one of {sorted(MAGNITUDE_CMAP_NAMES)}"
         )
     if error_cmap not in ERROR_CMAP_NAMES:
         raise ValueError(
-            "rbf_reconstruction.plot.error_cmap must be one of "
-            f"{sorted(ERROR_CMAP_NAMES)}"
+            f"rbf_reconstruction.plot.error_cmap must be one of {sorted(ERROR_CMAP_NAMES)}"
         )
     reference_magnitude_cmap = str(
         reference_plot.get("magnitude_cmap", reference_plot.get("cmap", magnitude_cmap))
     )
     reference_error_cmap = str(reference_plot.get("error_cmap", error_cmap))
-    broeren_error_cmap = str(
-        broeren_error_plot.get("error_cmap", error_cmap)
-    )
+    broeren_error_cmap = str(broeren_error_plot.get("error_cmap", error_cmap))
     component_mode = str(plot.get("component_mode", "raw"))
     background_mode = str(plot.get("background_mode", "metadata"))
     background_vector = plot.get("background_vector")
     reference_component_mode = str(reference_plot.get("component_mode", component_mode))
     reference_background_mode = str(reference_plot.get("background_mode", background_mode))
-    reference_background_vector = reference_plot.get(
-        "background_vector", background_vector
-    )
+    reference_background_vector = reference_plot.get("background_vector", background_vector)
     if reference_magnitude_cmap not in MAGNITUDE_CMAP_NAMES:
         raise ValueError(
             "rbf_reconstruction.reference.plot.magnitude_cmap must be one of "
@@ -1090,39 +1070,29 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             f"{sorted(ERROR_CMAP_NAMES)}"
         )
     if component_mode not in COMPONENT_MODES:
-        raise ValueError(
-            "rbf_reconstruction.plot.component_mode must be raw or delta"
-        )
+        raise ValueError("rbf_reconstruction.plot.component_mode must be raw or delta")
     if reference_component_mode not in COMPONENT_MODES:
-        raise ValueError(
-            "rbf_reconstruction.reference.plot.component_mode must be raw or delta"
-        )
+        raise ValueError("rbf_reconstruction.reference.plot.component_mode must be raw or delta")
     if background_mode not in BACKGROUND_MODES:
         raise ValueError(
-            "rbf_reconstruction.plot.background_mode must be one of "
-            f"{sorted(BACKGROUND_MODES)}"
+            f"rbf_reconstruction.plot.background_mode must be one of {sorted(BACKGROUND_MODES)}"
         )
     if reference_background_mode not in BACKGROUND_MODES:
         raise ValueError(
             "rbf_reconstruction.reference.plot.background_mode must be one of "
             f"{sorted(BACKGROUND_MODES)}"
         )
-    background_vector = (
-        None if background_vector is None else _vector_from_value(background_vector)
-    )
+    background_vector = None if background_vector is None else _vector_from_value(background_vector)
     reference_background_vector = (
         None
         if reference_background_vector is None
         else _vector_from_value(reference_background_vector)
     )
     if background_mode == "user" and background_vector is None:
-        raise ValueError(
-            "rbf_reconstruction.plot.background_mode: user requires background_vector"
-        )
+        raise ValueError("rbf_reconstruction.plot.background_mode: user requires background_vector")
     if reference_background_mode == "user" and reference_background_vector is None:
         raise ValueError(
-            "rbf_reconstruction.reference.plot.background_mode: user requires "
-            "background_vector"
+            "rbf_reconstruction.reference.plot.background_mode: user requires background_vector"
         )
     return {
         "data_group": data_group,
@@ -1229,9 +1199,7 @@ def _read_magnetic_measurements(
         magnetic_source = np.asarray(handle[dataset_path], dtype=float)
         if data_group == "observed":
             if magnetic_source.ndim != 4 or magnetic_source.shape[-1] != 3:
-                raise ValueError(
-                    "/observed/B must have shape (mc, time, spacecraft, 3)"
-                )
+                raise ValueError("/observed/B must have shape (mc, time, spacecraft, 3)")
             index = 0 if mc_index is None else int(mc_index)
             if not 0 <= index < magnetic_source.shape[0]:
                 raise IndexError(
@@ -1261,8 +1229,7 @@ def _read_magnetic_measurements(
         raise ValueError("/spacecraft/r/B must have shape (spacecraft, time, 3)")
     if magnetic.shape[:2] != (positions.shape[1], positions.shape[0]):
         raise ValueError(
-            f"/{data_group}/B shape must match /spacecraft/r/B as "
-            "(time, spacecraft, 3)"
+            f"/{data_group}/B shape must match /spacecraft/r/B as (time, spacecraft, 3)"
         )
     if magnetic.shape[0] != times.size:
         raise ValueError(f"/{data_group}/B time axis length does not match /time/B")
@@ -1329,9 +1296,7 @@ def collect_samples_for_window(
     time_stride = int(time_stride)
     if time_stride < 1:
         raise ValueError("time_stride must be at least 1")
-    center_time, mask = _window_mask(
-        time_axis, t0=t0, t0_index=t0_index, delta_t=delta_t
-    )
+    center_time, mask = _window_mask(time_axis, t0=t0, t0_index=t0_index, delta_t=delta_t)
     window_indices = np.nonzero(mask)[0][::time_stride]
     if window_indices.size == 0:
         raise ValueError("Selected RBF time window contains no samples after time_stride")
@@ -1388,9 +1353,7 @@ def compute_rbf_reconstruction(input_path: str | Path, config: dict[str, Any]) -
         n_transverse=settings["grid"]["n_transverse"],
         axial_padding=settings["grid"]["axial_padding"],
         radius_padding=settings["grid"]["radius_padding"],
-        require_all_spacecraft_coverage=settings["grid"][
-            "require_all_spacecraft_coverage"
-        ],
+        require_all_spacecraft_coverage=settings["grid"]["require_all_spacecraft_coverage"],
     )
     sigma_candidates = None
     sigma_selection = None
@@ -1420,16 +1383,8 @@ def compute_rbf_reconstruction(input_path: str | Path, config: dict[str, Any]) -
         else:
             sigma_candidates = _sigma_candidates_from_config(
                 sample_positions,
-                sigma_min=(
-                    None
-                    if settings["sigma_min"] is None
-                    else float(settings["sigma_min"])
-                ),
-                sigma_max=(
-                    None
-                    if settings["sigma_max"] is None
-                    else float(settings["sigma_max"])
-                ),
+                sigma_min=(None if settings["sigma_min"] is None else float(settings["sigma_min"])),
+                sigma_max=(None if settings["sigma_max"] is None else float(settings["sigma_max"])),
                 sigma_num=settings["sigma_num"],
                 sigma_grid=settings["sigma_grid"],
             )
@@ -1451,16 +1406,8 @@ def compute_rbf_reconstruction(input_path: str | Path, config: dict[str, Any]) -
             smoothing=settings["smoothing"],
             sigma_selection=settings["sigma_selection"],
             sigma_initial=settings["sigma_initial"],
-            sigma_min=(
-                None
-                if settings["sigma_min"] is None
-                else float(settings["sigma_min"])
-            ),
-            sigma_max=(
-                None
-                if settings["sigma_max"] is None
-                else float(settings["sigma_max"])
-            ),
+            sigma_min=(None if settings["sigma_min"] is None else float(settings["sigma_min"])),
+            sigma_max=(None if settings["sigma_max"] is None else float(settings["sigma_max"])),
             sigma_subsample_max=(
                 None
                 if settings["sigma_subsample_max"] is None
@@ -1584,11 +1531,7 @@ def write_rbf_reconstruction(result: dict[str, Any], output_path: str | Path) ->
     settings = result["settings"]
     metadata = {
         **result["metadata"],
-        **{
-            key: value
-            for key, value in result["rbf_metadata"].items()
-            if key != "sigma_selection"
-        },
+        **{key: value for key, value in result["rbf_metadata"].items() if key != "sigma_selection"},
         "auto_sigma": settings["auto_sigma"],
         "sigma_grid": settings["sigma_grid"],
         "sigma_selection": settings["sigma_selection"],
@@ -1613,23 +1556,17 @@ def write_rbf_reconstruction(result: dict[str, Any], output_path: str | Path) ->
         _write_metadata(handle.create_group("metadata"), metadata)
         samples = handle.create_group("samples")
         samples.create_dataset("position", data=result["sample_positions"], compression="gzip")
-        samples.create_dataset(
-            "trajectory", data=result["sample_trajectory"], compression="gzip"
-        )
+        samples.create_dataset("trajectory", data=result["sample_trajectory"], compression="gzip")
         samples.create_dataset("B", data=result["sample_B"], compression="gzip")
         samples.create_dataset("time", data=result["selected_times"])
         samples.create_dataset(
             "spacecraft_id",
-            data=np.asarray(
-                result["spacecraft_ids"], dtype=h5py.string_dtype("utf-8")
-            ),
+            data=np.asarray(result["spacecraft_ids"], dtype=h5py.string_dtype("utf-8")),
         )
 
         grid_group = handle.create_group("grid")
         grid_group.create_dataset("points", data=grid.points, compression="gzip")
-        grid_group.create_dataset(
-            "full_points", data=grid.full_points, compression="gzip"
-        )
+        grid_group.create_dataset("full_points", data=grid.full_points, compression="gzip")
         grid_group.create_dataset(
             "dimensions",
             data=np.asarray((grid.n_axial, grid.n_transverse, grid.n_transverse)),
@@ -1652,9 +1589,7 @@ def write_rbf_reconstruction(result: dict[str, Any], output_path: str | Path) ->
         )
 
         reconstruction = handle.create_group("reconstruction")
-        reconstruction.create_dataset(
-            "B", data=result["B_reconstructed"], compression="gzip"
-        )
+        reconstruction.create_dataset("B", data=result["B_reconstructed"], compression="gzip")
         reconstruction.create_dataset(
             "Bmag",
             data=np.linalg.norm(result["B_reconstructed"], axis=-1),
@@ -1667,18 +1602,12 @@ def write_rbf_reconstruction(result: dict[str, Any], output_path: str | Path) ->
         rbf_group.attrs["sigma"] = result["rbf_metadata"]["sigma"]
         rbf_group.attrs["sigma_source"] = result["rbf_metadata"]["sigma_source"]
         if result["rbf_metadata"].get("sigma_cache_key") is not None:
-            rbf_group.attrs["sigma_cache_key"] = result["rbf_metadata"][
-                "sigma_cache_key"
-            ]
+            rbf_group.attrs["sigma_cache_key"] = result["rbf_metadata"]["sigma_cache_key"]
         if result["rbf_metadata"].get("sigma_cache_path") is not None:
-            rbf_group.attrs["sigma_cache_path"] = result["rbf_metadata"][
-                "sigma_cache_path"
-            ]
+            rbf_group.attrs["sigma_cache_path"] = result["rbf_metadata"]["sigma_cache_path"]
         rbf_group.attrs["kernel"] = result["rbf_metadata"]["kernel"]
         rbf_group.attrs["smoothing"] = result["rbf_metadata"]["smoothing"]
-        rbf_group.attrs["condition_number"] = result["rbf_metadata"][
-            "condition_number"
-        ]
+        rbf_group.attrs["condition_number"] = result["rbf_metadata"]["condition_number"]
         rbf_group.attrs["solver"] = result["rbf_metadata"]["solver"]
         handle.attrs["t0"] = result["t0"]
         handle.attrs["delta_t"] = result["delta_t"]
@@ -1904,9 +1833,7 @@ def _read_background_field(
         raise ValueError("background-mode actual-volume-mean requires /validation/B_actual")
     if source == "reconstructed-volume-mean":
         if "reconstruction/B" not in handle:
-            raise ValueError(
-                "background-mode reconstructed-volume-mean requires /reconstruction/B"
-            )
+            raise ValueError("background-mode reconstructed-volume-mean requires /reconstruction/B")
         return _valid_field_mean(np.asarray(handle["reconstruction/B"], dtype=float), mask)
     raise ValueError(f"Unsupported background mean source {source!r}")
 
@@ -1934,12 +1861,12 @@ def determine_background_field(
         if vector is not None:
             return vector, {"source": "metadata"}
         if "validation/B_actual" in h5_file or "validation/B_true" in h5_file:
-            return _read_background_field(
-                h5_file, "actual-volume-mean", mask
-            ), {"source": "actual-volume-mean"}
-        return _read_background_field(
-            h5_file, "reconstructed-volume-mean", mask
-        ), {"source": "reconstructed-volume-mean"}
+            return _read_background_field(h5_file, "actual-volume-mean", mask), {
+                "source": "actual-volume-mean"
+            }
+        return _read_background_field(h5_file, "reconstructed-volume-mean", mask), {
+            "source": "reconstructed-volume-mean"
+        }
     return _read_background_field(h5_file, mode, mask), {"source": mode}
 
 
@@ -1980,12 +1907,8 @@ def _magnetic_products(
     component_mode: str = "raw",
     background: np.ndarray | None = None,
 ) -> list[tuple[str, np.ndarray]]:
-    component_values = compute_component_plot_field(
-        values, B0=background, mode=component_mode
-    )
-    component_labels = (
-        ("δBx", "δBy", "δBz") if component_mode == "delta" else ("Bx", "By", "Bz")
-    )
+    component_values = compute_component_plot_field(values, B0=background, mode=component_mode)
+    component_labels = ("δBx", "δBy", "δBz") if component_mode == "delta" else ("Bx", "By", "Bz")
     return [
         (f"{component_labels[0]} {label}", component_values[:, 0]),
         (f"{component_labels[1]} {label}", component_values[:, 1]),
@@ -2166,12 +2089,8 @@ def _plot_slice_products(
         float(transverse_values[-1]),
     ]
     for row, (label, values) in enumerate(products):
-        axial_image = _slice_to_image(
-            values, mask, n_axial, n_transverse, mode="axial"
-        )
-        transverse_image = _slice_to_image(
-            values, mask, n_axial, n_transverse, mode="transverse"
-        )
+        axial_image = _slice_to_image(values, mask, n_axial, n_transverse, mode="axial")
+        transverse_image = _slice_to_image(values, mask, n_axial, n_transverse, mode="transverse")
         product_kind = _plot_product_kind(label)
         image_kwargs: dict[str, Any] = {}
         if product_kind == "component":
@@ -2293,9 +2212,7 @@ def _simulation_reference_B(
         grid_points = np.asarray(reconstruction_handle["grid/points"], dtype=float)
     with h5py.File(observation_path, "r") as observation_handle:
         if "spacecraft/r/B" in observation_handle:
-            spacecraft_position = np.asarray(
-                observation_handle["spacecraft/r/B"], dtype=float
-            )
+            spacecraft_position = np.asarray(observation_handle["spacecraft/r/B"], dtype=float)
         elif "spacecraft/r" in observation_handle:
             spacecraft_position = np.asarray(observation_handle["spacecraft/r"], dtype=float)
         else:
@@ -2344,16 +2261,10 @@ def add_simulation_reference_to_rbf_output(
         validation = handle.create_group("validation")
         validation.create_dataset("B_actual", data=actual, compression="gzip")
         validation.create_dataset("Bmag_actual", data=actual_mag, compression="gzip")
-        validation.create_dataset(
-            "component_error", data=component_error, compression="gzip"
-        )
+        validation.create_dataset("component_error", data=component_error, compression="gzip")
         validation.create_dataset("error_mag", data=error_mag, compression="gzip")
-        validation.create_dataset(
-            "error_magnitude", data=error_mag, compression="gzip"
-        )
-        validation.create_dataset(
-            "error_percent", data=error_percent, compression="gzip"
-        )
+        validation.create_dataset("error_magnitude", data=error_mag, compression="gzip")
+        validation.create_dataset("error_percent", data=error_percent, compression="gzip")
         validation.create_dataset(
             "error_percent_capped", data=error_percent_capped, compression="gzip"
         )
@@ -2413,16 +2324,13 @@ def plot_rbf_broeren_uv_error(
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
     colormap = get_scientific_cmap(error_cmap, fallback="inferno")
 
     with h5py.File(hdf5_path, "r") as handle:
         if "validation" not in handle:
             raise ValueError("Broeren-style u-v error plot requires validation data")
-        preferred = (
-            "validation/error_percent_capped"
-            if capped
-            else "validation/error_percent"
-        )
+        preferred = "validation/error_percent_capped" if capped else "validation/error_percent"
         fallback = "validation/error_percent"
         if preferred in handle:
             values = np.asarray(handle[preferred], dtype=float)
@@ -2445,9 +2353,7 @@ def plot_rbf_broeren_uv_error(
             np.asarray(handle["grid/basis_vectors"], dtype=float),
         )
 
-    image = _mean_over_axial(
-        values, mask, axial_values.size, transverse_values.size
-    )
+    image = _mean_over_axial(values, mask, axial_values.size, transverse_values.size)
     extent = [
         float(transverse_values[0]),
         float(transverse_values[-1]),
@@ -2557,17 +2463,13 @@ class RBFReconstructionAnalysis(AnalysisMethod):
                     "rbf_reconstruction.reference.generation_config is required "
                     "when reference.enabled is true"
                 )
-            observation_path = reference_settings["observation_path"] or result[
-                "metadata"
-            ]["input_path"]
-            add_simulation_reference_to_rbf_output(
-                output, observation_path, generation_config
+            observation_path = (
+                reference_settings["observation_path"] or result["metadata"]["input_path"]
             )
+            add_simulation_reference_to_rbf_output(output, observation_path, generation_config)
         plot_settings = result["settings"]["plot"]
         if plot_settings["enabled"]:
-            plot_path = Path(
-                plot_settings["path"] or output.with_name(f"{output.stem}.png")
-            )
+            plot_path = Path(plot_settings["path"] or output.with_name(f"{output.stem}.png"))
             plot_rbf_reconstruction(
                 output,
                 plot_path,
@@ -2607,13 +2509,8 @@ class RBFReconstructionAnalysis(AnalysisMethod):
                 error_cmap=broeren_error_plot["error_cmap"],
                 capped=broeren_error_plot["capped"],
             )
-        if (
-            result["settings"]["auto_sigma"]
-            and result["settings"]["rippa_plot"]["enabled"]
-        ):
+        if result["settings"]["auto_sigma"] and result["settings"]["rippa_plot"]["enabled"]:
             rippa_plot = result["settings"]["rippa_plot"]
-            plot_path = Path(
-                rippa_plot["path"] or output.with_name(f"{output.stem}_sigma.png")
-            )
+            plot_path = Path(rippa_plot["path"] or output.with_name(f"{output.stem}_sigma.png"))
             plot_rippa_sigma_selection(output, plot_path, dpi=rippa_plot["dpi"])
         return output

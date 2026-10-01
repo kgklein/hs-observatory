@@ -1,0 +1,30 @@
+input:
+  path: outputs/synthetic_observations.h5
+
+analysis:
+  method: structure_function
+
+output:
+  path: outputs/structure_function.json
+
+structure_function:
+  min_order: 1
+  max_order: 6
+  n_lambda_bins: 20
+  lambda_bins_km: null
+  scale_ranges_km:
+    total: [10.0, 10000.0]
+  min_fit_bins: 3
+  elsasser:
+    velocity: {frame: auto, spacecraft_correction: auto}
+    density_normalization: {method: global_per_spacecraft, species: proton}
+    mean_subtraction: {method: global_per_spacecraft}
+    timebase: {method: slower_of_n_and_v, interpolation: linear}
+  plot:
+    enabled: true
+    path: outputs/structure_function_diagnostic.png
+    data_group: observed
+    field: z_plus
+    member: 0
+    normalized_exponents: false
+    dpi: 150

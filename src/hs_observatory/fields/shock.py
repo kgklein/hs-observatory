@@ -34,12 +34,9 @@ def _fast_speed(
     normal_alfven_squared = float(np.dot(magnetic_field, normal)) ** 2 / (MU0 * rho)
     discriminant = max(
         0.0,
-        (sound_squared + magnetic_squared) ** 2
-        - 4.0 * sound_squared * normal_alfven_squared,
+        (sound_squared + magnetic_squared) ** 2 - 4.0 * sound_squared * normal_alfven_squared,
     )
-    return float(
-        np.sqrt(0.5 * (sound_squared + magnetic_squared + np.sqrt(discriminant)))
-    )
+    return float(np.sqrt(0.5 * (sound_squared + magnetic_squared + np.sqrt(discriminant))))
 
 
 class ShockField(FieldModel):
@@ -156,9 +153,7 @@ class ShockField(FieldModel):
         normal = self.normal
         un1 = float(np.dot(velocity1, normal))
         if un1 <= 0.0:
-            raise ValueError(
-                "upstream normal flow in the shock-rest frame must be positive"
-            )
+            raise ValueError("upstream normal flow in the shock-rest frame must be positive")
         ut1 = velocity1 - un1 * normal
         bn = float(np.dot(magnetic1, normal))
         bt1 = magnetic1 - bn * normal
@@ -347,14 +342,10 @@ class ShockField(FieldModel):
             tangent_momentum = rho * un * ut - bn * bt / MU0
             electric_t = un * bt - bn * ut
             energy = (
-                (
-                    0.5 * rho * np.dot(velocity, velocity)
-                    + self.gamma / (self.gamma - 1.0) * pressure
-                    + np.dot(magnetic, magnetic) / MU0
-                )
-                * un
-                - bn * np.dot(velocity, magnetic) / MU0
-            )
+                0.5 * rho * np.dot(velocity, velocity)
+                + self.gamma / (self.gamma - 1.0) * pressure
+                + np.dot(magnetic, magnetic) / MU0
+            ) * un - bn * np.dot(velocity, magnetic) / MU0
             return mass, normal_momentum, tangent_momentum, electric_t, bn, energy
 
         first = fluxes(rho1, pressure1, velocity1, magnetic1)
@@ -442,9 +433,7 @@ class ShockField(FieldModel):
         return spatial_distance - self.distance_km - propagation
 
     def transition_fraction(self, xi: np.ndarray) -> np.ndarray:
-        return 0.5 * (
-            1.0 + np.tanh(TRANSITION_COEFFICIENT * np.asarray(xi) / self.thickness_km)
-        )
+        return 0.5 * (1.0 + np.tanh(TRANSITION_COEFFICIENT * np.asarray(xi) / self.thickness_km))
 
     def analytic_magnetic_divergence(self, xi: np.ndarray) -> np.ndarray:
         """Return the analytic divergence of the planar interpolated field."""

@@ -205,9 +205,7 @@ def estimate_gradient_least_squares(
     )
 
 
-def gradient_response_coefficients(
-    positions: np.ndarray, **settings: Any
-) -> np.ndarray:
+def gradient_response_coefficients(positions: np.ndarray, **settings: Any) -> np.ndarray:
     """Build reusable linear gradient responses using the existing estimator.
 
     Returns ``(geometry_time, spacecraft, derivative_axis)`` coefficients;
@@ -354,7 +352,7 @@ def align_spacecraft_samples(
                 if left < 0 or right >= n_time:
                     if not allow_extrapolation:
                         continue
-                    left, right = ((0, 1) if target < source_time[0] else (n_time - 2, n_time - 1))
+                    left, right = (0, 1) if target < source_time[0] else (n_time - 2, n_time - 1)
                 width = source_time[right] - source_time[left]
                 if not np.isfinite(width) or width <= 0.0:
                     continue
@@ -363,14 +361,12 @@ def align_spacecraft_samples(
                 magnetic = source_field[left, spacecraft]
                 position = source_positions[spacecraft, left]
             else:
-                magnetic = (
-                    (1.0 - fraction) * source_field[left, spacecraft]
-                    + fraction * source_field[right, spacecraft]
-                )
-                position = (
-                    (1.0 - fraction) * source_positions[spacecraft, left]
-                    + fraction * source_positions[spacecraft, right]
-                )
+                magnetic = (1.0 - fraction) * source_field[
+                    left, spacecraft
+                ] + fraction * source_field[right, spacecraft]
+                position = (1.0 - fraction) * source_positions[
+                    spacecraft, left
+                ] + fraction * source_positions[spacecraft, right]
                 interpolation[target_index, spacecraft] = True
             if not np.all(np.isfinite(magnetic)) or not np.all(np.isfinite(position)):
                 continue
@@ -405,8 +401,7 @@ def periodic_grid_gradient(
     gradient = np.empty((*magnetic.shape[:3], 3, 3), dtype=float)
     for derivative_axis in range(3):
         gradient[..., :, derivative_axis] = (
-            np.roll(magnetic, -1, axis=derivative_axis)
-            - np.roll(magnetic, 1, axis=derivative_axis)
+            np.roll(magnetic, -1, axis=derivative_axis) - np.roll(magnetic, 1, axis=derivative_axis)
         ) / (2.0 * spacing[derivative_axis])
     return gradient
 
@@ -545,9 +540,7 @@ def select_configurations(
             [
                 item
                 for item in candidates
-                if intermediate_l_min_km
-                <= item[1].characteristic_size
-                <= intermediate_l_max_km
+                if intermediate_l_min_km <= item[1].characteristic_size <= intermediate_l_max_km
             ],
             lambda item: (item[1].chi, abs(item[1].characteristic_size - 1000.0), item[0]),
             f"minimum Q with {intermediate_l_min_km:g} <= L <= {intermediate_l_max_km:g} km",
@@ -670,9 +663,7 @@ def _settings(config: Mapping[str, Any]) -> dict[str, Any]:
             "intermediate_l_max_km": float(
                 dict(selection.get("intermediate", {})).get("l_max_km", 1200.0)
             ),
-            "large_l_min_km": float(
-                dict(selection.get("large", {})).get("l_min_km", 1500.0)
-            ),
+            "large_l_min_km": float(dict(selection.get("large", {})).get("l_min_km", 1500.0)),
             "enabled": enabled,
         },
         "truth": {
@@ -903,9 +894,7 @@ def _truth_derived(products: dict[str, np.ndarray], floor_fraction: float) -> fl
     point_curl, point_magnitude, point_divergence = gradient_curl_divergence(
         products["point_gradient"]
     )
-    coarse_ratio, coarse_valid = divergence_curl_ratio(
-        coarse_divergence, coarse_magnitude, floor
-    )
+    coarse_ratio, coarse_valid = divergence_curl_ratio(coarse_divergence, coarse_magnitude, floor)
     point_ratio, point_valid = divergence_curl_ratio(point_divergence, point_magnitude, floor)
     products.update(
         coarse_curl=coarse_curl,
@@ -1005,9 +994,7 @@ def compute_magnetic_gradient_analysis(
     true_positions = np.swapaxes(nominal_positions, 0, 1)
     selected = select_configurations(true_positions[0], **settings["selection"])
     simulation, generation_config = _load_simulation(metadata, settings)
-    magnetic_grid = (
-        np.asarray(simulation.snapshot.B, dtype=float) * simulation.scale_factors["B"]
-    )
+    magnetic_grid = np.asarray(simulation.snapshot.B, dtype=float) * simulation.scale_factors["B"]
     simulation_gradient = periodic_grid_gradient(magnetic_grid, simulation.box_size_km)
     configurations: dict[str, dict[str, Any]] = {}
     truth_metadata: dict[str, Any] = {
@@ -1031,12 +1018,8 @@ def compute_magnetic_gradient_analysis(
         positions = true_positions[:, indices]
         fields = true_field[:, indices]
         geometry = _geometry_series(positions)
-        geometry["pseudoinverse_required"] = (
-            (np.asarray(geometry["rank"]) < 3)
-            | (
-                np.asarray(geometry["condition_number"])
-                > settings["gradient"]["condition_number_max"]
-            )
+        geometry["pseudoinverse_required"] = (np.asarray(geometry["rank"]) < 3) | (
+            np.asarray(geometry["condition_number"]) > settings["gradient"]["condition_number_max"]
         )
         truth = _truth_products(
             simulation,
@@ -1096,8 +1079,7 @@ def compute_magnetic_gradient_analysis(
                     },
                 )
                 synchronization = {
-                    "effective_time": time[:, None]
-                    + time_offset[mc_index, indices][None, :],
+                    "effective_time": time[:, None] + time_offset[mc_index, indices][None, :],
                     "valid": aligned.valid[:, indices],
                     "interpolation_required": aligned.interpolation_required[:, indices],
                     "fractions": aligned.fractions[:, indices],
@@ -1227,12 +1209,8 @@ def _diagnostic_counts(configurations: Mapping[str, Mapping[str, Any]]) -> dict[
         if "measured" in product:
             invalid_geometry += int(np.count_nonzero(~product["measured"]["valid"]))
             pseudoinverse += int(np.count_nonzero(product["measured"]["used_pseudoinverse"]))
-            interpolation_failures += int(
-                np.count_nonzero(~product["synchronization"]["valid"])
-            )
-            small_curl += int(
-                np.count_nonzero(~product["measured"]["divergence_curl_ratio_valid"])
-            )
+            interpolation_failures += int(np.count_nonzero(~product["synchronization"]["valid"]))
+            small_curl += int(np.count_nonzero(~product["measured"]["divergence_curl_ratio_valid"]))
     cells = np.concatenate(cell_counts) if cell_counts else np.asarray([], dtype=int)
     return {
         "invalid_geometry_samples": invalid_geometry,
@@ -1505,14 +1483,10 @@ def _curl_error_decomposition(
             "rerun the analysis with monte_carlo.store_all_realizations: true"
         )
     measured_curl = np.asarray(group["measured/curl"], dtype=float)[:, time_mask, :]
-    measurement_error = np.linalg.norm(
-        measured_curl - ideal_curl[np.newaxis, :, :], axis=-1
-    )
+    measurement_error = np.linalg.norm(measured_curl - ideal_curl[np.newaxis, :, :], axis=-1)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        q25, median, q75 = np.nanpercentile(
-            measurement_error, (25.0, 50.0, 75.0), axis=0
-        )
+        q25, median, q75 = np.nanpercentile(measurement_error, (25.0, 50.0, 75.0), axis=0)
     return {
         "normalization": normalization,
         "finite_scale_error": finite_scale_error / normalization,
@@ -1554,17 +1528,15 @@ def _plot_curl_error_decomposition(
         ideal = group["true_estimate"]
         summary = group.get("mc_summary")
         if summary is None:
-            raise ValueError(
-                "curl-error decomposition requires Monte Carlo summary datasets"
-            )
+            raise ValueError("curl-error decomposition requires Monte Carlo summary datasets")
         indices = np.asarray(group["spacecraft_indices"], dtype=int).tolist()
         ids = [
             value.decode("utf-8") if isinstance(value, bytes) else str(value)
             for value in group["spacecraft_ids"][...]
         ]
-        size = _read_scalar_or_series(
-            group["geometry/characteristic_size"], len(full_time)
-        )[time_mask]
+        size = _read_scalar_or_series(group["geometry/characteristic_size"], len(full_time))[
+            time_mask
+        ]
         chi = _read_scalar_or_series(group["geometry/chi"], len(full_time))[time_mask]
         axes[0, column].set_title(
             f"{category.replace('_', ' ')}\n{ids} / {indices}; N={len(indices)}\n"
@@ -1572,19 +1544,13 @@ def _plot_curl_error_decomposition(
             fontsize=9,
         )
 
-        coarse_magnitude = np.asarray(
-            truth["coarse_curl_magnitude"], dtype=float
-        )[time_mask]
+        coarse_magnitude = np.asarray(truth["coarse_curl_magnitude"], dtype=float)[time_mask]
         ideal_magnitude = np.asarray(ideal["curl_magnitude"], dtype=float)[time_mask]
-        measured_magnitude_q25 = np.asarray(
-            summary["curl_magnitude/q25"], dtype=float
-        )[time_mask]
-        measured_magnitude_median = np.asarray(
-            summary["curl_magnitude/median"], dtype=float
-        )[time_mask]
-        measured_magnitude_q75 = np.asarray(
-            summary["curl_magnitude/q75"], dtype=float
-        )[time_mask]
+        measured_magnitude_q25 = np.asarray(summary["curl_magnitude/q25"], dtype=float)[time_mask]
+        measured_magnitude_median = np.asarray(summary["curl_magnitude/median"], dtype=float)[
+            time_mask
+        ]
+        measured_magnitude_q75 = np.asarray(summary["curl_magnitude/q75"], dtype=float)[time_mask]
         axis = axes[0, column]
         axis.plot(
             time,
@@ -1626,15 +1592,9 @@ def _plot_curl_error_decomposition(
         )
 
         ideal_total_error = np.asarray(ideal["curl_l2_error"], dtype=float)[time_mask]
-        measured_total_q25 = np.asarray(
-            summary["curl_l2_error/q25"], dtype=float
-        )[time_mask]
-        measured_total_median = np.asarray(
-            summary["curl_l2_error/median"], dtype=float
-        )[time_mask]
-        measured_total_q75 = np.asarray(
-            summary["curl_l2_error/q75"], dtype=float
-        )[time_mask]
+        measured_total_q25 = np.asarray(summary["curl_l2_error/q25"], dtype=float)[time_mask]
+        measured_total_median = np.asarray(summary["curl_l2_error/median"], dtype=float)[time_mask]
+        measured_total_q75 = np.asarray(summary["curl_l2_error/q75"], dtype=float)[time_mask]
         axis = axes[1, column]
         axis.plot(
             time,
@@ -1668,12 +1628,8 @@ def _plot_curl_error_decomposition(
         )
 
         decomposition = _curl_error_decomposition(group, time_mask)
-        finite_scale_error = np.asarray(
-            decomposition["finite_scale_error"], dtype=float
-        )
-        measurement_median = np.asarray(
-            decomposition["measurement_error_median"], dtype=float
-        )
+        finite_scale_error = np.asarray(decomposition["finite_scale_error"], dtype=float)
+        measurement_median = np.asarray(decomposition["measurement_error_median"], dtype=float)
         axis = axes[2, column]
         axis.plot(
             time,
@@ -1712,9 +1668,7 @@ def _plot_curl_error_decomposition(
         )
 
     for row, values in enumerate(row_values):
-        finite_parts = [
-            value[np.isfinite(value)] for value in values if np.any(np.isfinite(value))
-        ]
+        finite_parts = [value[np.isfinite(value)] for value in values if np.any(np.isfinite(value))]
         finite = np.concatenate(finite_parts) if finite_parts else np.asarray([])
         if not finite.size:
             continue
@@ -1768,11 +1722,7 @@ def plot_magnetic_gradient_product(
         raise ValueError("start_time_s must be finite")
     if stop_time_s is not None and not np.isfinite(stop_time_s):
         raise ValueError("stop_time_s must be finite")
-    if (
-        start_time_s is not None
-        and stop_time_s is not None
-        and stop_time_s <= start_time_s
-    ):
+    if start_time_s is not None and stop_time_s is not None and stop_time_s <= start_time_s:
         raise ValueError("stop_time_s must be greater than start_time_s")
     with h5py.File(product_path, "r") as handle:
         full_time = np.asarray(handle["time/analysis_time"], dtype=float)
@@ -1788,8 +1738,7 @@ def plot_magnetic_gradient_product(
                 else "empty"
             )
             raise ValueError(
-                "requested time range contains no analysis samples; "
-                f"available range is {available}"
+                f"requested time range contains no analysis samples; available range is {available}"
             )
         time = full_time[time_mask]
         categories = [name for name in CONFIGURATION_ORDER if name in handle["configurations"]]
@@ -1830,12 +1779,10 @@ def plot_magnetic_gradient_product(
                 value.decode("utf-8") if isinstance(value, bytes) else str(value)
                 for value in group["spacecraft_ids"][...]
             ]
-            size = _read_scalar_or_series(
-                group["geometry/characteristic_size"], len(full_time)
-            )[time_mask]
-            chi = _read_scalar_or_series(
-                group["geometry/chi"], len(full_time)
-            )[time_mask]
+            size = _read_scalar_or_series(group["geometry/characteristic_size"], len(full_time))[
+                time_mask
+            ]
+            chi = _read_scalar_or_series(group["geometry/chi"], len(full_time))[time_mask]
             axes[0, column].set_title(
                 f"{category.replace('_', ' ')}\n{ids} / {indices}; N={len(indices)}\n"
                 f"median L={np.nanmedian(size):.3g} km, Q={np.nanmedian(chi):.3g}",
@@ -1882,9 +1829,9 @@ def plot_magnetic_gradient_product(
                         )
                     row_values[row].append(values)
                 if row == 3 and row4 in {"chi", "d_ep"}:
-                    values = _read_scalar_or_series(
-                        group[f"geometry/{row4}"], len(full_time)
-                    )[time_mask]
+                    values = _read_scalar_or_series(group[f"geometry/{row4}"], len(full_time))[
+                        time_mask
+                    ]
                 else:
                     values = np.asarray(true[quantity], dtype=float)[time_mask]
                 if is_vector:
@@ -1909,9 +1856,7 @@ def plot_magnetic_gradient_product(
                 row_scale_values[row].append(values)
                 if summary is not None and quantity in summary:
                     q25 = np.asarray(summary[f"{quantity}/q25"], dtype=float)[time_mask]
-                    median = np.asarray(
-                        summary[f"{quantity}/median"], dtype=float
-                    )[time_mask]
+                    median = np.asarray(summary[f"{quantity}/median"], dtype=float)[time_mask]
                     q75 = np.asarray(summary[f"{quantity}/q75"], dtype=float)[time_mask]
                     if is_vector:
                         for component, color in enumerate(component_colors):

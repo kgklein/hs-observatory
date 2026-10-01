@@ -452,7 +452,14 @@ def compute_increment_pdf_for_points(
     if infer_bounds:
         for left, right in _chunks(n_points, settings):
             values = _pair_values(
-                left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+                left,
+                right,
+                flat_position,
+                flat_plus,
+                flat_minus,
+                flat_B,
+                global_B,
+                settings,
                 calculate_increments=False,
             )
             valid = values["valid_direction"] & np.isfinite(values["lambda"])
@@ -466,12 +473,8 @@ def compute_increment_pdf_for_points(
                 inferred_max = max(inferred_max, float(np.max(selected_lambda)))
         if not np.isfinite(inferred_min) or not np.isfinite(inferred_max):
             raise ValueError("No valid pair separations are available for scale binning")
-    lambda_min = (
-        inferred_min if configured_min in {"auto", None} else float(configured_min)
-    )
-    lambda_max = (
-        inferred_max if configured_max in {"auto", None} else float(configured_max)
-    )
+    lambda_min = inferred_min if configured_min in {"auto", None} else float(configured_min)
+    lambda_max = inferred_max if configured_max in {"auto", None} else float(configured_max)
     if settings["scale_binning"] == "log" and lambda_min <= 0.0:
         raise ValueError("lambda_min must be positive for logarithmic bins")
     if lambda_max < lambda_min:
@@ -498,9 +501,7 @@ def compute_increment_pdf_for_points(
             [int(np.argmin(np.abs(lambda_centers - lag))) for lag in settings["selected_lags_km"]]
         )
         if np.unique(selected_indices).size != selected_indices.size:
-            raise ValueError(
-                "scale_bins.selected_lags_km must match distinct configured lag bins"
-            )
+            raise ValueError("scale_bins.selected_lags_km must match distinct configured lag bins")
         calculated_bin[:] = False
         calculated_bin[selected_indices] = True
     calculated_indices = np.flatnonzero(calculated_bin)
@@ -515,7 +516,14 @@ def compute_increment_pdf_for_points(
     outside_scale_bins = 0
     for left, right in _chunks(n_points, settings):
         values = _pair_values(
-            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+            left,
+            right,
+            flat_position,
+            flat_plus,
+            flat_minus,
+            flat_B,
+            global_B,
+            settings,
             lambda_edges=lambda_edges,
             calculated_bin=calculated_bin,
         )
@@ -593,7 +601,14 @@ def compute_increment_pdf_for_points(
         reservoir_limit = min(settings["max_samples"], 100_000)
         for left, right in _chunks(n_points, settings):
             values = _pair_values(
-                left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+                left,
+                right,
+                flat_position,
+                flat_plus,
+                flat_minus,
+                flat_B,
+                global_B,
+                settings,
                 lambda_edges=lambda_edges,
                 calculated_bin=calculated_bin,
             )
@@ -647,7 +662,14 @@ def compute_increment_pdf_for_points(
     saved_count = 0
     for left, right in _chunks(n_points, settings):
         values = _pair_values(
-            left, right, flat_position, flat_plus, flat_minus, flat_B, global_B, settings,
+            left,
+            right,
+            flat_position,
+            flat_plus,
+            flat_minus,
+            flat_B,
+            global_B,
+            settings,
             lambda_edges=lambda_edges,
             calculated_bin=calculated_bin,
         )
@@ -957,16 +979,16 @@ def _ordered_pdf_cases(
     missing = [p_value for p_value in required if p_value not in normalized]
     if missing:
         raise ValueError(f"results_by_p is missing Malara cases: {missing}")
-    cases = [(p_value, _load_publication_pdf_product(normalized[p_value], field)) for p_value in required]
+    cases = [
+        (p_value, _load_publication_pdf_product(normalized[p_value], field)) for p_value in required
+    ]
     reference_lambda = cases[0][1]["lambda_centers"]
     for p_value, product in cases[1:]:
         centers = product["lambda_centers"]
         if centers.shape != reference_lambda.shape or not np.allclose(
             centers, reference_lambda, rtol=1.0e-10, atol=1.0e-12
         ):
-            raise ValueError(
-                f"lambda-bin grids for p=0.9 and p={p_value:g} are not aligned"
-            )
+            raise ValueError(f"lambda-bin grids for p=0.9 and p={p_value:g} are not aligned")
     return cases
 
 
@@ -993,9 +1015,9 @@ def _publication_lag_indices(
             if panel_count == 3:
                 locations = (1, available_indices.size // 2, available_indices.size - 2)
             else:
-                locations = np.rint(
-                    np.linspace(1, available_indices.size - 2, panel_count)
-                ).astype(int)
+                locations = np.rint(np.linspace(1, available_indices.size - 2, panel_count)).astype(
+                    int
+                )
             indices = available_indices[np.asarray(locations)]
     else:
         requested = np.asarray(selected_lags, dtype=float)
@@ -1053,42 +1075,36 @@ def plot_increment_pdf_publication_row(
         raise ValueError("layout must be '1x3' or '2x2'")
     panel_count = 4 if layout == "2x2" else 3
     cases = _ordered_pdf_cases(results_by_p, quantity)
-    lag_indices, matched_lags = _publication_lag_indices(
-        cases, selected_lags, panel_count
-    )
+    lag_indices, matched_lags = _publication_lag_indices(cases, selected_lags, panel_count)
     if axes is None:
         if layout == "2x2":
-            figure, axes_array = plt.subplots(
-                2, 2, figsize=(11.2, 8.3), sharey=True, squeeze=False
-            )
+            figure, axes_array = plt.subplots(2, 2, figsize=(11.2, 8.3), sharey=True, squeeze=False)
             axes_array = axes_array.reshape(-1)
             figure.subplots_adjust(
-                left=0.08, right=0.99, bottom=0.09, top=0.90,
-                wspace=0.16, hspace=0.36,
+                left=0.08,
+                right=0.99,
+                bottom=0.09,
+                top=0.90,
+                wspace=0.16,
+                hspace=0.36,
             )
         else:
             figure, axes_array = plt.subplots(
                 1, 3, figsize=(13.6, 4.35), sharey=True, squeeze=False
             )
             axes_array = axes_array[0]
-            figure.subplots_adjust(
-                left=0.065, right=0.995, bottom=0.17, top=0.80, wspace=0.16
-            )
+            figure.subplots_adjust(left=0.065, right=0.995, bottom=0.17, top=0.80, wspace=0.16)
     else:
         axes_array = np.asarray(axes, dtype=object).reshape(-1)
         if axes_array.size != panel_count:
-            raise ValueError(
-                f"axes must contain exactly {panel_count} Matplotlib axes"
-            )
+            raise ValueError(f"axes must contain exactly {panel_count} Matplotlib axes")
         figure = axes_array[0].figure
         if any(axis.figure is not figure for axis in axes_array):
             raise ValueError("all supplied axes must belong to the same figure")
 
     for axis, lag_index, lag_km in zip(axes_array, lag_indices, matched_lags):
         rayleigh_x = cases[0][1]["x_centers"]
-        rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(
-            cases[0][1]["x_edges"]
-        )
+        rayleigh = geometric_mean_normalized_rayleigh_pdf_on_bins(cases[0][1]["x_edges"])
         axis.plot(
             rayleigh_x,
             rayleigh,
@@ -1109,18 +1125,33 @@ def plot_increment_pdf_publication_row(
                 )
             band = np.isfinite(lower) & np.isfinite(upper) & (lower > 0.0) & (upper > 0.0)
             axis.fill_between(
-                x, lower, upper, where=band, color=color, alpha=0.14,
-                linewidth=0, interpolate=True, zorder=1,
+                x,
+                lower,
+                upper,
+                where=band,
+                color=color,
+                alpha=0.14,
+                linewidth=0,
+                interpolate=True,
+                zorder=1,
             )
             truth_selected = np.isfinite(truth) & (truth > 0.0)
             median_selected = np.isfinite(median) & (median > 0.0)
             axis.plot(
-                x[truth_selected], truth[truth_selected], color=color, linestyle="-",
-                linewidth=1.65, zorder=3,
+                x[truth_selected],
+                truth[truth_selected],
+                color=color,
+                linestyle="-",
+                linewidth=1.65,
+                zorder=3,
             )
             axis.plot(
-                x[median_selected], median[median_selected], color=color, linestyle="--",
-                linewidth=1.55, zorder=4,
+                x[median_selected],
+                median[median_selected],
+                color=color,
+                linestyle="--",
+                linewidth=1.55,
+                zorder=4,
             )
         axis.set_xscale("linear")
         axis.set_yscale("log")
@@ -1151,9 +1182,14 @@ def plot_increment_pdf_publication_row(
         ),
     ]
     figure.legend(
-        handles=case_handles + meaning_handles, loc="upper center", bbox_to_anchor=(0.5, 0.985),
+        handles=case_handles + meaning_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.985),
         ncols=4 if layout == "2x2" else 7,
-        frameon=False, fontsize=8.5, handlelength=2.4, columnspacing=1.2,
+        frameon=False,
+        fontsize=8.5,
+        handlelength=2.4,
+        columnspacing=1.2,
     )
     return figure, axes_array, matched_lags
 

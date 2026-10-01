@@ -62,8 +62,7 @@ def test_observed_timeseries_overlays_color_on_grayscale_truth():
         "B": np.zeros((4, 9, 3)),
     }
     observed = {
-        quantity: np.stack((values + 1.0, values + 2.0))
-        for quantity, values in truth.items()
+        quantity: np.stack((values + 1.0, values + 2.0)) for quantity, values in truth.items()
     }
 
     figure, axes = plot_observed_timeseries(time, truth, observed, ids, mc_index=1)
@@ -118,7 +117,11 @@ def test_velocity_alfven_plot_converts_b_to_velocity_units():
 
 def test_velocity_alfven_plot_can_show_fluctuations():
     ids = ("H",)
-    time = {"n": np.array([0.0, 1.0, 2.0]), "v": np.array([0.0, 1.0, 2.0]), "B": np.array([0.0, 1.0, 2.0])}
+    time = {
+        "n": np.array([0.0, 1.0, 2.0]),
+        "v": np.array([0.0, 1.0, 2.0]),
+        "B": np.array([0.0, 1.0, 2.0]),
+    }
     values = {
         "n": np.full((3, 1), 5.0),
         "v": np.array([[[10.0, 0.0, 0.0]], [[11.0, 0.0, 0.0]], [[12.0, 0.0, 0.0]]]),
@@ -146,9 +149,7 @@ def test_observed_velocity_alfven_plot_overlays_truth_and_observed():
         "B": np.stack((truth["B"], truth["B"] * 2.0)),
     }
 
-    figure, axes = plot_observed_velocity_alfven_timeseries(
-        time, truth, observed, ids, mc_index=1
-    )
+    figure, axes = plot_observed_velocity_alfven_timeseries(time, truth, observed, ids, mc_index=1)
 
     assert axes.shape == (3, 2)
     assert len(axes[0, 0].lines) == 4
@@ -220,19 +221,22 @@ def test_plot_figure2_cli_smoke(tmp_path, capsys):
     _write_figure2_input(malara)
     _write_figure2_input(simulation, scale=2.0)
 
-    assert plot_figure2_main(
-        [
-            "--malara",
-            str(malara),
-            "--simulation",
-            str(simulation),
-            "--output",
-            str(output),
-            "--start-time",
-            "1.0",
-            "--stop-time",
-            "3.0",
-        ]
-    ) == 0
+    assert (
+        plot_figure2_main(
+            [
+                "--malara",
+                str(malara),
+                "--simulation",
+                str(simulation),
+                "--output",
+                str(output),
+                "--start-time",
+                "1.0",
+                "--stop-time",
+                "3.0",
+            ]
+        )
+        == 0
+    )
     assert str(output) in capsys.readouterr().out
     assert output.is_file() and output.stat().st_size > 0

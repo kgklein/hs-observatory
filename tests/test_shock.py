@@ -80,9 +80,7 @@ def test_fixed_mesocenter_offset_propagation_and_crossing_time():
     np.testing.assert_allclose(field.mesocenter_km, [0.0, 0.0, 0.0])
 
     center_path = np.zeros((1, 3, 3))
-    center_path[0, :, :] = np.array(
-        [[0.0, 0.0, 0.0], [3000.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
-    )
+    center_path[0, :, :] = np.array([[0.0, 0.0, 0.0], [3000.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
     times = np.array([0.0, 10.0, 20.0])
     xi = field.signed_distance(times, center_path)[:, 0]
     np.testing.assert_allclose(xi, [-3000.0, 1500.0, 0.0])
@@ -90,9 +88,9 @@ def test_fixed_mesocenter_offset_propagation_and_crossing_time():
     # A nominal mesocenter translating at +1 km/s meets a -150 km/s shock.
     crossing_time = 3000.0 / 151.0
     crossing_position = np.array([[[crossing_time, 0.0, 0.25 * crossing_time]]])
-    assert field.signed_distance(
-        np.array([crossing_time]), crossing_position
-    )[0, 0] == pytest.approx(0.0)
+    assert field.signed_distance(np.array([crossing_time]), crossing_position)[
+        0, 0
+    ] == pytest.approx(0.0)
 
     original_center = field.mesocenter_km.copy()
     positions = np.full((1, 1, 3), 1.0e6)

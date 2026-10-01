@@ -89,9 +89,7 @@ def _uniform_cadence(time: np.ndarray, variable: str) -> float:
     dt = float(np.mean(differences))
     tolerance = max(1.0e-12, abs(dt) * 1.0e-8)
     if dt <= 0.0 or not np.allclose(differences, dt, rtol=1.0e-7, atol=tolerance):
-        raise ValueError(
-            f"Time for {variable} must be uniformly sampled with a positive cadence"
-        )
+        raise ValueError(f"Time for {variable} must be uniformly sampled with a positive cadence")
     return dt
 
 
@@ -190,9 +188,7 @@ def _psd_products(
     }
 
 
-def compute_timeseries_fft(
-    input_path: str | Path, config: dict[str, Any]
-) -> dict[str, Any]:
+def compute_timeseries_fft(input_path: str | Path, config: dict[str, Any]) -> dict[str, Any]:
     """Compute independent spacecraft spectra for selected observation variables."""
 
     settings = _settings(config)
@@ -232,25 +228,16 @@ def compute_timeseries_fft(
             observed_velocity_frame = "plasma"
             if "metadata" in handle:
                 observed_velocity_frame = str(
-                    handle["metadata"].attrs.get(
-                        "velocity_observed_frame", "plasma"
-                    )
+                    handle["metadata"].attrs.get("velocity_observed_frame", "plasma")
                 )
-            if (
-                observed_velocity_frame == "spacecraft"
-                and "truth/v_spacecraft_frame" in handle
-            ):
+            if observed_velocity_frame == "spacecraft" and "truth/v_spacecraft_frame" in handle:
                 truth_settings["velocity_truth_frame"] = "spacecraft"
             for variable in settings["variables"]:
                 values, time, dt = _read_values(handle, variable, truth_settings)
                 truth_frequency = np.fft.rfftfreq(time.size, d=dt)
                 if not np.array_equal(truth_frequency, frequencies[variable]):
-                    raise ValueError(
-                        f"Truth and observed frequency grids differ for {variable}"
-                    )
-                truth_spectra.update(
-                    _psd_products(variable, values, dt, settings)
-                )
+                    raise ValueError(f"Truth and observed frequency grids differ for {variable}")
+                truth_spectra.update(_psd_products(variable, values, dt, settings))
 
     assert n_spacecraft is not None
     if spacecraft_ids is None:
@@ -260,8 +247,7 @@ def compute_timeseries_fft(
 
     first_frequency = frequencies[settings["variables"][0]]
     shared_frequency = all(
-        frequency.shape == first_frequency.shape
-        and np.array_equal(frequency, first_frequency)
+        frequency.shape == first_frequency.shape and np.array_equal(frequency, first_frequency)
         for frequency in frequencies.values()
     )
     scalar_dt: float | dict[str, float] = (
@@ -392,10 +378,7 @@ def plot_timeseries_fft(
             constrained_layout=True,
         )
         frequency_limits = _common_positive_frequency_limits(
-            [
-                _frequency_for_product(handle, variable)
-                for variable, _product, _ylabel in products
-            ]
+            [_frequency_for_product(handle, variable) for variable, _product, _ylabel in products]
         )
         matched_power_limits = _matched_truth_power_limits(handle)
         fallback_colors = plt.cm.tab10(np.linspace(0.0, 0.9, len(ids)))
@@ -509,10 +492,7 @@ class TimeseriesFFTAnalysis(AnalysisMethod):
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         plot_settings = result["settings"]["plot"]
-        plot_path = Path(
-            plot_settings["path"]
-            or output.with_name(f"{output.stem}.png")
-        )
+        plot_path = Path(plot_settings["path"] or output.with_name(f"{output.stem}.png"))
         truth_plot_enabled = bool(
             plot_settings["enabled"]
             and plot_settings["truth_enabled"]
@@ -523,9 +503,7 @@ class TimeseriesFFTAnalysis(AnalysisMethod):
             or plot_path.with_name(f"{plot_path.stem}_truth{plot_path.suffix}")
         )
         result["metadata"]["plot_enabled"] = plot_settings["enabled"]
-        result["metadata"]["plot_path"] = (
-            str(plot_path) if plot_settings["enabled"] else "null"
-        )
+        result["metadata"]["plot_path"] = str(plot_path) if plot_settings["enabled"] else "null"
         result["metadata"]["truth_plot_enabled"] = truth_plot_enabled
         result["metadata"]["truth_plot_path"] = (
             str(truth_plot_path) if truth_plot_enabled else "null"
@@ -544,9 +522,7 @@ class TimeseriesFFTAnalysis(AnalysisMethod):
             spacecraft = handle.create_group("spacecraft")
             spacecraft.create_dataset(
                 "id",
-                data=np.asarray(
-                    result["spacecraft_ids"], dtype=h5py.string_dtype("utf-8")
-                ),
+                data=np.asarray(result["spacecraft_ids"], dtype=h5py.string_dtype("utf-8")),
             )
             _write_psd_group(handle, "psd", result["psd"])
             if result["truth_psd"]:

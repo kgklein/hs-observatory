@@ -104,12 +104,8 @@ def test_proton_reference_scales_use_angular_gyrofrequency_without_two_pi():
     temperature_eV = 10.0
     magnetic_nT = 5.0
     scales = compute_proton_reference_scales(temperature_eV, magnetic_nT)
-    expected_omega = (
-        ELEMENTARY_CHARGE_C * magnetic_nT * 1.0e-9 / PROTON_MASS_KG
-    )
-    expected_vth = np.sqrt(
-        2.0 * temperature_eV * ELEMENTARY_CHARGE_C / PROTON_MASS_KG
-    )
+    expected_omega = ELEMENTARY_CHARGE_C * magnetic_nT * 1.0e-9 / PROTON_MASS_KG
+    expected_vth = np.sqrt(2.0 * temperature_eV * ELEMENTARY_CHARGE_C / PROTON_MASS_KG)
 
     assert scales.omega_ref_rad_s == pytest.approx(expected_omega)
     assert scales.vth_ref_m_s == pytest.approx(expected_vth)
@@ -141,9 +137,7 @@ def test_field_shapes_real_plane_wave_and_relative_phase(tmp_path):
     np.testing.assert_allclose(values["B"][..., 0], np.cos(phase), atol=1.0e-13)
     np.testing.assert_allclose(values["B"][..., 1], -np.sin(phase), atol=1.0e-13)
     np.testing.assert_allclose(values["v"][..., 1], np.cos(phase), atol=1.0e-13)
-    np.testing.assert_allclose(
-        values["n"], np.cos(phase) + 0.5 * np.sin(phase), atol=1.0e-13
-    )
+    np.testing.assert_allclose(values["n"], np.cos(phase) + 0.5 * np.sin(phase), atol=1.0e-13)
 
 
 def test_magnetic_normalization_applies_one_scale_to_all_eigenfunctions(tmp_path):

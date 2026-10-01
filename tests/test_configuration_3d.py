@@ -36,9 +36,7 @@ def test_parse_additional_connections_and_reject_invalid_labels():
 def test_xz_projection_is_on_positive_y_wall_and_legend_lists_spacecraft():
     spacecraft = synthetic_configuration(np.array([0.0]))
 
-    figure, diagnostics = plot_3d_configuration(
-        spacecraft.position, spacecraft.spacecraft_ids
-    )
+    figure, diagnostics = plot_3d_configuration(spacecraft.position, spacecraft.spacecraft_ids)
 
     axis = figure.axes[0]
     projected_x, projected_y, projected_z = axis.collections[0]._offsets3d
@@ -46,7 +44,15 @@ def test_xz_projection_is_on_positive_y_wall_and_legend_lists_spacecraft():
     assert projected_x[1] == pytest.approx(projected_x[2])
     assert projected_z[1] == pytest.approx(projected_z[0])
     assert [text.get_text() for text in figure.legends[0].get_texts()] == [
-        "Hub", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8"
+        "Hub",
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "N5",
+        "N6",
+        "N7",
+        "N8",
     ]
     plt.close(figure)
 

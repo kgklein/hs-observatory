@@ -77,11 +77,7 @@ def _spacecraft_on_time_axes(
             quantity_time,
             master.position[:, indices, :],
             metadata=dict(master.metadata),
-            velocity=(
-                None
-                if master.velocity is None
-                else master.velocity[:, indices, :]
-            ),
+            velocity=(None if master.velocity is None else master.velocity[:, indices, :]),
         )
     return result
 
@@ -121,9 +117,9 @@ def _trajectory_positions_at_times(
             if nominal_time.size == 1:
                 shifted_values = np.full(n_time, values[0], dtype=float)
                 if velocity is not None:
-                    shifted_values += (
-                        sample_time - nominal_time[0]
-                    ) * velocity[spacecraft_index, 0, component]
+                    shifted_values += (sample_time - nominal_time[0]) * velocity[
+                        spacecraft_index, 0, component
+                    ]
                 elif np.any(sample_time != nominal_time[0]):
                     raise ValueError(
                         "Cannot shift a one-sample trajectory without spacecraft velocity"
@@ -138,8 +134,7 @@ def _trajectory_positions_at_times(
                 right_slope = (
                     velocity[spacecraft_index, -1, component]
                     if velocity is not None
-                    else (values[-1] - values[-2])
-                    / (nominal_time[-1] - nominal_time[-2])
+                    else (values[-1] - values[-2]) / (nominal_time[-1] - nominal_time[-2])
                 )
                 before = sample_time < nominal_time[0]
                 after = sample_time > nominal_time[-1]
@@ -284,9 +279,7 @@ def generate_from_config(
     if callable(set_mapping_reference):
         hub_spacecraft = int(getattr(field, "hub_spacecraft", 0))
         set_mapping_reference(spacecraft["n"].position[hub_spacecraft, 0])
-    velocity_frame = str(
-        config.get("measurement", {}).get("velocity_frame", "spacecraft")
-    ).lower()
+    velocity_frame = str(config.get("measurement", {}).get("velocity_frame", "spacecraft")).lower()
     truth = {
         quantity: _evaluate_quantity_with_progress(
             field,
@@ -308,9 +301,7 @@ def generate_from_config(
         spacecraft_velocity_time_first = None
     else:
         spacecraft_velocity_time_first = np.swapaxes(spacecraft_velocity, 0, 1)
-        truth["v_spacecraft_frame"] = (
-            truth["v"] - spacecraft_velocity_time_first
-        )
+        truth["v_spacecraft_frame"] = truth["v"] - spacecraft_velocity_time_first
 
     errors_config = config["errors"]
     n_mc = int(errors_config.get("n_mc", 1))
@@ -322,14 +313,10 @@ def generate_from_config(
         normalized_observatory_config(errors_config) if use_observatory_errors else None
     )
     time_config = (
-        observatory_config["timing"]
-        if use_observatory_errors
-        else errors_config.get("time")
+        observatory_config["timing"] if use_observatory_errors else errors_config.get("time")
     )
     position_config = (
-        observatory_config["position"]
-        if use_observatory_errors
-        else errors_config.get("position")
+        observatory_config["position"] if use_observatory_errors else errors_config.get("position")
     )
     time_offset_model = time_offset_model_from_config(time_config)
     position_offset_model = position_offset_model_from_config(position_config)
@@ -380,9 +367,7 @@ def generate_from_config(
         sampled_by_quantity[quantity] = sampled
 
     if use_observatory_errors:
-        result = apply_observatory_measurement_errors(
-            sampled_by_quantity, time, errors_config, rng
-        )
+        result = apply_observatory_measurement_errors(sampled_by_quantity, time, errors_config, rng)
         observed.update(result.observed)
         realized_errors.update(result.errors)
         measurement_error_names = {
@@ -412,18 +397,12 @@ def generate_from_config(
     parse_configuration_connections(configured_3d_connections)
     visualization_enabled = bool(visualization_config.get("enabled", True))
     requested_truth_velocity_frame = str(
-        truth_velocity_frame
-        or visualization_config.get("truth_velocity_frame", "spacecraft")
+        truth_velocity_frame or visualization_config.get("truth_velocity_frame", "spacecraft")
     ).lower()
     if requested_truth_velocity_frame not in {"spacecraft", "plasma"}:
-        raise ValueError(
-            "truth visualization velocity frame must be 'spacecraft' or 'plasma'"
-        )
+        raise ValueError("truth visualization velocity frame must be 'spacecraft' or 'plasma'")
     truth_visualization_velocity_frame = requested_truth_velocity_frame
-    if (
-        truth_visualization_velocity_frame == "spacecraft"
-        and "v_spacecraft_frame" not in truth
-    ):
+    if truth_visualization_velocity_frame == "spacecraft" and "v_spacecraft_frame" not in truth:
         truth_visualization_velocity_frame = "plasma"
     truth_for_visualization = dict(truth)
     if truth_visualization_velocity_frame == "spacecraft":
@@ -436,8 +415,7 @@ def generate_from_config(
     observed_mc_index = int(visualization_config.get("mc_index", 0))
     if observed_visualization_enabled and not 0 <= observed_mc_index < n_mc:
         raise ValueError(
-            f"visualization.mc_index must be between 0 and {n_mc - 1}; "
-            f"got {observed_mc_index}"
+            f"visualization.mc_index must be between 0 and {n_mc - 1}; got {observed_mc_index}"
         )
     truth_plot_path, geometry_plot_path = visualization_paths(output_path, visualization_config)
     geometry_summary_pdf_path, geometry_summary_png_path = geometry_summary_paths(
@@ -456,12 +434,9 @@ def generate_from_config(
     alfven_visualization_enabled = visualization_enabled and bool(
         visualization_config.get("alfven_enabled", True)
     )
-    alfven_visualization_fluctuations = bool(
-        visualization_config.get("alfven_fluctuations", True)
-    )
-    observed_alfven_visualization_enabled = (
-        observed_visualization_enabled
-        and bool(visualization_config.get("alfven_enabled", True))
+    alfven_visualization_fluctuations = bool(visualization_config.get("alfven_fluctuations", True))
+    observed_alfven_visualization_enabled = observed_visualization_enabled and bool(
+        visualization_config.get("alfven_enabled", True)
     )
     metadata = {
         "config_yaml": loaded.yaml_text,
@@ -470,9 +445,7 @@ def generate_from_config(
         "random_seed": "null" if seed is None else int(seed),
         "n_mc": n_mc,
         "field_model": field.name,
-        "field_metadata": json.dumps(
-            getattr(field, "metadata", {}), sort_keys=True
-        ),
+        "field_metadata": json.dumps(getattr(field, "metadata", {}), sort_keys=True),
         "error_models": json.dumps(
             {
                 "measurements": measurement_error_names,
@@ -509,9 +482,7 @@ def generate_from_config(
         ),
         "alfven_visualization_enabled": alfven_visualization_enabled,
         "alfven_visualization_fluctuations": alfven_visualization_fluctuations,
-        "alfven_plot_path": (
-            str(alfven_plot_path) if alfven_visualization_enabled else "null"
-        ),
+        "alfven_plot_path": (str(alfven_plot_path) if alfven_visualization_enabled else "null"),
         "observed_visualization_enabled": observed_visualization_enabled,
         "observed_visualization_mc_index": observed_mc_index,
         "observed_plot_path": (
@@ -522,9 +493,7 @@ def generate_from_config(
         ),
         "observed_alfven_visualization_enabled": observed_alfven_visualization_enabled,
         "observed_alfven_plot_path": (
-            str(observed_alfven_plot_path)
-            if observed_alfven_visualization_enabled
-            else "null"
+            str(observed_alfven_plot_path) if observed_alfven_visualization_enabled else "null"
         ),
     }
     output = write_observations(

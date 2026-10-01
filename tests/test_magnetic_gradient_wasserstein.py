@@ -64,29 +64,20 @@ def _write_product(path: Path) -> Path:
         magnitude_summary.create_dataset("median", data=np.median(measured, axis=0))
         magnitude_summary.create_dataset("q75", data=np.percentile(measured, 75, axis=0))
         total_errors = np.linalg.norm(
-            measured_curl
-            - np.asarray(truth["coarse_curl"])[np.newaxis, :, :],
+            measured_curl - np.asarray(truth["coarse_curl"])[np.newaxis, :, :],
             axis=-1,
         )
         error_summary = summary.create_group("curl_l2_error")
-        error_summary.create_dataset(
-            "q25", data=np.percentile(total_errors, 25, axis=0)
-        )
-        error_summary.create_dataset(
-            "median", data=np.median(total_errors, axis=0)
-        )
-        error_summary.create_dataset(
-            "q75", data=np.percentile(total_errors, 75, axis=0)
-        )
+        error_summary.create_dataset("q25", data=np.percentile(total_errors, 25, axis=0))
+        error_summary.create_dataset("median", data=np.median(total_errors, axis=0))
+        error_summary.create_dataset("q75", data=np.percentile(total_errors, 75, axis=0))
     return path
 
 
 def test_empirical_wasserstein_handles_equal_and_unequal_samples():
     assert empirical_wasserstein_1d([0.0, 2.0], [1.0, 3.0]) == pytest.approx(1.0)
     assert empirical_wasserstein_1d([0.0], [1.0, 2.0]) == pytest.approx(1.5)
-    assert empirical_wasserstein_1d([np.nan], [1.0]) != empirical_wasserstein_1d(
-        [np.nan], [1.0]
-    )
+    assert empirical_wasserstein_1d([np.nan], [1.0]) != empirical_wasserstein_1d([np.nan], [1.0])
 
 
 def test_distributional_decomposition_and_normalization(tmp_path):
@@ -101,9 +92,7 @@ def test_distributional_decomposition_and_normalization(tmp_path):
     assert entry["method_w1_normalized"] == pytest.approx(0.2)
     np.testing.assert_allclose(entry["measurement_w1_raw"]["by_mc"], [0.0, 0.5])
     np.testing.assert_allclose(entry["total_w1_raw"]["by_mc"], [0.5, 0.0])
-    np.testing.assert_allclose(
-        entry["pointwise_median_absolute_error_raw"]["by_mc"], [0.0, 0.5]
-    )
+    np.testing.assert_allclose(entry["pointwise_median_absolute_error_raw"]["by_mc"], [0.0, 0.5])
     assert min(entry["triangle_slack_raw"]["by_mc"]) >= -1.0e-14
     assert len(small["cdf"]["x_normalized"]) == 256
 
@@ -114,9 +103,7 @@ def test_configurable_interval_uses_fifth_and_ninety_fifth_percentiles(tmp_path)
         {"200": {"path": product, "label": "all errors"}},
         interval_percentiles=(5.0, 95.0),
     )
-    summary = diagnostics["configurations"]["small"]["cases"]["200"][
-        "measurement_w1_raw"
-    ]
+    summary = diagnostics["configurations"]["small"]["cases"]["200"]["measurement_w1_raw"]
     assert diagnostics["interval_percentiles"] == [5.0, 95.0]
     assert summary["interval_lower"] == pytest.approx(0.025)
     assert summary["interval_upper"] == pytest.approx(0.475)
@@ -141,15 +128,9 @@ def test_missing_cases_warn_and_outputs_are_written(tmp_path):
             }
         )
     assert diagnostics["case_order"] == ["200"]
-    figure = plot_magnetic_gradient_wasserstein(
-        diagnostics, tmp_path / "figure.png", dpi=60
-    )
-    json_path = write_magnetic_gradient_wasserstein_json(
-        diagnostics, tmp_path / "diagnostics.json"
-    )
-    csv_path = write_magnetic_gradient_wasserstein_csv(
-        diagnostics, tmp_path / "diagnostics.csv"
-    )
+    figure = plot_magnetic_gradient_wasserstein(diagnostics, tmp_path / "figure.png", dpi=60)
+    json_path = write_magnetic_gradient_wasserstein_json(diagnostics, tmp_path / "diagnostics.json")
+    csv_path = write_magnetic_gradient_wasserstein_csv(diagnostics, tmp_path / "diagnostics.csv")
     assert figure.stat().st_size > 0
     assert json.loads(json_path.read_text())["quantity"] == "curl_magnitude"
     rows = list(csv.DictReader(csv_path.open()))
