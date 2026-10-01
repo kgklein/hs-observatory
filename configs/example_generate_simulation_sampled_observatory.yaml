@@ -140,7 +140,7 @@ errors:
     model: independent_constant_rotation_B_and_V
 
 output:
-  path: outputs/synthetic_observations_simulation_sampled_observatory.h5
+  path: outputs/gkeyll/synthetic_observations_simulation_sampled_observatory.h5
   write_errors: true
 
 visualization:
@@ -148,7 +148,7 @@ visualization:
   alfven_enabled: true
   alfven_fluctuations: true
   truth_velocity_frame: spacecraft
-  truth_path: outputs/synthetic_observations_simulation_sampled_observatory_truth.png
-  geometry_path: outputs/synthetic_observations_simulation_sampled_observatory_geometry.png
-  alfven_path: outputs/synthetic_observations_simulation_sampled_observatory_velocity_alfven.png
+  truth_path: outputs/gkeyll/synthetic_observations_simulation_sampled_observatory_truth.png
+  geometry_path: outputs/gkeyll/synthetic_observations_simulation_sampled_observatory_geometry.png
+  alfven_path: outputs/gkeyll/synthetic_observations_simulation_sampled_observatory_velocity_alfven.png
   dpi: 150

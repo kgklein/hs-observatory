@@ -8,9 +8,6 @@
 | Outputs | All-MC HDF5 with corrections, covariance, objectives, projections/influence and recovery diagnostics. |
 | Limitations | Research methodology, not established flight calibration; spatial-model bias and correlated residuals remain. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
-
 `timing-calibrate` analyzes synthetic nine-spacecraft magnetic measurements with
 constant timing errors only. It uses the existing magnetic-gradient estimator,
 all 382 subsets with 4–9 members by default, and eight timing parameters. The Hub
@@ -21,8 +18,7 @@ IDs, with H omitted from the parameter vector.
 
 The research configurations named below are local/untracked in the reviewed
 working tree and are not supplied by a tracked checkout. These command recipes
-require those files and, for generation, external simulation data. See the
-[release availability manifest](../examples/index.md#timing-research) before running.
+require those files and, for generation, external simulation data. 
 
 
 Regenerate the timing case before analysis: older observations include a random

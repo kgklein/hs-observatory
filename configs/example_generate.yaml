@@ -2,7 +2,7 @@ spacecraft:
   source: cdf
   cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
   configuration_time: "2030-06-01T00:00:00"
-  fallback_synthetic: true
+  fallback_synthetic: false
   # Common illustrative translation used to make the trajectory projection visible.
   velocity_km_s: [1.0, 0.0, 0.25]
 
@@ -61,7 +61,7 @@ errors:
       sigma: [0.05, 0.05, 0.05]
 
 output:
-  path: outputs/synthetic_observations.h5
+  path: outputs/example/synthetic_observations.h5
   write_errors: true
 
 visualization:
@@ -69,8 +69,8 @@ visualization:
   truth_velocity_frame: spacecraft
   observed_enabled: true
   mc_index: 0
-  truth_path: outputs/synthetic_observations_truth.png
-  geometry_path: outputs/synthetic_observations_geometry.png
-  observed_path: outputs/synthetic_observations_observed_mc000.png
-  observed_geometry_path: outputs/synthetic_observations_geometry_observed_mc000.png
+  truth_path: outputs/example/synthetic_observations_truth.png
+  geometry_path: outputs/example/synthetic_observations_geometry.png
+  observed_path: outputs/example/synthetic_observations_observed_mc000.png
+  observed_geometry_path: outputs/example/synthetic_observations_geometry_observed_mc000.png
   dpi: 150

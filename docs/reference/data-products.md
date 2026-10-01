@@ -74,16 +74,13 @@ described in [errors](errors.md).
 | Static decorrelation | Uses the variable's native nominal position grid. |
 | FFT | Uses time grids, without spatial/Taylor conversion. |
 
-These distinctions document implementation, not an endorsement of a shared
-scientific coordinate policy. See the [review checklist](../developer/scientific-review.md).
-
 ## Provenance and optional errors
 
 `/metadata` contains serialized generation YAML, creation time, seed, field/error
 models, spacecraft-source details and schema version. Frame and plotting choices
 are recorded separately. `/errors/n`, `/errors/v`, and `/errors/B` are measurement
 realizations, not the entire difference from nominal truth. Coordinate offsets
-and [observatory auxiliary errors](errors.md#observatory-requirement-details)
+and [observatory auxiliary errors](errors.md#observatory-requirement-model)
 have their own datasets. Disabling error storage can make analyses that require
 those offsets unavailable.
 
@@ -97,6 +94,6 @@ Each method reference owns its detailed output schema, masks and units:
 - [Shock timing](shock-timing.md): detections, inversions, statuses and MC summaries.
 - [Timing calibration](timing-calibration.md): corrections, objectives, covariance, projections and influence.
 
-NaNs, validity masks and completion flags are method-specific. For timing
-calibration, `metadata.complete = false` marks an incomplete streamed product.
+NaNs, validity masks and completion flags are method-specific.
+For timing calibration, `metadata.complete = false` marks an incomplete streamed product.
 Do not treat NaN statistics or failed fits as zero measurements.

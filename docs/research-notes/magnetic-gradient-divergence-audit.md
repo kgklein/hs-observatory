@@ -5,8 +5,7 @@ Date: 2026-07-26
 Historical report, preserved without rerunning the numerical audit. Reproduction
 requires the named simulation inputs, observation products and optional scientific
 dependencies; generated artifacts are not distributed by default. See the
-[example manifest](../examples/index.md#simulation-and-gradient-workflows),
-[current gradient reference](../reference/magnetic-gradients.md), and
+[current gradient reference](../reference/magnetic-gradients.md) and
 [visualization guide](../user-guide/visualization.md).
 
 Scope: `outputs/sim-prod-400.h5`,

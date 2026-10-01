@@ -2,7 +2,7 @@ analysis:
   method: elsasser
 
 input:
-  path: outputs/synthetic_observations.h5
+  path: outputs/example/synthetic_observations.h5
 
 output:
   path: outputs/elsasser.h5
@@ -28,5 +28,5 @@ elsasser:
 
   plot:
     enabled: true
-    path: outputs/elsasser_timeseries.png
+    path: outputs/example/elsasser_timeseries.png
     dpi: 150

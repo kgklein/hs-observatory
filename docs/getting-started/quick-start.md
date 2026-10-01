@@ -1,75 +1,69 @@
-# Quick Start
+# First Light
 
-Complete [installation](installation.md), activate that environment, and run
-commands from the repository root so relative configuration and output paths
-resolve as expected.
+After completing the [installation](installation.md),
+activate the environment and run commands from the repository root,
+enabling relative configuration and output paths to resolve as expected.
 
-## Generate observations
+## Generating Example Observations
+
+For our first calculation, we will generate a time series.
 
 ```bash
 hsobs-generate configs/example_generate.yaml
 ```
 
-This existing example uses a sine-sum field, quantity-specific measurement
-cadences, coordinate offsets, Gaussian measurement errors, and ten Monte Carlo
-realizations. It requests CDF spacecraft geometry but enables
-`fallback_synthetic: true`, so it also runs without mission files.
+The script expects a CDF file for the positions of the nine HS spacecraft, covering June 1, 2030.
+In the `spacecraft:` namelist in `example_generate.yaml`, ensure that `cdf_directory` points to the directory where you have stored the [representative trajectories](https://doi.org/10.5281/zenodo.13887061).
+
+This first example uses a sum of sine wave for the underlying field,
+with expected measurement cadences for n,V, and B.
+We include Gaussian measurement errors for position, time, and plasma quantites,
+with ten Monte Carlo realizations.
+It requests CDF spacecraft geometry.
+Enabling `fallback_synthetic: true`, will allow it to run without mission files for arbitrarily selected relative positions.
 
 The configured products include:
 
-- `outputs/synthetic_observations.h5`: truth, observed measurements, coordinates,
+- `outputs/example/synthetic_observations.h5`: true measurements, observed measurements, coordinates,
   errors, and generation metadata.
-- Truth and observed time-series/geometry PNGs under `outputs/`.
+- Truth and observed time-series/geometry PNGs under `outputs/example/`.
 
-## Run a basic analysis
+### Figures from Example Data Generation
 
-```bash
-hsobs-analyze configs/example_analyze.yaml
-```
+The following figures are constructed when new observations are generated.
 
-This configuration reads the generated observation file and writes a basic
-statistical report to `outputs/diagnostics.json`.
+**Configurations**
 
-## Use Python instead of the CLI
+![HelioSwarm Configuration for Example Data Generation](../assets/figures/synthetic_observations_3d_configuration_2030-05-31T23-50-35-801000000.png)
 
-The preferred package-root Python API consists of `__version__`,
-`generate_from_config`, and `analyze_from_config`:
+*Single Panel Summary of HelioSwarm Configuration*
 
-```python
-from hs_observatory import analyze_from_config, generate_from_config
+![HelioSwarm Configuration for Example Data Generation](../assets/figures/synthetic_observations_geometry.png)
 
-observation_path = generate_from_config("configs/example_generate.yaml")
-analysis_path = analyze_from_config("configs/example_analyze.yaml")
-```
+*HelioSwarm Configuration for Example Data Generation.*
 
-Both functions accept a string or `pathlib.Path` pointing to the same YAML files
-used by `hsobs-generate` and `hsobs-analyze`, and return the configured output
-path. The analysis configuration selects its input file; it is not automatically
-connected to the preceding Python return value. Run this example from the
-repository root, just like the CLI commands above.
+![HelioSwarm Configuration for Example Data Generation](../assets/figures/synthetic_observations_geometry_summary_2030-05-31T23-50-35-801000000.png)
 
-This small root API is the preferred user-facing Python interface. Specialized
-scientific routines and advanced extension interfaces remain in their logical
-modules/subpackages; those paths may evolve during the 0.x series. Private
-helpers and registry internals are implementation details, not stability promises.
+*HelioSwarm Configuration Geometry Overview*
 
-## Choose an analysis
+![HelioSwarm Configuration for Example Data Generation](../assets/figures/synthetic_observations_geometry_polyhedra_2030-05-31T23-50-35-801000000.png)
 
-Analysis YAML selects a method using `analysis.method`. See
-[Analysis Methods](../user-guide/analysis.md) for the method-specific settings and
-example configuration names. Check each example's input/output paths and any
-required simulation data before running it.
+*HelioSwarm Configuration Polyhedral Geometry Summary*
+
+![HelioSwarm Configuration for Example Data Generation](../assets/figures/synthetic_observations_geometry_formation_2030-05-31T23-50-35-801000000.png)
+
+*HelioSwarm Configuration Spacecraft Separation Geometry Summary*
+
+**Measurements**
+
+![HelioSwarm True Observations for Example Data Generation](../assets/figures/synthetic_observations_truth.png)
+
+*HelioSwarm **True** Observations for Example Data Generation*
+
+![HelioSwarm Observations with Measurement Error for Example Data Generation](../assets/figures/synthetic_observations_observed_mc000.png)
+
+*HelioSwarm Observations **with measurement error** for Example Data Generation*
 
 Read [Generating Synthetic Observations](../user-guide/generation.md) to change
 field or sampling choices, and the [Observatory Error Model](../reference/errors.md)
 for the requirement-driven error path.
-## Inspect provenance and continue
-
-The CDF fallback makes this example runnable without mission files, but a local
-CDF directory can change the geometry. Inspect `metadata.spacecraft_source` and
-its fallback reason. Native sample counts for the supplied 0–300 s interval are
-2401 for n/v and 9601 for B; the MC dimension is 10. Diagnostics report 36 distinct
-spacecraft pairs for nine-spacecraft geometry.
-
-Read the [verification record and complete example manifest](../examples/index.md#starter-workflow),
-then [visualization](../user-guide/visualization.md) or [analysis selection](../user-guide/analysis.md).

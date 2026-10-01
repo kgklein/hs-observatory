@@ -1,9 +1,9 @@
 input:
-  path: outputs/synthetic_observations.h5
+  path: outputs/example/synthetic_observations.h5
 
 analysis:
   method: diagnostics
   options: {}
 
 output:
-  path: outputs/diagnostics.json
+  path: outputs/example/diagnostics.json

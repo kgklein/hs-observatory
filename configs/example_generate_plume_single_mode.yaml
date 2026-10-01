@@ -95,7 +95,7 @@ errors:
     model: independent_constant_rotation_B_and_V
 
 output:
-  path: outputs/synthetic_observations_plume_single_mode.h5
+  path: outputs/plume/synthetic_observations_plume_single_mode.h5
   write_errors: true
 
 visualization:
@@ -103,7 +103,7 @@ visualization:
   alfven_enabled: true
   alfven_fluctuations: true
   truth_velocity_frame: spacecraft
-  truth_path: outputs/synthetic_observations_plume_single_mode_truth.png
-  geometry_path: outputs/synthetic_observations_plume_single_mode_geometry.png
-  alfven_path: outputs/synthetic_observations_plume_single_mode_velocity_alfven.png
+  truth_path: outputs/plume/synthetic_observations_plume_single_mode_truth.png
+  geometry_path: outputs/plume/synthetic_observations_plume_single_mode_geometry.png
+  alfven_path: outputs/plume/synthetic_observations_plume_single_mode_velocity_alfven.png
   dpi: 150

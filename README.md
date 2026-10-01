@@ -23,12 +23,13 @@ Use Python **3.10 or newer** and a local checkout of this repository. From its r
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[analysis]'
+python -m pip install -e .
 ```
 
-The existing `analysis` extra is needed by the current default geometry figures;
-[`cmcrameri`](https://zenodo.org/records/8409685) is used throughout for perceptually-uniform colour maps.
-as well as SciPy.
+The base installation includes
+[`cmcrameri`](https://zenodo.org/records/8409685), which is used throughout for
+perceptually uniform colour maps. Install the `analysis` extra for features that
+require SciPy.
 The activation command is for a POSIX shell.
 See [installation](docs/getting-started/installation.md) for
 checkout instructions, other environments, optional dependencies and external inputs.

@@ -8,8 +8,6 @@
 | Outputs | JSON or HDF5 plus optional diagnostic/publication figures. |
 | Limitations | Native sampling, ensemble handling and frozen-field assumptions differ by method. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 ## `diagnostics`
 
 | Summary | Details |
@@ -19,9 +17,6 @@ and [visualization guide](../user-guide/visualization.md) for inspection and plo
 | Entry points | `analysis.method: diagnostics`. |
 | Outputs | JSON statistics and separation summaries. |
 | Limitations | Reader currently requires truth. |
-
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 Basic JSON sanity report for generated observations.
 
@@ -39,9 +34,6 @@ Basic JSON sanity report for generated observations.
 | Entry points | `analysis.method: elsasser`; section `elsasser`. |
 | Outputs | HDF5 and optional six-panel PNG. |
 | Limitations | Proton-only density; linear cadence alignment; no anti-alias filtering. |
-
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 The selectable `elsasser` analysis computes the convention
 
@@ -63,6 +55,11 @@ Run the observed-data example with:
 ```bash
 hsobs-analyze configs/example_elsasser.yaml
 ```
+
+![HelioSwarm Measurements of the Elsasser Fields from a sine wave pattern](../assets/figures/elsasser_timeseries.png)
+
+*Elsasser Fields constructed from HS measurement of a sinewave.*
+
 
 Set `elsasser.data_group: truth` to use plasma-frame `/truth/v`, `/truth/n`,
 and `/truth/B`. Observed analysis selects one `mc_index`. Its velocity frame
@@ -97,28 +94,6 @@ The physical calculation lives in
 Future analyses should import that common utility rather than implementing a
 second Elsasser convention.
 
-## Elsasser configuration
-
-
-Computes Elsasser variables, using `z_plus = delta_v + delta_b` and
-`z_minus = delta_v - delta_b`.
-
-- Config section: `elsasser`.
-- Output: HDF5 plus optional diagnostic PNG.
-- Controllable parameters:
-  - `data_group`: `truth` or `observed`; default `observed`.
-  - `mc_index`: observed Monte Carlo member; default `0`; `all` is not implemented.
-  - `velocity.frame`: `auto`, `plasma`, or `spacecraft`.
-  - `velocity.spacecraft_correction`: `auto` or `apply`.
-  - `density_normalization.method`: `instantaneous` or `global_per_spacecraft`.
-  - `density_normalization.species`: currently `proton` only.
-  - `mean_subtraction.method`: currently `global_per_spacecraft` only.
-  - `timebase.method`: currently `slower_of_n_and_v` only.
-  - `timebase.interpolation`: currently `linear` only.
-  - `plot.enabled`, `plot.path`, `plot.dpi`.
-
-Example: `configs/example_elsasser.yaml`.
-
 ## Static Elsasser-increment PDFs
 
 | Summary | Details |
@@ -129,15 +104,16 @@ Example: `configs/example_elsasser.yaml`.
 | Outputs | HDF5 moments, histograms, optional samples and plots. |
 | Limitations | Frozen-field assumption; no dynamical interpretation; missing higher diagnostics below. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
-
 `elsasser_increment_pdf_static` creates scale-conditioned PDFs inspired by
 Mallet et al. (2015), Fig. 1:
 
 ```bash
 hsobs-analyze configs/example_elsasser_increment_pdf_static.yaml
 ```
+
+![HelioSwarm Measurements of the Elsasser Field Increments from p-model turbulence](../assets/figures/elsasser_increment_pdf_2x2.png)
+
+*Elsasser Field increments constructed from HS measurement of a p-model turbulence.*
 
 The method reads an ordinary synthetic-observation file and calls the common
 Elsasser implementation internally for both truth and one configured observed
@@ -218,8 +194,6 @@ Examples: `configs/example_elsasser_increment_pdf_static.yaml`,
 | Outputs | Binned HDF5 statistics and diagnostic PNG. |
 | Limitations | No temporal lags or Taylor hypothesis; only order 2 here. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 `static_decorrelation` estimates simultaneous pairwise correlation as a function of spacecraft separation and computes the matching second-order pair-difference structure function. It treats every time index as an independent spatial snapshot. This first method intentionally includes no time lags, temporal evolution, Taylor hypothesis, flow advection, or wave propagation.
 
@@ -295,8 +269,6 @@ Example: `configs/example_static_decorrelation.yaml`.
 | Outputs | PSD HDF5 and observed/truth figures. |
 | Limitations | No frequency-to-wavenumber conversion; no irregular-grid estimator. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 `timeseries_fft` computes one-sided real-FFT power spectral densities independently for every spacecraft time series. It uses no multi-spacecraft separation or spatial information and performs no Taylor-hypothesis conversion from frequency to wavenumber. Input time axes must be uniformly sampled; nonuniform data currently raise an error rather than being interpolated or passed to Lomb–Scargle analysis.
 
@@ -315,7 +287,10 @@ With time step `dt` and window `w`, the normalization is
 PSD(f) = dt / sum(w^2) * |rFFT(w x)|^2
 ```
 
-Strictly positive non-Nyquist bins are doubled, yielding approximate units of quantity²/Hz. Mean detrending and a Hann window are enabled by default. The DC bin is saved but omitted from the default log-log diagnostic plot, which overlays all spacecraft in panels for density, velocity trace, and magnetic trace. All panels use the same frequency-axis limits; native lower-cadence products therefore retain blank space above their Nyquist frequencies.
+Strictly positive non-Nyquist bins are doubled, yielding units of quantity²/Hz.
+Mean detrending and a Hann window are enabled by default.
+The DC bin is saved but omitted from the default log-log diagnostic plot, which overlays all spacecraft in panels for density, velocity trace, and magnetic trace.
+All panels use the same frequency-axis limits; native lower-cadence products therefore retain blank space above their Nyquist frequencies.
 
 When analyzing `data_group: observed`, plotting also computes the corresponding truth spectra and writes them under `/truth_psd` in the analysis HDF5 file. The selected Monte Carlo realization and truth are rendered as separate figures by default, using identical axes and styling. For each parameter with positive truth spectral power, both figures use a common y-axis range spanning the observed and truth spectra. Parameters with zero truth power retain an independently autoscaled observed panel and an annotated zero-power truth panel. Set `plot.truth_enabled: false` to suppress the truth product.
 
@@ -371,8 +346,7 @@ Examples: `configs/example_timeseries_fft.yaml`,
 | Outputs | JSON moments/counts/flatness/fits and optional figures. |
 | Limitations | Pair counts and selected spatial/fit assumptions limit inference. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+See the [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 Binned Elsasser vector-increment structure functions. The default uses same-time spacecraft pairs; `increment_mode: all_spacetime_pairs` also treats samples as points of a frozen field.
 
@@ -403,6 +377,10 @@ truth separate from the observed Monte Carlo ensemble:
 hsobs-plot-structure-function structure_function.json \
   --p-value 0.9 --quantity z_plus --output sf_summary_p09.png
 ```
+
+![Structure function analysis from p-model observations](../assets/figures/malara-prod-001_sf_publication.png)
+
+*Structure Function Analysis from p-model observations.*
 
 Python callers can use `plot_structure_function_summary_row(...)` with a
 supplied row of three axes when assembling multiple p-model rows, or

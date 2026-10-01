@@ -1,0 +1,8 @@
+.md-header__button.md-logo img {
+  filter: invert(1);
+  height: 1.5rem;
+}
+
+.md-header__inner > .md-header__button.md-logo {
+  display: inline-block;
+}

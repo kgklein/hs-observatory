@@ -17,7 +17,7 @@ To add a measurement-error model, subclass `ErrorModel` and implement `apply(tru
 
 To add an analysis method, subclass `AnalysisMethod`, give it a `name`, decorate it with `@register_analysis`, and ensure its module is loaded by the registry. JSON is the default output; binary analyses can override `write_result`, as `static_decorrelation` and `timeseries_fft` do for HDF5. `StructureFunctionAnalysis` implements configurable-order Elsasser structure functions, flatness, fits and multiple pair-sampling modes. Use the current implementation and focused tests, not the obsolete scaffold description, when extending it.
 
-## Malara benchmarking and cache diagnostics
+## P-model benchmarking and cache diagnostics
 
 The low-level benchmark compares backends across point counts, scale depths, and intermittency values. Its default ceiling is 100 points so routine runs remain manageable; request heavier cases explicitly:
 
@@ -53,8 +53,8 @@ preexisting dependency mismatch needs a separate packaging/CI decision.
 
 ## Scientific and documentation review
 
-Use [research notes](../research-notes/timing-investigations.md) to understand
-known biases before modifying calibration. Review [open scientific questions](scientific-review.md)
-and the [preservation audit](preservation-audit.md). Public package-root API
-stability is described in the [Python quick start](../getting-started/quick-start.md#use-python-instead-of-the-cli).
+***ADD DETAILS ON CURRENT PROJECTS***
+
+Public package-root API
+stability is described in the [Python quick start](../getting-started/first-analysis.md#use-python-instead-of-the-cli).
 See [documentation development](documentation.md) for build and diagram checks.
