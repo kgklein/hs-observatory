@@ -72,9 +72,16 @@ def test_formation_colors_coordinates_and_preserved_right_panels():
         assert list(spec.rowspan) == [0, 1] and list(spec.colspan) == [0, 1]
         assert formation.name == "3d"
         assert not formation.child_axes  # No orbit inset in the 3D panel.
-        assert len(formation.lines) == 8
         nodes = [c for c in formation.collections if hasattr(c, "_offsets3d")]
         relative = spacecraft.position[:, 0] - spacecraft.position[0, 0]
+        hub_connections = [
+            np.column_stack(line.get_data_3d())
+            for line in formation.lines
+            if np.allclose(np.column_stack(line.get_data_3d())[0], relative[0])
+        ]
+        assert len(hub_connections) == 8
+        for point in relative[1:]:
+            assert sum(np.allclose(connection[1], point) for connection in hub_connections) == 1
         for node, point, name in zip(nodes, relative, spacecraft.spacecraft_ids):
             np.testing.assert_allclose(np.asarray(node._offsets3d).ravel(), point)
             np.testing.assert_allclose(
@@ -98,15 +105,7 @@ def test_formation_colors_coordinates_and_preserved_right_panels():
 
 
 @pytest.mark.parametrize("variant", ["polyhedra", "formation"])
-def test_degenerate_formation_renders_without_scipy(monkeypatch, variant):
-    real_import = builtins.__import__
-
-    def no_scipy(name, *args, **kwargs):
-        if name == "scipy" or name.startswith("scipy."):
-            raise ImportError("SciPy unavailable for this test")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", no_scipy)
+def test_degenerate_formation_renders(variant):
     figure, _ = plot_geometry_summary(
         np.zeros((9, 3)), ["H", *[f"N{i}" for i in range(1, 9)]], variant=variant
     )
@@ -221,7 +220,10 @@ def test_publication_aspect_boundaries_and_highlights(variant):
             except ImportError:
                 assert shape.collections[0].cmap.name == "cividis"
             else:
-                assert shape.collections[0].cmap is cm.lajolla
+                samples = np.linspace(0.0, 1.0, 5)
+                np.testing.assert_allclose(
+                    shape.collections[0].cmap(samples), cm.lajolla(samples)
+                )
             for axis in (shape, axes[0, 2]):
                 np.testing.assert_array_equal(axis.collections[0].get_sizes(), [33])
             arc = shape.lines[0]

@@ -1806,7 +1806,7 @@ def _polyhedron_length_cmap():
         from cmcrameri import cm
     except ImportError:
         return plt.get_cmap("cividis")
-    return cm.bam
+    return cm.lajolla
 
 
 def _selected_plot_polyhedra(metrics: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
@@ -2099,8 +2099,11 @@ def plot_geometry_summary(
         baseline_magnitudes = np.linalg.norm(baseline_vectors, axis=1)
         positive_lengths = baseline_magnitudes[baseline_magnitudes > 0.0]
         baseline_cmap = cm.batlow
-        baseline_norm = LogNorm(vmin=positive_lengths.min(), vmax=positive_lengths.max())
-        baseline_colors = baseline_cmap(baseline_norm(baseline_magnitudes))
+        if positive_lengths.size:
+            baseline_norm = LogNorm(vmin=positive_lengths.min(), vmax=positive_lengths.max())
+            baseline_colors = baseline_cmap(baseline_norm(baseline_magnitudes))
+        else:
+            baseline_colors = np.tile(baseline_cmap(0.0), (len(baseline_pairs), 1))
     mesocenter = np.mean(sample, axis=0)
     title_time = _selected_time_title_label(metadata)
 
@@ -2292,7 +2295,7 @@ def plot_geometry_summary(
         )
     if variant != "summary":
         _style_publication_geometry(fig, variant, relative, metadata)
-        if variant == "formation":
+        if variant == "formation" and positive_lengths.size:
             # Use spare header space without resizing any of the existing panels.
             colorbar_ax = fig.add_axes((0.52, 0.955, 0.15, 0.012))
             colorbar = fig.colorbar(
