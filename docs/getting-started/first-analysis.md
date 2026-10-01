@@ -10,10 +10,6 @@ hsobs-analyze configs/example_analyze.yaml
 This configuration reads the generated observation file and writes a basic
 statistical report to `outputs/example/diagnostics.json`.
 
-For more details,
-read the [verification record and complete example manifest](../examples/index.md#starter-workflow),
-then [visualization](../user-guide/visualization.md).
-
 ## Use Python instead of the CLI
 
 If you are looking to integrate this package into your python workflow,

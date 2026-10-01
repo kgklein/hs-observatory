@@ -14,10 +14,9 @@ Some methods, e.g. timing calibration, are areas of active research.
 
 ## Developer path
 
-Start with the quick start and [public Python API](getting-started/quick-start.md#use-python-instead-of-the-cli),
-followed by [developer guidance](developer/index.md), [architecture](architecture/index.md),
-[data contracts](reference/data-products.md),
-the relevant scientific reference and focused tests.
+Start with the quick start and [public Python API](getting-started/first-analysis.md#use-python-instead-of-the-cli),
+followed by [architecture](architecture/index.md) and
+[data contracts](reference/data-products.md).
 [Detailed import diagrams](architecture/module-dependencies.md)
 are intended for general reference, and do not represent runtime sequence or HDF5 data flow.
 
@@ -27,8 +26,7 @@ Use [CITATION.cff](https://github.com/kgklein/hs-observatory/blob/main/CITATION.
 and the method citations when publishing results. The repository
 [README](https://github.com/kgklein/hs-observatory/blob/main/README.md) is the concise
 landing page. The documentation is being prepared for public release; repository
-links require access while private. See [local documentation development](developer/documentation.md)
-and the [scientific review checklist](developer/scientific-review.md).
+links require access while private. See [local documentation development](developer/documentation.md).
 
 ## Researcher workflow
 

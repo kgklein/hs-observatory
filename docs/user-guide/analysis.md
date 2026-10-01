@@ -1,8 +1,6 @@
 # Choosing and running an analysis
 
 A full listing of methods can be found [here](../reference/analysis_methods.md).
-Choose a method from the scientific question and available input, then check the
-[example manifest](../examples/index.md) for prerequisites and verification status.
 Generation and analysis are separate; an analysis configuration names its input.
 
 ## Run an analysis

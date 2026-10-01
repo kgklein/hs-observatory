@@ -95,8 +95,8 @@ field:
 with current options:
 
 - [Sine-sum](../reference/fields.md#sine-sum-field): introductory analytic inputs.
-- [P-Model](../reference/fields.md#malara-style-intermittent-turbulence-evaluator): static periodic with tunable levels of intermittency.
-- [Simulation sampling](../reference/fields.md#static-numerical-simulation-sampling): external snapshot from a Gkeyll simulation.
+- [P-Model](../reference/fields.md#p-model-intermittent-turbulence): static periodic with tunable levels of intermittency.
+- [Simulation sampling](../reference/fields.md#static-gkeyll-simulation-sampling): external snapshot from a Gkeyll simulation.
 - [Linear Eigenmode](../reference/fields.md#plume-single-mode-plane-wave): external selected eigenmode, fixed geometry.
 - [Planar shock](../reference/fields.md#propagating-planar-mhd-shocks): jump solution and smooth synthetic transition.
 
@@ -104,7 +104,7 @@ with current options:
 
 See the [error reference](../reference/errors.md) for details.
 Use Gaussian/OU errors for configurable noise studies,
-or the [observatory requirement model](../reference/errors.md#observatory-requirement-details)
+or the [observatory requirement model](../reference/errors.md#observatory-requirement-model)
 for the current best model for the observatory performance.
 
 ## Inspect the run

@@ -57,8 +57,7 @@ Supported magnitude colormaps: `batlow`, `lajolla`, `magma`, `inferno`,
 | Outputs | HDF5 and optional reconstruction/reference/error plots. |
 | Limitations | Reserved flow_velocity axis; one MC member. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+See [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 Reconstructs magnetic-field samples on time-synchronized planes through the
 formation, using inverse-distance weighting.

@@ -80,5 +80,5 @@ strict builds, and the optional system Graphviz executable used for [diagrams](.
 Use `python -m pip` inside the activated environment and check `hsobs-generate --help`.
 If commands are missing, verify activation and editable installation. BP examples
 require both ADIOS2 and the source files; installing an extra does not download
-mission, PLUME or simulation data. See the [example manifest](../examples/index.md).
+mission, PLUME or simulation data.
 The [configuration reference](../reference/configuration.md) explains path resolution.

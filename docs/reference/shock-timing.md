@@ -59,6 +59,13 @@ tetrahedra.
 hsobs-analyze configs/example_analyze_shock_timing.yaml
 ```
 
+![HelioSwarm Observation of Toy Shock](../assets/figures/shock_timing_detection.png)
+
+![HelioSwarm Observation Accuracy of Resolving Toy Shock](../assets/figures/shock_timing_accuracy.png)
+
+![Reliability of HelioSwarm Observation Resolving Toy Shock](../assets/figures/shock_timing_geometry_reliability.png)
+
+
 The HDF5 product contains detection diagnostics and channel masks,
 reconstructed parameters and residuals, optional per-realization truth errors,
 per-method and per-tetrahedron 16th/median/84th percentiles, paired-success

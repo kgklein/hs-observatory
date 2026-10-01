@@ -2,10 +2,10 @@ analysis:
   method: shock_timing
 
 input:
-  path: outputs/synthetic_observations_shock.h5
+  path: outputs/shock/synthetic_observations_shock.h5
 
 output:
-  path: outputs/shock_timing.h5
+  path: outputs/shock/shock_timing.h5
 
 shock_timing:
   modes: both
@@ -39,9 +39,9 @@ shock_timing:
 
   plot:
     enabled: true
-    detection_base: outputs/shock_timing_detection
-    accuracy_base: outputs/shock_timing_accuracy
-    geometry_base: outputs/shock_timing_geometry_reliability
-    tetrahedra_geometry_base: outputs/shock_timing_tetrahedra_geometry
+    detection_base: outputs/shock/shock_timing_detection
+    accuracy_base: outputs/shock/shock_timing_accuracy
+    geometry_base: outputs/shock/shock_timing_geometry_reliability
+    tetrahedra_geometry_base: outputs/shock/shock_timing_tetrahedra_geometry
     representative_mc_index: 0
     dpi: 150

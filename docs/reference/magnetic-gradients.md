@@ -168,8 +168,8 @@ output, configuration, and DPI.
 | Outputs | Correlation HDF5 with validity/regression metrics and figures. |
 | Limitations | Autocorrelation prevents ordinary independent-sample p-values; bootstrap unavailable. |
 
-See the [example manifest](../examples/index.md) for prerequisites and verification status,
-and [visualization guide](../user-guide/visualization.md) for inspection and plotting.
+
+See [visualization guide](../user-guide/visualization.md) for inspection and plotting.
 
 This post-processing analysis adapts the Pearson product-moment coefficient
 from Equation 6 of Broeren & Klein (2024) to paired time samples of saved
@@ -247,12 +247,7 @@ currently disabled and not implemented.
 
 ## Interpretation and evidence
 
-See the [dated divergence audit](../research-notes/magnetic-gradient-divergence-audit.md)
-for the pair-normalization derivation, independent checks and finite-scale
-limitations. An exactly fitted tetrahedron has zero affine residual by
+An exactly fitted tetrahedron has zero affine residual by
 construction; this is not evidence of a spatially linear underlying field.
 Measured gradient calculation uses stored coordinate offsets. Plotting a saved
 product does not rerun simulation sampling.
-
-The Pearson amplitude-bias wording above is retained pending review of sign
-qualification; see the [scientific checklist](../developer/scientific-review.md).

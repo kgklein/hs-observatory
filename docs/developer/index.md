@@ -56,5 +56,5 @@ preexisting dependency mismatch needs a separate packaging/CI decision.
 ***ADD DETAILS ON CURRENT PROJECTS***
 
 Public package-root API
-stability is described in the [Python quick start](../getting-started/quick-start.md#use-python-instead-of-the-cli).
+stability is described in the [Python quick start](../getting-started/first-analysis.md#use-python-instead-of-the-cli).
 See [documentation development](documentation.md) for build and diagram checks.

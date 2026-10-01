@@ -1,8 +1,7 @@
 # Configuration and command reference
 
 The checked-in YAML files remain the executable examples; this page owns shared
-configuration rules. See the [example manifest](../examples/index.md) before using
-research cases. Specialized parameter definitions live with their field/error/method.
+configuration rules. Specialized parameter definitions live with their field/error/method.
 
 ## YAML and paths
 
@@ -44,7 +43,7 @@ mapping then overrides matching keys. The registry selects the method class.
 `plume_single_mode`, or `shock`; use the [field reference](fields.md).
 `spacecraft.source` selects synthetic geometry or CDF loading, with an optional
 fallback. CDF variables and snapshot/advection behavior are described in
-[generation](../user-guide/generation.md#two-stage-workflow).
+[generation](../user-guide/generation.md).
 
 The [error reference](errors.md) defines coordinate, Gaussian, OU and observatory
 selectors. Preserve scalar cadence support, Malara density `none` as a legacy

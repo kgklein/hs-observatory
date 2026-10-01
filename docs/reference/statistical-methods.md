@@ -111,6 +111,10 @@ Mallet et al. (2015), Fig. 1:
 hsobs-analyze configs/example_elsasser_increment_pdf_static.yaml
 ```
 
+![HelioSwarm Measurements of the Elsasser Field Increments from p-model turbulence](../assets/figures/elsasser_increment_pdf_2x2.png)
+
+*Elsasser Field increments constructed from HS measurement of a p-model turbulence.*
+
 The method reads an ordinary synthetic-observation file and calls the common
 Elsasser implementation internally for both truth and one configured observed
 MC member. It treats every `(time, spacecraft)` sample as a point in one frozen
@@ -283,7 +287,10 @@ With time step `dt` and window `w`, the normalization is
 PSD(f) = dt / sum(w^2) * |rFFT(w x)|^2
 ```
 
-Strictly positive non-Nyquist bins are doubled, yielding approximate units of quantity²/Hz. Mean detrending and a Hann window are enabled by default. The DC bin is saved but omitted from the default log-log diagnostic plot, which overlays all spacecraft in panels for density, velocity trace, and magnetic trace. All panels use the same frequency-axis limits; native lower-cadence products therefore retain blank space above their Nyquist frequencies.
+Strictly positive non-Nyquist bins are doubled, yielding units of quantity²/Hz.
+Mean detrending and a Hann window are enabled by default.
+The DC bin is saved but omitted from the default log-log diagnostic plot, which overlays all spacecraft in panels for density, velocity trace, and magnetic trace.
+All panels use the same frequency-axis limits; native lower-cadence products therefore retain blank space above their Nyquist frequencies.
 
 When analyzing `data_group: observed`, plotting also computes the corresponding truth spectra and writes them under `/truth_psd` in the analysis HDF5 file. The selected Monte Carlo realization and truth are rendered as separate figures by default, using identical axes and styling. For each parameter with positive truth spectral power, both figures use a common y-axis range spanning the observed and truth spectra. Parameters with zero truth power retain an independently autoscaled observed panel and an annotated zero-power truth panel. Set `plot.truth_enabled: false` to suppress the truth product.
 
@@ -370,6 +377,10 @@ truth separate from the observed Monte Carlo ensemble:
 hsobs-plot-structure-function structure_function.json \
   --p-value 0.9 --quantity z_plus --output sf_summary_p09.png
 ```
+
+![Structure function analysis from p-model observations](../assets/figures/malara-prod-001_sf_publication.png)
+
+*Structure Function Analysis from p-model observations.*
 
 Python callers can use `plot_structure_function_summary_row(...)` with a
 supplied row of three axes when assembling multiple p-model rows, or

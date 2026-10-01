@@ -3,8 +3,7 @@
 These are distinct research experiments. Their original numerical findings,
 warnings and setup details are preserved below; documentation migration does not
 rerun or newly validate them. Follow the [method reference](../reference/timing-calibration.md)
-for implemented equations and the [example manifest](../examples/index.md#timing-research)
-for public reproducibility obstacles. Generated artifacts are git-ignored and are
+for implemented equations. Generated artifacts are git-ignored and are
 not promised as distributed data. A commit/data provenance record remains needed.
 
 <a id="affine-projection-experiment"></a>

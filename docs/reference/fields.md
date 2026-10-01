@@ -49,7 +49,7 @@ field:
       phase: 0.0
 ```
 
-## p-model Intermittent Turbulence
+## p model Intermittent Turbulence
 
 `fields/malara.py` provides a low-level isotropic evaluator for a p-model of turbulence inspired by Malara et al., [“Fast algorithm for a three-dimensional synthetic model of intermittent turbulence”](https://doi.org/10.1103/PhysRevE.94.053109).
 `MalaraTurbulence.evaluate_vector(positions)` evaluates a deterministic three-component turbulent field directly at arbitrary points without constructing a spatial grid.

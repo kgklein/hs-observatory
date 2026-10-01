@@ -135,14 +135,13 @@ publication in the future.
 ## Content ownership and migration checks
 
 Scientific equations/parameters/products belong to their method reference;
-shared schema belongs to the data reference. The [example manifest](../examples/index.md)
-owns execution status, and research notes preserve historical evidence. Root
-DESIGN/CONTRIBUTING and visualization helpers remain separate authorities.
+shared schema belongs to the data reference.
+Root DESIGN/CONTRIBUTING and visualization helpers remain separate authorities.
 
-Before retiring a legacy page, review the [preservation audit](preservation-audit.md),
+Before retiring a legacy page
 check local links/anchors/assets, and retain practical compatibility links.
 Strict builds validate site links but cannot establish scientific correctness or
-public availability of external inputs. See [scientific review](scientific-review.md).
+public availability of external inputs.
 
 ## Equation rendering without new dependencies
 
