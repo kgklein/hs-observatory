@@ -12,6 +12,11 @@ The timeseries can include measurement errors, including timing and spatial know
 The currently implemented methods intentionally have different scopes.
 Some methods, e.g. timing calibration, are areas of active research.
 
+The [intermittency recovery investigation](research-notes/intermittency-recovery.md)
+tracks fit-range sensitivity, local logarithmic slopes, and direct 3D Malara
+sampling under **Ongoing Research**. It distinguishes current findings from
+smoke-test validation and the pilot calculations still to be run.
+
 ## Developer path
 
 Start with the quick start and [public Python API](getting-started/first-analysis.md#use-python-instead-of-the-cli),

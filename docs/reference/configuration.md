@@ -59,9 +59,11 @@ exact arguments; uppercase arguments here are placeholders.
 | --- | --- |
 | `hsobs-generate` | Generation YAML; `--truth-velocity-frame`, repeatable `--3d-connection` |
 | `hsobs-analyze` | Analysis YAML |
+| `hsobs-analyze-spatial-structure-function` | Direct-spatial analysis YAML; `--field-config`, `--p`, `--n-pairs`, `--seed`, separation/backend controls, `--output-prefix` |
+| `hsobs-plot-spatial-structure-function` | Saved direct-spatial HDF5; fit windows, local-slope method, cascade context and comparison controls; no field evaluation |
 | `hsobs-plot-figure2` | `--malara`, `--simulation`, `--output`; units/frame/member/time controls |
 | `hsobs-plot-structure-function` | Saved JSON; `--p-value`, `--quantity`, `--output` |
-| `hsobs-plot-structure-function-overlay` | Plotting YAML |
+| `hsobs-plot-structure-function-overlay` | Plotting YAML; `--local-slopes`, `--local-slope-method three-point\|adjacent`, `--show-cascade-scales`, `--output-prefix`; [local diagnostic details](statistical-methods.md#local-logarithmic-scaling-diagnostic) |
 | `hsobs-plot-increment-pdf` | Repeatable `--result P=HDF5`, `--output`, `--lags`, `--layout`, `--dpi` |
 | `hsobs-plot-increment-pdf-wasserstein` | Plotting YAML; `--panels-a-c` |
 | `hsobs-plot-magnetic-gradient` | Saved HDF5; `--output`, `--layout`, `--row4`, `--ratio-scale`, time bounds, DPI |
