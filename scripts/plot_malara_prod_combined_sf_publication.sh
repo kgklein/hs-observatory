@@ -15,6 +15,10 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 #   scripts/plot_malara_prod_combined_sf_publication.sh
 #   scripts/plot_malara_prod_combined_sf_publication.sh \
 #       --fit-lambda-range 1000 7000 --min-fit-bins 3
+#   scripts/plot_malara_prod_combined_sf_publication.sh \
+#       --local-slopes --show-cascade-scales
+#   Local diagnostics also support --local-slope-method adjacent and
+#   --output-prefix PATH (writes primary/focused PNG/PDF and derived HDF5).
 #
 # Other useful overrides:
 #   --fit-range NAME   use a named fit range saved in the analysis JSON

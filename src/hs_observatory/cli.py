@@ -53,6 +53,18 @@ def analyze_main(argv: list[str] | None = None) -> int:
     return _run("Analyze synthetic HelioSwarm observations", analyze_from_config, argv)
 
 
+def spatial_structure_function_main(argv: list[str] | None = None) -> int:
+    from hs_observatory.cli_spatial_structure_function import sample_main
+
+    return sample_main(argv)
+
+
+def plot_spatial_structure_function_main(argv: list[str] | None = None) -> int:
+    from hs_observatory.cli_spatial_structure_function import plot_main
+
+    return plot_main(argv)
+
+
 def plot_figure2_main(argv: list[str] | None = None) -> int:
     from hs_observatory.visualization import plot_figure2_timeseries
 
@@ -221,6 +233,11 @@ def plot_structure_function_overlay_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Overlay Malara structure functions and fitted scaling exponents"
     )
+    parser.add_argument("--local-slopes", action="store_true", help="post-process local slopes")
+    parser.add_argument("--local-slope-method", choices=("three-point", "adjacent"),
+                        default="three-point")
+    parser.add_argument("--show-cascade-scales", action="store_true")
+    parser.add_argument("--output-prefix", help="local diagnostic PNG/PDF/HDF5 prefix")
     parser.add_argument("config", help="structure-function overlay YAML")
     parser.add_argument("--output", default=None, help="override output figure path")
     parser.add_argument(
@@ -251,6 +268,27 @@ def plot_structure_function_overlay_main(argv: list[str] | None = None) -> int:
         help="hide the theoretical p-model curves",
     )
     args = parser.parse_args(argv)
+    if args.local_slopes:
+        if any(value is not None for value in (
+            args.output, args.fit_range, args.fit_lambda_range, args.min_fit_bins,
+        )):
+            parser.error("local slopes use the full range; omit global fit options and "
+                         "--output, and use --output-prefix")
+        from hs_observatory.analysis.structure_function_local import local_slopes_from_config
+
+        try:
+            outputs = local_slopes_from_config(
+                args.config, method=args.local_slope_method,
+                output_prefix=args.output_prefix, show_cascade_scales=args.show_cascade_scales,
+                show_p_model_override=args.show_p_model,
+            )
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            parser.error(str(exc))
+        for output in outputs:
+            print(output)
+        return 0
+    if args.output_prefix is not None or args.show_cascade_scales or args.local_slope_method != "three-point":
+        parser.error("local diagnostic options require --local-slopes")
     output = plot_structure_function_overlay_from_config(
         args.config,
         output_override=args.output,

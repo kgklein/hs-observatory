@@ -103,6 +103,8 @@ The effective plotted frame is stored as `truth_visualization_velocity_frame` in
 | --- | --- | --- |
 | Structure functions | `hsobs-plot-structure-function PRODUCT --p-value P --quantity z_plus --output FIGURE` | [Moments, scaling fits and ensemble plots](../reference/statistical-methods.md#structure_function) |
 | Structure-function overlays | `hsobs-plot-structure-function-overlay CONFIG` | Lightweight plotting YAML; inspect its case inputs first. |
+| Local structure-function slopes | `hsobs-plot-structure-function-overlay CONFIG --local-slopes` | [Local scaling, per-member MC intervals and cascade context](../reference/statistical-methods.md#local-logarithmic-scaling-diagnostic) |
+| Direct 3D spatial structure functions | `hsobs-plot-spatial-structure-function PRODUCT` | [Raw Malara field, exact separations and batch sampling diagnostics](../reference/statistical-methods.md#direct-3d-spatial-structure-functions) |
 | Static increment PDFs | `hsobs-plot-increment-pdf --result P=HDF5 --output FIGURE` (repeat cases) | [Frozen-field PDF definitions](../reference/statistical-methods.md#static-elsasser-increment-pdfs) |
 | Increment-PDF distance | `hsobs-plot-increment-pdf-wasserstein CONFIG` | Saved-product comparison; no new observation generation. |
 | Magnetic gradients | `hsobs-plot-magnetic-gradient PRODUCT --output FIGURE` | [Standard and error-decomposition layouts](../reference/magnetic-gradients.md#magnetic_gradient) |
@@ -116,6 +118,52 @@ Uppercase arguments are placeholders, not supplied files. Use `--help` and the
 [CLI index](../reference/configuration.md#installed-commands) for argument details.
 Standard statistics, shock timing and reconstruction can produce figures during
 analysis; gradient and timing commands support separate saved-product plotting.
+
+### Local structure-function slopes
+
+From the repository root, use saved structure-function JSON products to inspect
+how the scaling exponent changes with separation:
+
+```bash
+scripts/plot_malara_prod_combined_sf_publication.sh \
+  --local-slopes --show-cascade-scales
+```
+
+This production example reads runs 400–402 through
+`analysis/malara-prod-combined_sf-publication.yaml`. It requires those saved
+JSONs; it does not generate fields, observations, or structure functions.
+The equivalent installed command is:
+
+```bash
+hsobs-plot-structure-function-overlay \
+  analysis/malara-prod-combined_sf-publication.yaml \
+  --local-slopes --show-cascade-scales
+```
+
+The default three-point estimator leaves the first and last bins undefined.
+Add `--local-slope-method adjacent` for consecutive-bin slopes at geometric
+midpoints. Use `--output-prefix outputs/my_local_slopes` to choose another
+prefix, or `--no-p-model` to hide analytic reference lines. Local mode uses the
+full saved separation range and rejects explicit global fitting options and
+`--output`.
+
+The example writes these files under `outputs/`:
+
+- `malara-prod-combined_sf_publication_local_slopes.png` and `.pdf`: six orders,
+  one row per intermittency parameter.
+- `malara-prod-combined_sf_publication_local_slopes_focused.png` and `.pdf`:
+  orders 2, 3, 4, and 6, comparing the three intermittency parameters.
+- `malara-prod-combined_sf_publication_local_slopes.h5`: local slopes, per-member
+  MC arrays, percentiles, validity masks, and provenance.
+
+The figures distinguish sampled truth, MC medians and 5th–95th percentile bands,
+and theoretical exponents. A theory crossing alone is not evidence of a scaling
+plateau. See the [method reference](../reference/statistical-methods.md#local-logarithmic-scaling-diagnostic)
+for estimators, cascade annotations, and interpretation limits.
+
+For the numerical findings, plot snapshots, direct-3D validation status and
+planned convergence checks, follow
+[Ongoing Research: Intermittency recovery](../research-notes/intermittency-recovery.md).
 
 ## Observed geometry display
 

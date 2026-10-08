@@ -421,6 +421,229 @@ Observed pair positions may incorporate `/errors/position_offset`; see
 moments and fitted exponents require adequate pair counts and an appropriate
 fit range; no ensemble averaging is performed inside each member's statistic.
 
+### Local logarithmic scaling diagnostic
+
+The overlay command can post-process saved structure-function JSONs to calculate
+`xi_local = d ln(S_n) / d ln(lambda)`. This exposes scale dependence that a
+single global power-law fit can obscure. It does not change the saved global
+fit range or recompute fields, observations, increments, or structure functions.
+See the [visualization guide](../user-guide/visualization.md#local-structure-function-slopes)
+for the production command and output locations.
+
+#### Estimators and validity
+
+- **Three-point regression (default):** regress `ln(S_n)` against `ln(lambda)`
+  over consecutive bins `k-1, k, k+1`, using the actual bin centers, and assign
+  the slope to `lambda_k`. The first and last slopes are `NaN`.
+- **Adjacent bins:** divide the difference in `ln(S_n)` by the difference in
+  `ln(lambda)` for consecutive bins and assign the slope to
+  `sqrt(lambda_k * lambda_(k+1))`. Select with
+  `--local-slope-method adjacent`.
+
+Both estimators use natural logarithms. Nonfinite/nonpositive structure-function
+values or separations and nonfinite/nonpositive pair counts invalidate the
+corresponding samples. A neighborhood containing invalid samples or
+non-increasing separations yields `NaN`; bins are never reordered and gaps are
+never bridged. There are no asymmetric edge fits or extrapolated slopes.
+
+Sampled-truth curves are processed separately. When individual MC curves are
+stored, slopes are computed independently for every realization, then the
+existing finite-member 5th, 50th and 95th percentiles are taken at each order
+and separation. This differs from differentiating the median structure-function
+curve. When individual MC curves are unavailable, MC slopes and bands are
+omitted with a warning; uncertainty is not inferred from percentile curves.
+
+The analytic reference is `zeta_n(p) = 1 - log2(p^(n/3) + (1-p)^(n/3))`.
+It gives `zeta_3 = 1` for every p and `zeta_n(0.5) = n/3`. Reference values are
+not imposed on the calculated slopes.
+
+#### Plotting configuration and cascade context
+
+The local mode reuses the overlay YAML's `cases`, `quantity`, `max_order`,
+`dpi`, `show_p_model`, and `output.figure`. Case inputs may have different
+separation grids. Relative paths resolve from the current working directory,
+as in the existing overlay workflow. The default output prefix is the configured
+figure stem plus `_local_slopes`; `--output-prefix` overrides it. The command
+writes primary and focused PNG/PDF figures plus HDF5, and rejects `--output`,
+`--fit-range`, `--fit-lambda-range`, and `--min-fit-bins` in local mode.
+
+To enable contextual scale marks, supply a matching generation configuration
+for each case and pass `--show-cascade-scales`:
+
+```yaml
+cases:
+  "400":
+    path: outputs/malara-prod-400_sf_publication.json
+    p_value: 0.9
+    generation_config: generation/malara-prod-400.yaml
+```
+
+Generation configurations are read only when marks are requested. The reader
+requires explicit isotropic Malara domain lengths in km, injection/max scale
+indices, and spectral exponent; it does not instantiate a field evaluator.
+No production cascade parameters are assumed for arbitrary datasets.
+
+Marks show nominal cell sizes `ell_m = L0 / 2^m`, selecting every third index
+from injection plus the maximum index and retaining only sizes in the plotted
+range. Eddies have compact support widths `2 * ell_m` along each coordinate.
+These marks are context, not asserted inertial-range boundaries. The primary
+figure shows each case's marks; the focused figure shows shared marks only when
+the supplied domain lengths and selected indices agree across cases.
+
+#### Derived HDF5 product
+
+`<prefix>.h5` stores root attributes `schema_version`, `estimator`, `quantity`,
+and `metadata_json`, including the plotting configuration path, creation time,
+ensemble policy, and edge policy. Numbered groups `cases/0`, `cases/1`, … are
+ordered by decreasing p and contain:
+
+- Attributes `name`, `p_value`, `source_path`, optional `mc_limitation`, and
+  optional `cascade_json` with generation provenance and scale parameters.
+- Datasets `orders` and `theory`.
+- A `truth` group and, when individual curves exist, an `mc` group with
+  `source_centers_km`, `source_edges_km`, `coordinates_km`, `source_valid`,
+  `slopes`, and `slope_valid`. Slopes and masks preserve `(member, order, bin)`
+  axes; adjacent slopes have one fewer bin than the source arrays.
+- Additional MC datasets `p05`, `median`, `p95`, and `finite_members`, shaped
+  `(order, slope_bin)`. Missing slopes remain `NaN`; a count of zero means no
+  finite MC slopes contribute at that location.
+
+The input JSONs and original publication figure are preserved.
+Python entry points live in `analysis.structure_function_local`, notably
+`local_log_slopes`, `p_model_exponents`, and `local_slopes_from_config`.
+
+#### Interpretation of the current production results
+
+Current numerical findings, figures and open questions are maintained in
+[Ongoing Research: Intermittency recovery](../research-notes/intermittency-recovery.md#local-slope-findings).
+The nine-bin production results provide seven overlapping three-point estimates;
+this limits the evidence for an extended plateau.
+
+### Direct 3D spatial structure functions
+
+The [ongoing intermittency investigation](../research-notes/intermittency-recovery.md#direct-3d-validation)
+records the smoke-test status and the next pilot/convergence steps. This section
+documents the implemented calculation and interfaces.
+
+`spatial_structure_function` samples the raw three-component Malara fluctuation
+field directly, bypassing trajectories, time series, instrument errors and
+observation MC models. Its vector-magnitude moments use the same shared moment
+helpers as the virtual-HS analysis. Global fits, local derivatives and p-model
+predictions reuse the existing routines.
+
+From the repository root, explicitly launch the pilot:
+
+```bash
+hsobs-analyze-spatial-structure-function \
+  configs/example_spatial_structure_function.yaml
+```
+
+The example references `generation/malara-prod-401.yaml` and overrides only p
+to evaluate 0.5, 0.7 and 0.9. It defaults to 2,000 pairs at each of 25 logarithmic
+separations from 50 to 20,000 km. This is 100,000 point evaluations per case and
+can be expensive. Increase `--n-pairs` to 5,000 or 50,000 explicitly; no production
+calculation runs as part of tests. The standard dispatcher also accepts this
+configuration through `hsobs-analyze CONFIG`; for this method, `input.path`
+names the generation YAML rather than an observation HDF5 file.
+
+The inexpensive production-field smoke command is:
+
+```bash
+hsobs-analyze-spatial-structure-function \
+  configs/example_spatial_structure_function.yaml \
+  --n-pairs 16 --lambda-centers-km 50 200 500 1000 20000 \
+  --backend cached --smoke --output-prefix outputs/direct-spatial-sf-smoke
+```
+
+Smoke products test functionality only. Sixteen pairs split into eight batches
+cannot establish high-order convergence or a scientific scaling plateau.
+
+#### Spatial samples and reproducibility
+
+Positions are uniform in the domain relative to the field origin, and directions
+are isotropic. The second coordinate is the **unwrapped** position plus the
+requested separation times the direction; the evaluator wraps both points into
+the periodic domain. Raw evaluator normalization, field seed and realization
+are preserved from the production adapter's base configuration. Backgrounds,
+output-field amplitudes and Elsasser transformations are not applied.
+
+The separation centers are exact evaluation magnitudes, not finite-width bins.
+Configure `lambda_centers_km`, or `centers_from_hs: PATH_TO_SF_JSON` to sample
+the existing HS truth centers without interpolation. CLI equivalents are
+`--lambda-centers-km ...` and `--centers-from-hs PATH`. Logarithmic grids support
+`--n-separations`, `--lambda-min-km` and `--lambda-max-km`. Their upper limit must
+remain below half the smallest domain dimension; larger explicit centers are
+allowed with a periodic-image warning.
+
+The sampling seed is separate from the field's `base_seed`. Each exact separation
+has its own deterministic stream, shared across p-values. With the seed and
+domain unchanged, the first 2,000 coordinates of a 5,000-pair run match the
+2,000-pair run, independently of processing chunk size. Extending a sample count
+replays this prefix; resuming field evaluation from a previous product is not
+implemented. Processing defaults to 128 pairs per task, bounded queues, and
+task-local caches. The parallel path reuses the existing process-safe Malara
+chunk evaluator inside a persistent pool, avoiding the existing high-level
+parallel API's materialization of an entire evaluation result.
+
+#### Fits, local slopes and sampling variability
+
+The candidate window is 200–1,000 km. An additional comparison window of
+100–1,300 km contains four of the saved HS centers, while the candidate window
+contains only two. The default minimum of three points is retained; unavailable
+HS fits are marked explicitly. These are diagnostic windows, not asserted
+inertial-range boundaries, and are never selected automatically to match theory.
+
+Eight disjoint contiguous sample batches supply moment standard deviations and
+coefficients of variation. Local slopes are calculated separately for the full
+sample and each batch; ±1 batch-SD bands are displayed only where at least three
+batch slopes are finite. These bands describe **spatial sampling variability**,
+not observation MC uncertainty or variability across independent turbulence
+realizations. Batches share the same deterministic field and may sample
+overlapping eddy supports. Cumulative 25/50/75/100% checkpoints use the same
+evaluations and are saved for convergence inspection.
+
+#### Saved products and cached plotting
+
+The pilot writes `outputs/direct-spatial-sf.h5` and PNG/PDF pairs with suffixes
+`_structure_functions`, `_local_slopes`, and, when HS inputs are available,
+`_comparison`. The HDF5 retains effective field configurations, source YAML,
+seeds, realization, exact centers, full/batch/checkpoint moments and counts,
+batch variability, global slopes and residual diagnostics, local slopes and
+validity masks, theory and HS comparison provenance. Each numbered `cases`
+group represents one p-value; `q/S_n` uses `(member=1, order, separation)` axes.
+Batch arrays use `(batch, order, separation)` axes. No artificial bin edges,
+Elsasser aliases or observation-MC arrays are introduced.
+
+Refit or regenerate figures from that product without evaluating the field:
+
+```bash
+hsobs-plot-spatial-structure-function outputs/direct-spatial-sf.h5 \
+  --fit-lambda-range 200 1000 --fit-window comparison 100 1300 \
+  --show-cascade-scales --output-prefix outputs/direct-spatial-sf-refit
+```
+
+The command writes a separate HDF5 product and records the source product path.
+Additional windows use repeatable `--fit-window NAME MIN_KM MAX_KM`. Select
+`--local-slope-method adjacent` for the existing adjacent-bin derivative.
+`--comparison-config` accepts an existing HS overlay YAML; missing files omit
+comparison cases with a warning, while malformed supplied products are errors.
+Comparisons refit ideal HS curves on their own actual centers, without
+interpolation or upstream recomputation. Raw q and processed HS Elsasser fields
+differ in preprocessing, so this comparison alone does not identify spacecraft
+sampling as the sole cause of a difference.
+
+Python interfaces are in `analysis.spatial_structure_function`, including
+`sample_spatial_pairs`, `SpatialStructureFunctionAnalysis`, `read_spatial_result`,
+`spatial_plot_product`, and `postprocess_spatial_result`. Before reinstalling
+console entry points, module fallbacks are available:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m hs_observatory.cli_spatial_structure_function \
+  sample configs/example_spatial_structure_function.yaml
+PYTHONPATH=src .venv/bin/python -m hs_observatory.cli_spatial_structure_function \
+  plot outputs/direct-spatial-sf.h5
+```
+
 ### Diagnostics input requirement
 
 The shared `read_observations` reader currently requires truth datasets even

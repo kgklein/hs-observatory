@@ -365,6 +365,24 @@ def _fit_scaling_exponents(
     }
 
 
+def structure_function_moment_sums(magnitudes: np.ndarray, orders: list[int]) -> np.ndarray:
+    """Sum vector-increment magnitude powers, sharing the existing arithmetic."""
+    return np.asarray([float(np.sum(magnitudes**order)) for order in orders])
+
+
+def structure_function_moment_means(sums: np.ndarray, counts: np.ndarray) -> np.ndarray:
+    """Normalize member/order/scale moment sums, preserving empty-bin NaNs."""
+    return np.divide(sums, counts[:, None, :], out=np.full(sums.shape, np.nan),
+                     where=counts[:, None, :] > 0)
+
+
+def plot_structure_function_curve(axis, centers, values, *, color, marker, **kwargs):
+    """Render one moment curve with the publication plot's established styling."""
+    return axis.plot(centers, values, color=color, linestyle="-", linewidth=1.45,
+                     marker=marker, markersize=4.0, markerfacecolor="white",
+                     markeredgewidth=0.9, alpha=0.9, zorder=2, **kwargs)
+
+
 def compute_pairwise_structure_functions(
     positions_km: np.ndarray,
     z_plus: np.ndarray,
@@ -424,8 +442,7 @@ def compute_pairwise_structure_functions(
                 for field, values in (("z_plus", arrays[1]), ("z_minus", arrays[2])):
                     increment = values[member, selected, left] - values[member, selected, right]
                     magnitude = np.linalg.norm(increment, axis=1)
-                    for order_index, order in enumerate(orders):
-                        sums[field][member, order_index, index] += float(np.sum(magnitude**order))
+                    sums[field][member, :, index] += structure_function_moment_sums(magnitude, orders)
 
     products: dict[str, Any] = {
         "orders": orders,
@@ -444,12 +461,7 @@ def compute_pairwise_structure_functions(
         )
     products["scale_ranges_km"] = scale_ranges_km
     for field in FIELDS:
-        S_n = np.divide(
-            sums[field],
-            counts[:, None, :],
-            out=np.full(sums[field].shape, np.nan),
-            where=counts[:, None, :] > 0,
-        )
+        S_n = structure_function_moment_means(sums[field], counts)
         products[field] = {
             "S_n": S_n,
             "flatness": _flatness(S_n, orders),
@@ -630,8 +642,7 @@ def compute_all_spacetime_structure_functions(
                     magnitude = np.linalg.norm(
                         values[right[selected]] - values[left[selected]], axis=1
                     )
-                    for order_index, order in enumerate(orders):
-                        sums[field][member, order_index, index] += float(np.sum(magnitude**order))
+                    sums[field][member, :, index] += structure_function_moment_sums(magnitude, orders)
 
     pair_diagnostics: dict[str, Any] = {
         "possible_per_member": possible_pairs,
@@ -668,12 +679,7 @@ def compute_all_spacetime_structure_functions(
         )
     products["scale_ranges_km"] = scale_ranges_km
     for field in FIELDS:
-        S_n = np.divide(
-            sums[field],
-            counts[:, None, :],
-            out=np.full(sums[field].shape, np.nan),
-            where=counts[:, None, :] > 0,
-        )
+        S_n = structure_function_moment_means(sums[field], counts)
         products[field] = {
             "S_n": S_n,
             "flatness": _flatness(S_n, orders),
@@ -1191,18 +1197,12 @@ def plot_structure_function_summary_row(
         structure_axis.fill_between(
             mc_lambda, lower, upper, color=color, alpha=0.10, linewidth=0, zorder=1
         )
-        structure_axis.plot(
+        plot_structure_function_curve(
+            structure_axis,
             truth_lambda,
             truth_sf[0, truth_index],
             color=color,
-            linestyle="-",
-            linewidth=1.45,
             marker=marker,
-            markersize=4.0,
-            markerfacecolor="white",
-            markeredgewidth=0.9,
-            alpha=0.9,
-            zorder=2,
         )
         structure_axis.plot(
             mc_lambda,
