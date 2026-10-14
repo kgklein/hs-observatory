@@ -107,6 +107,33 @@ Use Gaussian/OU errors for configurable noise studies,
 or the [observatory requirement model](../reference/errors.md#observatory-requirement-model)
 for the current best model for the observatory performance.
 
+## Truth-only generation
+
+Set `errors.n_mc: 0` to generate nominal sampled truth without a Monte Carlo
+ensemble:
+
+```yaml
+errors:
+  n_mc: 0
+```
+
+Other error settings may remain in the configuration; they are inactive for this
+run. No error RNG, error models, coordinate-offset draws, perturbed field samples
+or measurement-error realizations are created. Truth, nominal trajectories and
+velocity-frame conventions are unchanged. Omitting `n_mc` still defaults to one;
+negative counts are rejected.
+
+The existing HDF5 schema is retained: `/observed/n`, `/observed/v` and
+`/observed/B` have a zero-length leading MC dimension, with their usual native
+cadence trailing dimensions. `/errors` is empty when `output.write_errors: true`
+and absent when false. Metadata records `n_mc: 0`, `mc_generation_enabled: false`
+and error models as not generated; the full input YAML remains embedded.
+
+Truth, geometry and truth Alfvén visualizations follow their normal switches.
+Observed-member visualizations are automatically disabled, and their metadata
+paths are null. Analyses that require an observed realization cannot use this
+file; select truth explicitly in truth-capable analysis workflows.
+
 ## Inspect the run
 
 Run `hsobs-generate CONFIG`, then check the printed output path, geometry-source
