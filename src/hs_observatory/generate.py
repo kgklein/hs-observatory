@@ -306,84 +306,106 @@ def generate_from_config(
     errors_config = config["errors"]
     n_mc = int(errors_config.get("n_mc", 1))
     seed = errors_config.get("random_seed")
-    rng = np.random.default_rng(seed)
-    n_spacecraft = len(spacecraft["n"].spacecraft_ids)
-    use_observatory_errors = observatory_errors_enabled(errors_config)
-    observatory_config = (
-        normalized_observatory_config(errors_config) if use_observatory_errors else None
-    )
-    time_config = (
-        observatory_config["timing"] if use_observatory_errors else errors_config.get("time")
-    )
-    position_config = (
-        observatory_config["position"] if use_observatory_errors else errors_config.get("position")
-    )
-    time_offset_model = time_offset_model_from_config(time_config)
-    position_offset_model = position_offset_model_from_config(position_config)
-    time_offset = time_offset_model.draw(rng, n_mc, n_spacecraft)  # (mc, spacecraft), seconds
-    reference_spacecraft = (time_config or {}).get("reference_spacecraft")
-    if reference_spacecraft is not None:
-        spacecraft_ids = tuple(spacecraft["n"].spacecraft_ids)
-        if reference_spacecraft not in spacecraft_ids:
-            raise ValueError("timing.reference_spacecraft must name an existing spacecraft")
-        time_offset[:, spacecraft_ids.index(reference_spacecraft)] = 0.0
-    position_offset = position_offset_model.draw(
-        rng, n_mc, n_spacecraft
-    )  # (mc, spacecraft, xyz), km
-
-    observed: dict[str, np.ndarray] = {}
-    realized_errors: dict[str, np.ndarray] = {
-        "time_offset": time_offset,
-        "position_offset": position_offset,
-    }
-    variable_configs = errors_config.get("variables", {})
-    measurement_error_names = {}
-    sampled_by_quantity: dict[str, np.ndarray] = {}
-    for quantity in ("n", "v", "B"):
-        sampled = np.empty((n_mc, *truth[quantity].shape), dtype=float)
-        for mc_index in range(n_mc):
-            # The coordinate offsets are constant over this spacecraft's whole
-            # time series. Nominal time/position remain unchanged in the file,
-            # while field sampling follows the trajectory to the shifted clock time.
-            sampled_time = time[quantity][:, None] + time_offset[mc_index][None, :]
-            sampled_position = (
-                _trajectory_positions_at_times(spacecraft[quantity], sampled_time)
-                + position_offset[mc_index][:, None, :]
-            )
-            sampled[mc_index] = _evaluate_quantity_with_progress(
-                field,
-                quantity,
-                sampled_time,
-                sampled_position,
-                progress_time=time[quantity],
-                label=f"sampled {quantity} MC {mc_index + 1}/{n_mc}",
-            )
-            if quantity == "v" and velocity_frame == "spacecraft":
-                shifted_spacecraft_velocity = _trajectory_velocities_at_times(
-                    spacecraft[quantity], sampled_time
-                )
-                assert shifted_spacecraft_velocity is not None
-                sampled[mc_index] -= np.swapaxes(shifted_spacecraft_velocity, 0, 1)
-        sampled_by_quantity[quantity] = sampled
-
-    if use_observatory_errors:
-        result = apply_observatory_measurement_errors(sampled_by_quantity, time, errors_config, rng)
-        observed.update(result.observed)
-        realized_errors.update(result.errors)
-        measurement_error_names = {
-            "n": "observatory_density",
-            "v": "observatory_velocity_speed_angle_alignment",
-            "B": "observatory_magnetic_dc_ac_alignment",
+    if n_mc == 0:
+        # Preserve schema paths without sampling fields or instantiating error models.
+        observed = {
+            quantity: np.empty((0, *truth[quantity].shape), dtype=float)
+            for quantity in ("n", "v", "B")
         }
-        observatory_metadata = result.metadata
-    else:
+        realized_errors = {}
         observatory_metadata = {}
+        error_model_metadata = {
+            "measurements": {},
+            "time": "not_generated",
+            "position": "not_generated",
+            "observatory": False,
+        }
+    else:
+        rng = np.random.default_rng(seed)
+        n_spacecraft = len(spacecraft["n"].spacecraft_ids)
+        use_observatory_errors = observatory_errors_enabled(errors_config)
+        observatory_config = (
+            normalized_observatory_config(errors_config) if use_observatory_errors else None
+        )
+        time_config = (
+            observatory_config["timing"] if use_observatory_errors else errors_config.get("time")
+        )
+        position_config = (
+            observatory_config["position"] if use_observatory_errors else errors_config.get("position")
+        )
+        time_offset_model = time_offset_model_from_config(time_config)
+        position_offset_model = position_offset_model_from_config(position_config)
+        time_offset = time_offset_model.draw(rng, n_mc, n_spacecraft)  # (mc, spacecraft), seconds
+        reference_spacecraft = (time_config or {}).get("reference_spacecraft")
+        if reference_spacecraft is not None:
+            spacecraft_ids = tuple(spacecraft["n"].spacecraft_ids)
+            if reference_spacecraft not in spacecraft_ids:
+                raise ValueError("timing.reference_spacecraft must name an existing spacecraft")
+            time_offset[:, spacecraft_ids.index(reference_spacecraft)] = 0.0
+        position_offset = position_offset_model.draw(
+            rng, n_mc, n_spacecraft
+        )  # (mc, spacecraft, xyz), km
+
+        observed: dict[str, np.ndarray] = {}
+        realized_errors: dict[str, np.ndarray] = {
+            "time_offset": time_offset,
+            "position_offset": position_offset,
+        }
+        variable_configs = errors_config.get("variables", {})
+        measurement_error_names = {}
+        sampled_by_quantity: dict[str, np.ndarray] = {}
         for quantity in ("n", "v", "B"):
-            model = error_model_from_config(variable_configs.get(quantity), quantity=quantity)
-            observed[quantity], realized_errors[quantity] = model.apply_ensemble(
-                sampled_by_quantity[quantity], rng, time=time[quantity]
-            )
-            measurement_error_names[quantity] = model.name
+            sampled = np.empty((n_mc, *truth[quantity].shape), dtype=float)
+            for mc_index in range(n_mc):
+                # The coordinate offsets are constant over this spacecraft's whole
+                # time series. Nominal time/position remain unchanged in the file,
+                # while field sampling follows the trajectory to the shifted clock time.
+                sampled_time = time[quantity][:, None] + time_offset[mc_index][None, :]
+                sampled_position = (
+                    _trajectory_positions_at_times(spacecraft[quantity], sampled_time)
+                    + position_offset[mc_index][:, None, :]
+                )
+                sampled[mc_index] = _evaluate_quantity_with_progress(
+                    field,
+                    quantity,
+                    sampled_time,
+                    sampled_position,
+                    progress_time=time[quantity],
+                    label=f"sampled {quantity} MC {mc_index + 1}/{n_mc}",
+                )
+                if quantity == "v" and velocity_frame == "spacecraft":
+                    shifted_spacecraft_velocity = _trajectory_velocities_at_times(
+                        spacecraft[quantity], sampled_time
+                    )
+                    assert shifted_spacecraft_velocity is not None
+                    sampled[mc_index] -= np.swapaxes(shifted_spacecraft_velocity, 0, 1)
+            sampled_by_quantity[quantity] = sampled
+
+        if use_observatory_errors:
+            result = apply_observatory_measurement_errors(sampled_by_quantity, time, errors_config, rng)
+            observed.update(result.observed)
+            realized_errors.update(result.errors)
+            measurement_error_names = {
+                "n": "observatory_density",
+                "v": "observatory_velocity_speed_angle_alignment",
+                "B": "observatory_magnetic_dc_ac_alignment",
+            }
+            observatory_metadata = result.metadata
+        else:
+            observatory_metadata = {}
+            for quantity in ("n", "v", "B"):
+                model = error_model_from_config(variable_configs.get(quantity), quantity=quantity)
+                observed[quantity], realized_errors[quantity] = model.apply_ensemble(
+                    sampled_by_quantity[quantity], rng, time=time[quantity]
+                )
+                measurement_error_names[quantity] = model.name
+
+        error_model_metadata = {
+            "measurements": measurement_error_names,
+            "time": time_offset_model.name,
+            "position": position_offset_model.name,
+            "observatory": bool(use_observatory_errors),
+        }
 
     output_path = Path(config["output"]["path"])
     visualization_config = config.get("visualization", {})
@@ -409,6 +431,7 @@ def generate_from_config(
         truth_for_visualization["v"] = truth["v_spacecraft_frame"]
     observed_visualization_enabled = (
         visualization_enabled
+        and n_mc > 0
         and bool(visualization_config.get("observed_enabled", True))
         and _has_configured_errors(errors_config)
     )
@@ -444,17 +467,10 @@ def generate_from_config(
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "random_seed": "null" if seed is None else int(seed),
         "n_mc": n_mc,
+        "mc_generation_enabled": n_mc > 0,
         "field_model": field.name,
         "field_metadata": json.dumps(getattr(field, "metadata", {}), sort_keys=True),
-        "error_models": json.dumps(
-            {
-                "measurements": measurement_error_names,
-                "time": time_offset_model.name,
-                "position": position_offset_model.name,
-                "observatory": bool(use_observatory_errors),
-            },
-            sort_keys=True,
-        ),
+        "error_models": json.dumps(error_model_metadata, sort_keys=True),
         **observatory_metadata,
         "spacecraft_source": json.dumps(spacecraft["n"].metadata, sort_keys=True),
         "schema_version": "2",

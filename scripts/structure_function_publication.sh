@@ -15,6 +15,10 @@ usage() {
   echo "  101, 401: p=0.7 (green)" >&2
   echo "  102, 402: p=0.5 (blue)" >&2
   echo "Options:" >&2
+  echo "  --stage3                      use refined 40X results (defaults to all three)" >&2
+  echo "  --recalculate                 opt-in Stage 3 ensemble analysis, then plot" >&2
+  echo "  --diagnostics                 Stage 3 fit-window and local-slope figures" >&2
+  echo "  --fit-window NAME             Stage 3 primary or sensitivity (default primary)" >&2
   echo "  --pair-counts                 show the baseline-pair count panel" >&2
   echo "  --fit-lambda-range MIN MAX    refit tsi_n over this lambda range [km]" >&2
   echo "  --min-fit-bins N              require at least N bins in the refit" >&2
@@ -29,8 +33,22 @@ show_kurtosis=true
 fit_lambda_range=()
 min_fit_bins=()
 run_ids=()
+stage3=false
+recalculate=false
+diagnostics=false
+fit_window=primary
+fit_window_requested=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --stage3) stage3=true ;;
+    --recalculate) recalculate=true ;;
+    --diagnostics) diagnostics=true ;;
+    --fit-window)
+      if [[ $# -lt 2 ]]; then usage; exit 2; fi
+      fit_window="$2"
+      fit_window_requested=true
+      shift
+      ;;
     --pair-counts) show_pair_counts=true ;;
     --no-p-model) show_p_model=false ;;
     --no-kurtosis) show_kurtosis=false ;;
@@ -62,6 +80,33 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+if [[ "${stage3}" == true ]]; then
+  if [[ "${show_pair_counts}" == true || "${show_p_model}" == false ]]; then
+    echo "Stage 3 uses two panels with the analytic p-model reference." >&2
+    exit 2
+  fi
+  stage3_args=(--fit-window "${fit_window}")
+  if [[ ${#run_ids[@]} -gt 0 ]]; then stage3_args+=(--cases "${run_ids[@]}"); fi
+  if [[ "${recalculate}" == true ]]; then stage3_args+=(--recalculate); fi
+  if [[ "${diagnostics}" == true ]]; then stage3_args+=(--diagnostics); fi
+  if [[ ${#fit_lambda_range[@]} -gt 0 ]]; then
+    stage3_args+=(--fit-lambda-range "${fit_lambda_range[@]}")
+  fi
+  if [[ ${#min_fit_bins[@]} -gt 0 ]]; then
+    stage3_args+=(--min-fit-bins "${min_fit_bins[@]}")
+  fi
+  cd "${ROOT}"
+  export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/sf-stage3-mpl}"
+  export OPENBLAS_NUM_THREADS=1
+  export OMP_NUM_THREADS=1
+  "${PYTHON}" -m hs_observatory.analysis.structure_function_publication "${stage3_args[@]}"
+  exit 0
+fi
+if [[ "${recalculate}" == true || "${diagnostics}" == true || "${fit_window_requested}" == true ]]; then
+  echo "--recalculate, --diagnostics and --fit-window require --stage3." >&2
+  exit 2
+fi
 
 if [[ ${#run_ids[@]} -eq 0 ]]; then
   usage

@@ -43,3 +43,15 @@ __pycache__/
 #The individual generation and analysis scripts
 analysis/*.yaml
 generation/*.yaml
+
+# Reviewed Stage 2 truth-only study recipes and runner.
+!analysis/malara-prod-400_sf-stage2-pilot.yaml
+!analysis/malara-prod-401_sf-stage2-pilot.yaml
+!analysis/malara-prod-402_sf-stage2-pilot.yaml
+!scripts/structure_function_stage2.sh
+
+# Refined 40X publication recipes and the backwards-compatible plot runner.
+!analysis/malara-prod-400_sf-stage3-publication.yaml
+!analysis/malara-prod-401_sf-stage3-publication.yaml
+!analysis/malara-prod-402_sf-stage3-publication.yaml
+!scripts/structure_function_publication.sh

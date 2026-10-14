@@ -14,6 +14,13 @@ import h5py
 import numpy as np
 
 from hs_observatory.analysis.base import AnalysisMethod
+from hs_observatory.analysis.derived.geometry_pairs import (
+    ALGORITHM_VERSION,
+    GeometryPlanCache,
+    geometry_lambda_bounds,
+    geometry_pair_chunks,
+    geometry_targets,
+)
 from hs_observatory.analysis.derived.pairs import (
     adaptive_stratified_pairs,
     pair_chunks,
@@ -112,10 +119,10 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
         )
     pair_sampling = _mapping(config, "pair_sampling")
     pair_mode = str(pair_sampling.get("mode", "all"))
-    if pair_mode not in {"all", "random", "adaptive_stratified"}:
+    if pair_mode not in {"all", "random", "adaptive_stratified", "geometry_stratified"}:
         raise ValueError(
             "structure_function.pair_sampling.mode must be 'all', 'random', "
-            "or 'adaptive_stratified'"
+            "'adaptive_stratified', or 'geometry_stratified'"
         )
     chunk_size = int(pair_sampling.get("chunk_size", 1_000_000))
     if chunk_size < 1:
@@ -127,7 +134,17 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     random_seed = pair_sampling.get("random_seed", 12345)
     random_seed = None if random_seed is None else int(random_seed)
     target_pairs_per_bin = pair_sampling.get("target_pairs_per_bin")
-    target_pairs_per_bin = None if target_pairs_per_bin is None else int(target_pairs_per_bin)
+    if pair_mode == "geometry_stratified":
+        n_bins = len(lambda_bins_km) - 1 if lambda_bins_km is not None else n_lambda_bins
+        target_pairs_per_bin = geometry_targets(target_pairs_per_bin, n_bins).tolist()
+        if increment_mode != "all_spacetime_pairs":
+            raise ValueError("geometry_stratified requires increment_mode='all_spacetime_pairs'")
+        if random_seed is None or random_seed < 0:
+            raise ValueError("geometry_stratified requires a nonnegative random_seed")
+        if max_pairs is not None:
+            raise ValueError("geometry_stratified uses per-bin targets, not max_pairs")
+    else:
+        target_pairs_per_bin = None if target_pairs_per_bin is None else int(target_pairs_per_bin)
     max_candidates = pair_sampling.get("max_candidates")
     max_candidates = None if max_candidates is None else int(max_candidates)
     binning_n_pairs = int(pair_sampling.get("binning_n_pairs", 5_000_000))
@@ -495,6 +512,8 @@ def _spacetime_lambda_bounds_km(
     min_pair_lambda_km: float | None,
     max_pair_lambda_km: float | None,
 ) -> tuple[float, float]:
+    if pair_sampling["mode"] == "geometry_stratified":
+        return geometry_lambda_bounds(positions_km, min_pair_lambda_km, max_pair_lambda_km)
     lower = np.inf
     upper = -np.inf
     flat_position = np.asarray(positions_km, dtype=float).reshape(-1, 3)
@@ -535,6 +554,7 @@ def compute_all_spacetime_structure_functions(
     min_fit_bins: int = 3,
     min_pair_lambda_km: float | None = None,
     max_pair_lambda_km: float | None = None,
+    geometry_plan_cache: GeometryPlanCache | None = None,
 ) -> dict[str, Any]:
     """Compute all-spacetime vector-increment structure functions.
 
@@ -565,9 +585,10 @@ def compute_all_spacetime_structure_functions(
     sums = {field: np.zeros((n_members, len(orders), n_bins)) for field in FIELDS}
     possible_pairs = possible_pair_count(n_points)
     adaptive = pair_sampling["mode"] == "adaptive_stratified"
+    geometry = pair_sampling["mode"] == "geometry_stratified"
     selected_pairs = (
         None
-        if adaptive
+        if adaptive or geometry
         else selected_pair_count(n_points, **_selection_count_kwargs(pair_sampling))
     )
     pair_count_by_member = np.zeros(n_members, dtype=np.int64)
@@ -579,6 +600,12 @@ def compute_all_spacetime_structure_functions(
     skipped_below_min_lambda = np.zeros(n_members, dtype=np.int64)
     skipped_above_max_lambda = np.zeros(n_members, dtype=np.int64)
     outside_lambda_bins = np.zeros(n_members, dtype=np.int64)
+    geometry_diagnostics = []
+    if geometry:
+        geometry_plan_cache = geometry_plan_cache or GeometryPlanCache()
+        targets = geometry_targets(pair_sampling["target_pairs_per_bin"], n_bins)
+        if pair_sampling.get("max_pairs") is not None:
+            raise ValueError("geometry_stratified uses per-bin targets, not max_pairs")
 
     for member in range(n_members):
         flat_position = arrays[0][member].reshape(-1, 3)
@@ -586,7 +613,29 @@ def compute_all_spacetime_structure_functions(
             "z_plus": arrays[1][member].reshape(-1, 3),
             "z_minus": arrays[2][member].reshape(-1, 3),
         }
-        if adaptive:
+        if geometry:
+            plan, reused = geometry_plan_cache.get(
+                arrays[0][member], edges, min_pair_lambda_km, max_pair_lambda_km,
+            )
+            populations = plan.populations
+            retained = np.minimum(populations, targets)
+            pair_count_by_member[member] = int(np.sum(retained))
+            sampling_target_reached[member] = bool(np.all(populations >= targets))
+            geometry_diagnostics.append({
+                "eligible_per_bin": populations,
+                "requested_per_bin": targets.copy(),
+                "selected_per_bin": retained,
+                "population_shortfall_per_bin": np.maximum(targets - populations, 0),
+                "groups_per_bin": np.array([len(b.groups) for b in plan.bins]),
+                "candidate_lag_groups": plan.candidate_groups,
+                "boundary_pairs_examined": plan.boundary_pairs_examined,
+                "plan_reused": reused,
+            })
+            pair_iterator = geometry_pair_chunks(
+                plan, targets, random_seed=pair_sampling["random_seed"],
+                chunk_size=pair_sampling["chunk_size"],
+            )
+        elif adaptive:
             selected_left, selected_right, sampling_diagnostics = adaptive_stratified_pairs(
                 flat_position,
                 edges,
@@ -661,6 +710,16 @@ def compute_all_spacetime_structure_functions(
                 "max_candidates_per_member": pair_sampling["max_candidates"],
             }
         )
+    if geometry:
+        pair_diagnostics["sampling_target_reached"] = sampling_target_reached
+        pair_diagnostics["geometry_sampling"] = {
+            "algorithm_version": ALGORITHM_VERSION,
+            "random_seed": pair_sampling["random_seed"],
+            "bit_generator": "PCG64",
+            "unsupported_geometry": "error; use mode='all' explicitly",
+            "members": [dict(item, retained_per_bin=counts[index].copy())
+                        for index, item in enumerate(geometry_diagnostics)],
+        }
     products: dict[str, Any] = {
         "orders": orders,
         "lambda_bin_edges_km": edges,
@@ -870,6 +929,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 settings,
             )
         products: dict[str, Any] = {}
+        geometry_plan_cache = GeometryPlanCache()
         for group_name, members in first_pass.items():
             positions = np.stack([member["positions_km"] for member in members], axis=0)
             z_plus = np.stack([member["elsasser"]["z_plus"] for member in members], axis=0)
@@ -898,6 +958,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     min_fit_bins=settings["min_fit_bins"],
                     min_pair_lambda_km=settings["min_pair_lambda_km"],
                     max_pair_lambda_km=settings["max_pair_lambda_km"],
+                    geometry_plan_cache=geometry_plan_cache,
                 )
             group_result["n_members"] = positions.shape[0]
             group_result["time_s"] = np.stack(

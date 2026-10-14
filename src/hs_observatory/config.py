@@ -58,8 +58,8 @@ def load_generation_config(path: str | Path) -> LoadedConfig:
         raise ValueError("time.t_stop_s must be at least time.t_start_s")
     if "model" not in cfg["field"]:
         raise ValueError("Missing required field.model setting")
-    if int(cfg["errors"].get("n_mc", 1)) < 1:
-        raise ValueError("errors.n_mc must be at least one")
+    if int(cfg["errors"].get("n_mc", 1)) < 0:
+        raise ValueError("errors.n_mc must be non-negative")
     measurement = cfg.get("measurement", {})
     if not isinstance(measurement, dict):
         raise ValueError("Configuration section 'measurement' must be a mapping")
