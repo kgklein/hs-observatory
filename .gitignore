@@ -65,3 +65,9 @@ generation/*.yaml
 !analysis/malara-ts-500a_sf-duration.yaml
 !analysis/malara-ts-502a_sf-duration.yaml
 !scripts/structure_function_duration_a.sh
+
+# Study A moment-convergence runner.
+!scripts/structure_function_moment_convergence.sh
+
+# Direct-3D convergence campaign runner.
+!scripts/malara_direct3d_convergence.sh
