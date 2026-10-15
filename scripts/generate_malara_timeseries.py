@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Generate malara-ts duration cases in pairs, longest first.
+"""Generate malara-ts duration cases in fixed batches, longest first.
 
 Usage:
     .venv/bin/python scripts/generate_malara_timeseries.py --dry-run
-    .venv/bin/python scripts/generate_malara_timeseries.py
+    .venv/bin/python scripts/generate_malara_timeseries.py --jobs 3
 
-Existing HDF5 outputs are skipped unless --overwrite is supplied. Both jobs in
-one pair finish before the next pair starts. A failed pair stops the batch.
+Existing HDF5 outputs are skipped unless --overwrite is supplied. All jobs in
+a batch finish before the next batch starts. Default: two concurrent cases.
+A failed batch stops subsequent batches.
 """
 
 import argparse
@@ -36,8 +37,8 @@ def discover_cases(root, overwrite=False):
     return sorted(cases, key=lambda case: (-case[0], case[1].name))
 
 
-def run_pair(cases, root, log_dir):
-    """Wait for the whole pair; terminate worker process groups on interruption."""
+def run_batch(cases, root, log_dir):
+    """Wait for the whole batch; terminate worker process groups on interruption."""
     env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1',
                MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', MPLBACKEND='Agg')
     env['PYTHONPATH'] = str(root / 'src') + (
@@ -81,10 +82,14 @@ def run_pair(cases, root, log_dir):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--dry-run', action='store_true', help='print pairs without generating')
+    parser.add_argument('--dry-run', action='store_true', help='print batches without generating')
+    parser.add_argument('--jobs', type=int, default=2,
+                        help='concurrent cases per batch (default: 2; workers per case unchanged)')
     parser.add_argument('--overwrite', action='store_true', help='include existing HDF5 outputs')
     parser.add_argument('--log-dir', type=Path, default=Path('logs/malara-timeseries'))
     args = parser.parse_args(argv)
+    if args.jobs < 1:
+        parser.error('--jobs must be a positive integer')
     cases = discover_cases(ROOT, args.overwrite)
     if not cases:
         print('No pending duration cases.')
@@ -94,11 +99,12 @@ def main(argv=None):
         if not (ROOT / '.venv/bin/hsobs-generate').is_file():
             parser.error('missing .venv/bin/hsobs-generate')
         log_dir.mkdir(parents=True, exist_ok=True)
-    for start in range(0, len(cases), 2):
-        pair = cases[start:start + 2]
-        print(f'Pair {start // 2 + 1}: ' + ', '.join(path.name for _, path in pair), flush=True)
-        if not args.dry_run and not run_pair(pair, ROOT, log_dir):
-            print('Batch stopped after failed pair. Check the logs before restarting.', flush=True)
+    for start in range(0, len(cases), args.jobs):
+        batch = cases[start:start + args.jobs]
+        print(f'Batch {start // args.jobs + 1}: '
+              + ', '.join(path.name for _, path in batch), flush=True)
+        if not args.dry_run and not run_batch(batch, ROOT, log_dir):
+            print('Stopped after failed batch. Check the logs before restarting.', flush=True)
             return 1
     return 0
 
