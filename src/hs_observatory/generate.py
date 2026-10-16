@@ -37,6 +37,7 @@ from hs_observatory.visualization import (
     save_default_visualizations,
     save_3d_configuration,
     save_geometry_summary,
+    save_malara_full_domain_geometry,
     save_observed_visualizations,
     visualization_paths,
 )
@@ -266,9 +267,19 @@ def generate_from_config(
     *,
     truth_velocity_frame: str | None = None,
     configuration_3d_extra_connections: list[str] | None = None,
+    plot_full_domain_geometry: bool | None = None,
 ) -> Path:
     loaded = load_generation_config(config_path)
     config = loaded.data
+    full_domain_requested = (
+        config.get("visualization", {}).get("plot_full_domain_geometry", False)
+        if plot_full_domain_geometry is None
+        else plot_full_domain_geometry
+    )
+    if not isinstance(full_domain_requested, bool):
+        raise ValueError("plot_full_domain_geometry must be a boolean")
+    if full_domain_requested and config["field"]["model"] != "malara_turbulence":
+        raise ValueError("plot_full_domain_geometry is supported only for malara_turbulence")
     time = _time_axes(config["time"])
     spacecraft = _spacecraft_on_time_axes(config["spacecraft"], time)
     field = field_from_config(config["field"])
@@ -516,6 +527,14 @@ def generate_from_config(
             str(observed_alfven_plot_path) if observed_alfven_visualization_enabled else "null"
         ),
     }
+    if visualization_enabled and full_domain_requested:
+        full_domain_pdf, full_domain_png = geometry_summary_paths(
+            output_path, spacecraft["n"].metadata, variant="full_domain"
+        )
+        metadata.update(
+            full_domain_geometry_pdf_path=str(full_domain_pdf),
+            full_domain_geometry_png_path=str(full_domain_png),
+        )
     output = write_observations(
         output_path,
         time=time,
@@ -537,6 +556,18 @@ def generate_from_config(
             velocity_frame=truth_visualization_velocity_frame,
         )
         path_quantity = max(("n", "v", "B"), key=lambda quantity: len(time[quantity]))
+        if full_domain_requested:
+            full_domain_pdf, full_domain_png = save_malara_full_domain_geometry(
+                output_path=output,
+                config=visualization_config,
+                position=spacecraft[path_quantity].position,
+                spacecraft_ids=spacecraft["n"].spacecraft_ids,
+                domain_size=field.base_config.domain_size,
+                origin=field.origin,
+                time=time[path_quantity],
+                metadata=spacecraft["n"].metadata,
+            )
+            print(f"Full-domain Malara geometry: {full_domain_pdf}\n  {full_domain_png}")
         pdf_path, png_path, geometry_diagnostics = save_geometry_summary(
             output_path=output,
             config=visualization_config,
