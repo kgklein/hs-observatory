@@ -12,6 +12,10 @@ The snapshots below come from existing workspace products; the underlying
 production JSON/HDF5 files are generated artifacts and are not distributed with
 these docs. A versioned input/commit record is still needed for publication.
 
+Detailed reports cover [Stage 1 geometry-stratified sampling](../structure_function_geometry_stage1.md)
+and [Stage 2 truth-only sampling convergence](../structure_function_stage2_convergence.md).
+Both are also listed under **Ongoing Research**.
+
 ## Status and input products
 
 | Stage | Status | Evidence and limits |

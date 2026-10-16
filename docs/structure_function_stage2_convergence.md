@@ -231,15 +231,17 @@ Numerical outputs retain every seed/budget, S1–S6 for both fields, counts,
 populations/shortfalls/groups, both-window exponents, three-point local slopes,
 source coordinate/field hashes, config and timing/memory metadata:
 
-- [400 numerical results](../outputs/structure_function_stage2/malara-prod-400_truth_convergence.h5)
-- [402 numerical results](../outputs/structure_function_stage2/malara-prod-402_truth_convergence.h5)
-- [Derived summary JSON](../outputs/structure_function_stage2/figures/summary.json)
-- [Exponent convergence](../outputs/structure_function_stage2/figures/xi_convergence.png)
-- [High-order SF variability](../outputs/structure_function_stage2/figures/high_order_convergence.png)
-- [Updated truth-only SFs](../outputs/structure_function_stage2/figures/truth_structure_functions.png)
+- 400 numerical results: `outputs/structure_function_stage2/malara-prod-400_truth_convergence.h5`
+- 402 numerical results: `outputs/structure_function_stage2/malara-prod-402_truth_convergence.h5`
+- Derived summary: `outputs/structure_function_stage2/figures/summary.json`
+- [Exponent convergence](assets/figures/sf-stage2-xi-convergence.png)
+- [High-order SF variability](assets/figures/sf-stage2-high-order-convergence.png)
+- [Updated truth-only SFs](assets/figures/sf-stage2-truth-structure-functions.png)
 
-All three figures also have PDF versions. Numerical files are in the repository's
-ignored `outputs/` tree; recipes/code/report are trackable. The original
+The three linked PNGs are documentation snapshots of the existing results.
+Their original PNG/PDF products and the numerical files remain in the repository's ignored
+`outputs/` tree. The paths above are local artifacts, not documentation downloads;
+recipes/code/report are trackable. The original
 publication image paths were never written. Refitting/plotting reads saved
 moments; `fit_saved(..., windows=...)` also accepts alternative fit-window maps.
 

@@ -30,7 +30,7 @@ apply. Bounds cover coordinate roundoff; they need not match historical sampled
 extrema. Geometric bin centers and the existing moment/fitting/plotting code are
 unchanged.
 
-[`derived/geometry_pairs.py`](../src/hs_observatory/analysis/derived/geometry_pairs.py)
+[`derived/geometry_pairs.py`](https://github.com/kgklein/hs-observatory/blob/main/src/hs_observatory/analysis/derived/geometry_pairs.py)
 checks the aligned coordinates for a common affine displacement per sample index.
 It permits floating-point construction roundoff, with a conservative bound on its
 effect on distances. Unsupported formation motion raises `ValueError` with
@@ -56,7 +56,7 @@ differ in their last bits with chunking. Census order is deterministic rather
 than a random permutation. Different eligible populations share random streams,
 but do not force identical identities.
 
-[`structure_function.py`](../src/hs_observatory/analysis/structure_function.py)
+[`structure_function.py`](https://github.com/kgklein/hs-observatory/blob/main/src/hs_observatory/analysis/structure_function.py)
 integrates these plans with the existing accumulator. A run-local two-entry LRU
 reuses plans for byte-identical coordinates, edges and limits, including across
 truth/observed groups. Perturbed MC position offsets still enter each member's

@@ -70,6 +70,8 @@ nav:
       - Documentation: developer/documentation.md
   - Ongoing Research:
       - Intermittency recovery: research-notes/intermittency-recovery.md
+      - Geometry sampling (Stage 1): structure_function_geometry_stage1.md
+      - Sampling convergence (Stage 2): structure_function_stage2_convergence.md
       - Timing calibration: reference/timing-calibration.md
       - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
       - Timing investigations: research-notes/timing-investigations.md
