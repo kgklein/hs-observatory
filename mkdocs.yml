@@ -74,6 +74,7 @@ nav:
       - Magnetic gradients: reference/magnetic-gradients.md
       - Reconstruction: reference/reconstruction.md
       - Shock timing: reference/shock-timing.md
+  - Roadmap: roadmap.md
   - Architecture:
       - Overview: architecture/index.md
       - Module dependencies: architecture/module-dependencies.md

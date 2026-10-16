@@ -1,0 +1,29 @@
+# Pilot only: run explicitly. input.path names a field-generation YAML, not observations.
+input:
+  path: generation/malara-prod-401.yaml
+analysis:
+  method: spatial_structure_function
+output:
+  path: outputs/direct-spatial-sf-5000.h5
+spatial_structure_function:
+  p_values: [0.5, 0.7, 0.9]
+  n_pairs: 5000
+  n_batches: 8
+  seed: 12345
+  chunk_size: 128
+  n_separations: 25
+  lambda_min_km: 50
+  lambda_max_km: 10000
+  # Alternatively: lambda_centers_km: [50, 200, 500, 1000, 20000]
+  # Or: centers_from_hs: outputs/malara-prod-401_sf_publication.json
+  scale_ranges_km:
+    candidate: [200, 1000]
+    comparison: [100, 1300]
+  fit_range: candidate
+  min_fit_bins: 3
+  local_slope_method: three-point
+  comparison_config: analysis/malara-prod-combined_sf-publication.yaml
+  plot:
+    enabled: true
+    dpi: 150
+    show_cascade_scales: true
