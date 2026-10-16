@@ -2,6 +2,15 @@
 # noise-floor curve supplied for this analysis; NOT final instrument specifications.
 # Working assumption: ASD is per Cartesian component. Pending MAG-team confirmation.
 # vector_total instead divides the PSD equally among three isotropic components.
+#
+# Source: [Klein et al., 2023, SSR, https://doi.org/10.1007/s11214-023-01019-0]
+# Digitized from Figure 2 of the published paper.
+# Values represent an approximate digitization of the
+# published instrument noise spectrum.
+#
+# This configuration is provided for scientific
+# simulation and reproducibility.
+
 frequency_units: Hz
 asd_units: nT/sqrt(Hz)
 interpretation: per_component

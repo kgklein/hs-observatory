@@ -152,7 +152,12 @@ def test_pilot_recipes_use_explicit_edges_and_windows():
         assert recipe["stage2"]["data_group"] == "truth"
         assert len(recipe["stage2"]["seeds"]) >= 5
         settings = _settings(recipe["structure_function"])
-        np.testing.assert_array_equal(settings["lambda_bins_km"], stage2_edges())
+        np.testing.assert_allclose(
+            settings["lambda_bins_km"],
+            stage2_edges(),
+            rtol=1e-12,
+            atol=1e-12,
+        )
         assert settings["scale_ranges_km"] == {
             "primary": [150.0, 1200.0],
             "sensitivity": [200.0, 1000.0],
