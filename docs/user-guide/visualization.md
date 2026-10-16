@@ -165,7 +165,7 @@ for estimators, cascade annotations, and interpretation limits.
 
 For the numerical findings, plot snapshots, direct-3D validation status and
 planned convergence checks, follow
-[Ongoing Research: Intermittency recovery](../research-notes/intermittency-recovery.md).
+[Research Notes: Intermittency recovery](../research-notes/intermittency-recovery.md).
 
 ## Observed geometry display
 

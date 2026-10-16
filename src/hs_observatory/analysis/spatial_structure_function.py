@@ -39,7 +39,9 @@ from hs_observatory.fields.malara import (
 
 ORDERS = list(range(1, 7))
 DEFAULT_WINDOWS = {"candidate": [200.0, 1000.0], "comparison": [100.0, 1300.0]}
-BATCH_NOTE = "Spatial batch variability is a sampling diagnostic, not independent-realization uncertainty."
+BATCH_NOTE = (
+    "Spatial batch variability is a sampling diagnostic, not independent-realization uncertainty."
+)
 
 
 def _positive_int(value, name):
@@ -68,7 +70,9 @@ def sample_spatial_pairs(rng, n_pairs: int, domain, separation: float):
 def _moment_task(task):
     config, left, right, backend, use_cache = task
     positions = np.stack((left, right), axis=1)
-    values = _evaluate_malara_chunk((config, positions, backend in {"cached", "parallel"} and use_cache))
+    values = _evaluate_malara_chunk(
+        (config, positions, backend in {"cached", "parallel"} and use_cache)
+    )
     return _evaluated_moments(values)
 
 
@@ -80,9 +84,13 @@ def _evaluated_moments(values):
         raise ValueError("raw field returned nonfinite values")
     with np.errstate(over="raise", invalid="raise"):
         try:
-            sums = structure_function_moment_sums(np.linalg.norm(values[:, 1] - values[:, 0], axis=1), ORDERS)
+            sums = structure_function_moment_sums(
+                np.linalg.norm(values[:, 1] - values[:, 0], axis=1), ORDERS
+            )
         except FloatingPointError as exc:
-            raise ValueError("increment moments overflowed; field normalization is unchanged") from exc
+            raise ValueError(
+                "increment moments overflowed; field normalization is unchanged"
+            ) from exc
     if not np.all(np.isfinite(sums)):
         raise ValueError("nonfinite increment moment sums")
     return sums
@@ -127,11 +135,23 @@ def _batch_sd(values):
     return sd, finite
 
 
-def sample_case(config, centers, *, n_pairs, n_batches, seed, chunk_size,
-                backend="cached", n_workers=1, use_cache=True, executor=None, evaluator=None):
+def sample_case(
+    config,
+    centers,
+    *,
+    n_pairs,
+    n_batches,
+    seed,
+    chunk_size,
+    backend="cached",
+    n_workers=1,
+    use_cache=True,
+    executor=None,
+    evaluator=None,
+):
     """Stream all scales for one p; evaluator injection supports inexpensive tests."""
     batch_edges = np.linspace(0, n_pairs, n_batches + 1, dtype=int)
-    checkpoints = np.unique(np.ceil(n_pairs * np.array([.25, .5, .75, 1])).astype(int))
+    checkpoints = np.unique(np.ceil(n_pairs * np.array([0.25, 0.5, 0.75, 1])).astype(int))
     n_scales = len(centers)
     batch_sums = np.zeros((n_batches, 6, n_scales))
     batch_correction = np.zeros_like(batch_sums)
@@ -148,7 +168,9 @@ def sample_case(config, centers, *, n_pairs, n_batches, seed, chunk_size,
                 while start < boundary:
                     stop = min(start + chunk_size, boundary)
                     batch = int(np.searchsorted(batch_edges[1:], start, side="right"))
-                    left, right = sample_spatial_pairs(rng, stop - start, config.domain_size, separation)
+                    left, right = sample_spatial_pairs(
+                        rng, stop - start, config.domain_size, separation
+                    )
                     yield (si, batch, stop), (config, left, right, backend, use_cache)
                     start = stop
 
@@ -187,10 +209,15 @@ def sample_case(config, centers, *, n_pairs, n_batches, seed, chunk_size,
     batch_values = structure_function_moment_means(batch_sums, batch_counts)
     sd, _ = _batch_sd(batch_values)
     return {
-        "orders": np.asarray(ORDERS), "lambda_bin_centers_km": np.asarray(centers),
-        "counts": counts, "q": {"S_n": values}, "moment_sums": total[None],
-        "batch_counts": batch_counts, "batch_S_n": batch_values,
-        "batch_moment_sums": batch_sums, "batch_sd": sd,
+        "orders": np.asarray(ORDERS),
+        "lambda_bin_centers_km": np.asarray(centers),
+        "counts": counts,
+        "q": {"S_n": values},
+        "moment_sums": total[None],
+        "batch_counts": batch_counts,
+        "batch_S_n": batch_values,
+        "batch_moment_sums": batch_sums,
+        "batch_sd": sd,
         "batch_cv": np.divide(sd, values[0], out=np.full_like(sd, np.nan), where=values[0] > 0),
         "checkpoint_counts": checkpoint_counts,
         "checkpoint_S_n": structure_function_moment_means(checkpoint_sums, checkpoint_counts),
@@ -220,12 +247,17 @@ def fit_with_diagnostics(values, counts, centers, orders, windows, min_bins):
                 slope = fit["raw"][mi, wi, oi]
                 if not np.isfinite(slope):
                     continue
-                valid = ((centers >= lo) & (centers <= hi) & (counts[mi] > 0)
-                         & np.isfinite(values[mi, oi]) & (values[mi, oi] > 0))
+                valid = (
+                    (centers >= lo)
+                    & (centers <= hi)
+                    & (counts[mi] > 0)
+                    & np.isfinite(values[mi, oi])
+                    & (values[mi, oi] > 0)
+                )
                 x, y = np.log(centers[valid]), np.log(values[mi, oi, valid])
                 intercept = y.mean() - slope * x.mean()
                 residual = y - (intercept + slope * x)
-                variance = np.sum((y - y.mean())**2)
+                variance = np.sum((y - y.mean()) ** 2)
                 diagnostics["intercept"][mi, wi, oi] = intercept
                 diagnostics["log_rms"][mi, wi, oi] = np.sqrt(np.mean(residual**2))
                 if variance > 0:
@@ -237,14 +269,23 @@ def fit_with_diagnostics(values, counts, centers, orders, windows, min_bins):
 def derive_spatial_case(case, windows, min_bins=3, method="three-point"):
     centers, orders = case["lambda_bin_centers_km"], case["orders"].tolist()
     values = case["q"]["S_n"]
-    case["q"]["scaling_exponents"] = fit_with_diagnostics(values, case["counts"], centers, orders, windows, min_bins)
+    case["q"]["scaling_exponents"] = fit_with_diagnostics(
+        values, case["counts"], centers, orders, windows, min_bins
+    )
     coords, slopes, valid = local_log_slopes(centers, values, counts=case["counts"], method=method)
-    _, batch_slopes, _ = local_log_slopes(centers, case["batch_S_n"],
-                                        counts=case["batch_counts"], method=method)
+    _, batch_slopes, _ = local_log_slopes(
+        centers, case["batch_S_n"], counts=case["batch_counts"], method=method
+    )
     sd, finite = _batch_sd(batch_slopes)
-    case["local"] = {"coordinates_km": coords, "slopes": slopes, "source_valid": valid,
-                     "slope_valid": np.isfinite(slopes), "batch_slopes": batch_slopes,
-                     "batch_sd": sd, "finite_batches": finite}
+    case["local"] = {
+        "coordinates_km": coords,
+        "slopes": slopes,
+        "source_valid": valid,
+        "slope_valid": np.isfinite(slopes),
+        "batch_slopes": batch_slopes,
+        "batch_sd": sd,
+        "finite_batches": finite,
+    }
     case["theory"] = p_model_exponents(orders, case["p_value"])
     return case
 
@@ -261,19 +302,33 @@ def _centers(options):
         lo, hi = float(options.get("lambda_min_km", 50)), float(options.get("lambda_max_km", 20000))
         if not np.isfinite(lo) or not np.isfinite(hi) or not 0 < lo < hi:
             raise ValueError("lambda bounds must be increasing positive finite values")
-        centers = np.geomspace(lo, hi, _positive_int(options.get("n_separations", 25), "n_separations"))
-    if (centers.ndim != 1 or len(centers) < 3 or not np.all(np.isfinite(centers) & (centers > 0))
-            or not np.all(np.diff(centers) > 0)):
+        centers = np.geomspace(
+            lo, hi, _positive_int(options.get("n_separations", 25), "n_separations")
+        )
+    if (
+        centers.ndim != 1
+        or len(centers) < 3
+        or not np.all(np.isfinite(centers) & (centers > 0))
+        or not np.all(np.diff(centers) > 0)
+    ):
         raise ValueError("at least three positive increasing finite separations are required")
     return centers
 
 
 def _cascade_from_config(config, source):
-    indices = sorted(set(range(config.injection_scale_index, config.n_scales + 1, 3)) | {config.n_scales})
-    return {"generation_config": source, "domain_lengths_km": list(config.domain_size),
-            "injection_scale_index": config.injection_scale_index, "maximum_scale_index": config.n_scales,
-            "spectral_exponent_h": config.spectral_exponent_h, "mark_indices": indices,
-            "cell_sizes_km": [config.domain_size[0] / 2**m for m in indices], "caption": CASCADE_CAPTION}
+    indices = sorted(
+        set(range(config.injection_scale_index, config.n_scales + 1, 3)) | {config.n_scales}
+    )
+    return {
+        "generation_config": source,
+        "domain_lengths_km": list(config.domain_size),
+        "injection_scale_index": config.injection_scale_index,
+        "maximum_scale_index": config.n_scales,
+        "spectral_exponent_h": config.spectral_exponent_h,
+        "mark_indices": indices,
+        "cell_sizes_km": [config.domain_size[0] / 2**m for m in indices],
+        "caption": CASCADE_CAPTION,
+    }
 
 
 @register_analysis
@@ -293,11 +348,17 @@ class SpatialStructureFunctionAnalysis(AnalysisMethod):
         if not np.all(np.asarray(base.domain_size) == base.domain_size[0]):
             raise ValueError("initial direct spatial analysis requires an isotropic cubic domain")
         centers = _centers(options)
-        explicit_grid = options.get("lambda_centers_km") is not None or options.get("centers_from_hs")
+        explicit_grid = options.get("lambda_centers_km") is not None or options.get(
+            "centers_from_hs"
+        )
         if centers[-1] >= min(base.domain_size) / 2:
             if not explicit_grid:
-                raise ValueError("default/logarithmic separation grid must stay below half the domain; use explicit centers to override")
-            warnings.warn("explicit separations reach half the domain: periodic-image ambiguity", stacklevel=2)
+                raise ValueError(
+                    "default/logarithmic separation grid must stay below half the domain; use explicit centers to override"
+                )
+            warnings.warn(
+                "explicit separations reach half the domain: periodic-image ambiguity", stacklevel=2
+            )
         p_values = list(map(float, options.get("p_values", [0.5, 0.7, 0.9])))
         if not p_values or len(set(p_values)) != len(p_values):
             raise ValueError("p_values must be nonempty and unique")
@@ -328,32 +389,69 @@ class SpatialStructureFunctionAnalysis(AnalysisMethod):
         selected = options.get("fit_range", next(iter(windows)))
         if selected not in windows:
             raise ValueError("fit_range must name a configured window")
-        options.update(scale_ranges_km=windows, min_fit_bins=minimum, local_slope_method=method,
-                       fit_range=selected, n_pairs=n_pairs, n_batches=n_batches, seed=seed,
-                       chunk_size=chunk_size, backend=backend, n_workers=workers, use_cache=use_cache)
+        options.update(
+            scale_ranges_km=windows,
+            min_fit_bins=minimum,
+            local_slope_method=method,
+            fit_range=selected,
+            n_pairs=n_pairs,
+            n_batches=n_batches,
+            seed=seed,
+            chunk_size=chunk_size,
+            backend=backend,
+            n_workers=workers,
+            use_cache=use_cache,
+        )
         cases = []
         pool = ProcessPoolExecutor(max_workers=workers) if backend == "parallel" else None
         try:
             for p in sorted(p_values, reverse=True):
                 effective = replace(base, intermittency_p=p)
-                print(f"Direct spatial p={p:g}: {len(centers)} separations × {n_pairs} pairs", flush=True)
-                case = sample_case(effective, centers, n_pairs=n_pairs, n_batches=n_batches,
-                                   seed=seed, chunk_size=chunk_size, backend=backend,
-                                   n_workers=workers, use_cache=use_cache, executor=pool)
-                case.update(p_value=p, field_config=asdict(effective),
-                            cascade=_cascade_from_config(effective, str(source)))
+                print(
+                    f"Direct spatial p={p:g}: {len(centers)} separations × {n_pairs} pairs",
+                    flush=True,
+                )
+                case = sample_case(
+                    effective,
+                    centers,
+                    n_pairs=n_pairs,
+                    n_batches=n_batches,
+                    seed=seed,
+                    chunk_size=chunk_size,
+                    backend=backend,
+                    n_workers=workers,
+                    use_cache=use_cache,
+                    executor=pool,
+                )
+                case.update(
+                    p_value=p,
+                    field_config=asdict(effective),
+                    cascade=_cascade_from_config(effective, str(source)),
+                )
                 cases.append(derive_spatial_case(case, windows, minimum, method))
         finally:
             if pool is not None:
                 pool.shutdown(wait=True, cancel_futures=True)
-        return {"method": self.name, "metadata": {
-            "field_model": "malara_turbulence", "source_field_config": str(source),
-            "source_field_yaml": source_yaml, "sampling_seed": seed,
-            "coordinate_convention": "uniform domain-relative x; unwrapped x+lambda*r; evaluator wraps",
-            "separation_mode": "exact", "quantity": "q", "units": "raw evaluator units; no velocity/B/Elsasser conversion",
-            "batch_note": BATCH_NOTE, "smoke": bool(options.get("smoke", False)),
-            "sampling_rng": "PCG64", "sample_stream_version": 1, "numpy_version": np.__version__,
-        }, "config": options, "cases": cases}
+        return {
+            "method": self.name,
+            "metadata": {
+                "field_model": "malara_turbulence",
+                "source_field_config": str(source),
+                "source_field_yaml": source_yaml,
+                "sampling_seed": seed,
+                "coordinate_convention": "uniform domain-relative x; unwrapped x+lambda*r; evaluator wraps",
+                "separation_mode": "exact",
+                "quantity": "q",
+                "units": "raw evaluator units; no velocity/B/Elsasser conversion",
+                "batch_note": BATCH_NOTE,
+                "smoke": bool(options.get("smoke", False)),
+                "sampling_rng": "PCG64",
+                "sample_stream_version": 1,
+                "numpy_version": np.__version__,
+            },
+            "config": options,
+            "cases": cases,
+        }
 
     def write_result(self, result, output_path):
         output = Path(output_path).expanduser().resolve()
@@ -371,8 +469,12 @@ class SpatialStructureFunctionAnalysis(AnalysisMethod):
             try:
                 read_spatial_result(output)
             except (OSError, ValueError, KeyError) as exc:
-                raise ValueError("output would overwrite a file that is not a direct spatial product") from exc
-        result["comparisons"] = {str(p): product for p, product in _comparison_products(result).items()}
+                raise ValueError(
+                    "output would overwrite a file that is not a direct spatial product"
+                ) from exc
+        result["comparisons"] = {
+            str(p): product for p, product in _comparison_products(result).items()
+        }
         write_spatial_result(result, output)
         if result["config"].get("plot", {}).get("enabled", True):
             for path in plot_spatial_result(result, output.with_suffix("")):
@@ -390,7 +492,9 @@ def _write_tree(group, mapping):
             group.create_dataset(key, data=np.asarray(value, dtype=h5py.string_dtype()))
         else:
             array = np.asarray(value)
-            group.create_dataset(key, data=array, compression="gzip" if array.ndim and array.size else None)
+            group.create_dataset(
+                key, data=array, compression="gzip" if array.ndim and array.size else None
+            )
 
 
 def _read_tree(group):
@@ -419,19 +523,29 @@ def write_spatial_result(result, output):
 
 def read_spatial_result(path):
     with h5py.File(path) as handle:
-        if handle.attrs.get("method") != "spatial_structure_function" or handle.attrs.get("schema_version") != 1:
+        if (
+            handle.attrs.get("method") != "spatial_structure_function"
+            or handle.attrs.get("schema_version") != 1
+        ):
             raise ValueError("unsupported direct spatial structure-function product")
-        return {"method": "spatial_structure_function",
-                "metadata": json.loads(handle.attrs["metadata_json"]),
-                "config": json.loads(handle.attrs["config_json"]),
-                "comparisons": _read_tree(handle["comparisons"]),
-                "cases": [_read_tree(handle["cases"][key]) for key in sorted(handle["cases"], key=int)]}
+        return {
+            "method": "spatial_structure_function",
+            "metadata": json.loads(handle.attrs["metadata_json"]),
+            "config": json.loads(handle.attrs["config_json"]),
+            "comparisons": _read_tree(handle["comparisons"]),
+            "cases": [_read_tree(handle["cases"][key]) for key in sorted(handle["cases"], key=int)],
+        }
 
 
 def spatial_plot_product(case):
     """Adapt exact raw-q statistics to the shared product convention without MC aliases."""
-    return {"orders": case["orders"].tolist(), "lambda_bin_centers_km": case["lambda_bin_centers_km"],
-            "counts": case["counts"], "q": case["q"], "separation_mode": "exact"}
+    return {
+        "orders": case["orders"].tolist(),
+        "lambda_bin_centers_km": case["lambda_bin_centers_km"],
+        "counts": case["counts"],
+        "q": case["q"],
+        "separation_mode": "exact",
+    }
 
 
 def _comparison_products(result):
@@ -443,7 +557,11 @@ def _comparison_products(result):
         warnings.warn(f"HS comparison config unavailable: {path}", stacklevel=2)
         return {}
     config = yaml.safe_load(path.read_text())
-    if not isinstance(config, dict) or not isinstance(config.get("cases"), dict) or not config["cases"]:
+    if (
+        not isinstance(config, dict)
+        or not isinstance(config.get("cases"), dict)
+        or not config["cases"]
+    ):
         raise ValueError("HS comparison config requires nonempty cases")
     products = {}
     for entry in config["cases"].values():
@@ -460,13 +578,29 @@ def _comparison_products(result):
         y = np.asarray(product[quantity]["S_n"], dtype=float)
         counts = np.asarray(product["counts"])
         orders = list(product["orders"])
-        if (x.ndim != 1 or not np.all(np.isfinite(x) & (x > 0)) or not np.all(np.diff(x) > 0)
-                or y.shape != (1, len(orders), len(x)) or counts.shape != (1, len(x))):
+        if (
+            x.ndim != 1
+            or not np.all(np.isfinite(x) & (x > 0))
+            or not np.all(np.diff(x) > 0)
+            or y.shape != (1, len(orders), len(x))
+            or counts.shape != (1, len(x))
+        ):
             raise ValueError(f"malformed HS comparison product: {source}")
-        fit = fit_with_diagnostics(y, counts, x, orders, result["config"]["scale_ranges_km"],
-                                   result["config"]["min_fit_bins"])
-        products[p] = {"path": str(source), "quantity": quantity, "orders": np.asarray(orders),
-                       "fit": fit, "centers_km": x}
+        fit = fit_with_diagnostics(
+            y,
+            counts,
+            x,
+            orders,
+            result["config"]["scale_ranges_km"],
+            result["config"]["min_fit_bins"],
+        )
+        products[p] = {
+            "path": str(source),
+            "quantity": quantity,
+            "orders": np.asarray(orders),
+            "fit": fit,
+            "centers_km": x,
+        }
     return products
 
 
@@ -497,38 +631,66 @@ def plot_spatial_result(result, prefix):
     selected = options["fit_range"]
     smoke = "SMOKE TEST — not a scientific result. " if result["metadata"].get("smoke") else ""
     figure, axis = plt.subplots(figsize=(10, 6))
-    axis.axvspan(*windows[selected], color="0.6", alpha=.15)
+    axis.axvspan(*windows[selected], color="0.6", alpha=0.15)
     for case in cases:
         product = spatial_plot_product(case)
         x = product["lambda_bin_centers_km"]
         color = P_MODEL_RUN_COLORS.get(case["p_value"], "0.3")
         for oi, order in enumerate(case["orders"]):
-            plot_structure_function_curve(axis, x, product["q"]["S_n"][0, oi], color=color,
-                                          marker=_ORDER_MARKERS[oi % len(_ORDER_MARKERS)])
+            plot_structure_function_curve(
+                axis,
+                x,
+                product["q"]["S_n"][0, oi],
+                color=color,
+                marker=_ORDER_MARKERS[oi % len(_ORDER_MARKERS)],
+            )
     if show_scales:
         x = cases[0]["lambda_bin_centers_km"]
         _mark_scales(axis, cases[0], (float(x.min()), float(x.max())))
-        figure.text(.5, .01, CASCADE_CAPTION, ha="center", fontsize=8)
-    axis.set(xscale="log", yscale="log", xlabel=r"$\lambda$ [km] (exact separations)",
-             ylabel=r"$S_n^{3D}(\lambda)$ [raw field units$^n$]", title=smoke + "Direct 3D raw Malara structure functions")
-    axis.grid(alpha=.15)
-    handles = [Line2D([], [], color=P_MODEL_RUN_COLORS.get(c["p_value"], "0.3"), label=f"p = {c['p_value']:g}") for c in cases]
-    handles += [Line2D([], [], color="0.3", linestyle="none", marker=_ORDER_MARKERS[i], label=f"n = {n}") for i, n in enumerate(ORDERS)]
+        figure.text(0.5, 0.01, CASCADE_CAPTION, ha="center", fontsize=8)
+    axis.set(
+        xscale="log",
+        yscale="log",
+        xlabel=r"$\lambda$ [km] (exact separations)",
+        ylabel=r"$S_n^{3D}(\lambda)$ [raw field units$^n$]",
+        title=smoke + "Direct 3D raw Malara structure functions",
+    )
+    axis.grid(alpha=0.15)
+    handles = [
+        Line2D(
+            [], [], color=P_MODEL_RUN_COLORS.get(c["p_value"], "0.3"), label=f"p = {c['p_value']:g}"
+        )
+        for c in cases
+    ]
+    handles += [
+        Line2D([], [], color="0.3", linestyle="none", marker=_ORDER_MARKERS[i], label=f"n = {n}")
+        for i, n in enumerate(ORDERS)
+    ]
     axis.legend(handles=handles, ncols=3, fontsize=8)
-    figure.tight_layout(rect=(0, .04 if show_scales else 0, 1, 1))
+    figure.tight_layout(rect=(0, 0.04 if show_scales else 0, 1, 1))
     outputs = _save_figure(figure, f"{prefix}_structure_functions", dpi)
     local_cases = []
     for case in cases:
         data = case["local"]
-        local_case = {"orders": case["orders"], "p_value": case["p_value"], "theory": case["theory"],
-                      "truth": {**data, "source_centers_km": case["lambda_bin_centers_km"]},
-                      "sampling_sd": np.where(data["finite_batches"] >= 3, data["batch_sd"], np.nan)}
+        local_case = {
+            "orders": case["orders"],
+            "p_value": case["p_value"],
+            "theory": case["theory"],
+            "truth": {**data, "source_centers_km": case["lambda_bin_centers_km"]},
+            "sampling_sd": np.where(data["finite_batches"] >= 3, data["batch_sd"], np.nan),
+        }
         if show_scales:
             local_case["cascade"] = case["cascade"]
         local_cases.append(local_case)
-    outputs += plot_local_diagnostics(local_cases, Path(f"{prefix}_local_slopes"), dpi=dpi,
-                                      show_theory=True, curve_label="direct 3D full sample", focused=False,
-                                      caption_extra=smoke + BATCH_NOTE)
+    outputs += plot_local_diagnostics(
+        local_cases,
+        Path(f"{prefix}_local_slopes"),
+        dpi=dpi,
+        show_theory=True,
+        curve_label="direct 3D full sample",
+        focused=False,
+        caption_extra=smoke + BATCH_NOTE,
+    )
     comparisons = {float(p): product for p, product in result.get("comparisons", {}).items()}
     matching = [case for case in cases if case["p_value"] in comparisons]
     if matching:
@@ -540,30 +702,61 @@ def plot_spatial_result(result, prefix):
                 orders = case["orders"]
                 color = P_MODEL_RUN_COLORS.get(case["p_value"], "0.3")
                 axis.plot(orders, case["theory"], color=color, linestyle="--")
-                axis.plot(orders, case["q"]["scaling_exponents"]["raw"][0, wi], color=color, marker="o")
+                axis.plot(
+                    orders, case["q"]["scaling_exponents"]["raw"][0, wi], color=color, marker="o"
+                )
                 hs = comparisons[case["p_value"]]
                 hs_slopes = hs["fit"]["raw"][0, wi]
                 axis.plot(hs["orders"], hs_slopes, color=color, marker="s", linestyle=":")
                 if not np.all(np.isfinite(hs_slopes)):
                     bins = hs["fit"]["bins_used"][0, wi]
-                    notes.append(f"HS p={case['p_value']:g}: {int(bins.min())} points; fit unavailable")
-            axis.set(xlabel="order n", ylabel=r"$\xi_n$", title=f"{name}: {bounds[0]:g}–{bounds[1]:g} km")
-            axis.grid(alpha=.15)
+                    notes.append(
+                        f"HS p={case['p_value']:g}: {int(bins.min())} points; fit unavailable"
+                    )
+            axis.set(
+                xlabel="order n", ylabel=r"$\xi_n$", title=f"{name}: {bounds[0]:g}–{bounds[1]:g} km"
+            )
+            axis.grid(alpha=0.15)
             if notes:
-                    axis.text(.03, .97, "\n".join(notes), transform=axis.transAxes, fontsize=8,
-                              va="top", bbox={"facecolor": "white", "alpha": .85, "edgecolor": "none"})
-        style = [Line2D([], [], color="0.3", linestyle="--", label="p-model"),
-                 Line2D([], [], color="0.3", marker="o", label="direct raw q"),
-                 Line2D([], [], color="0.3", marker="s", linestyle=":", label="ideal HS z (processed)")]
-        figure.legend(handles=handles[:len(cases)] + style, loc="upper center", ncols=3, fontsize=8)
-        figure.text(.5, .01, smoke + "Raw q and processed HS Elsasser fields differ; this comparison does not isolate sampling alone.", ha="center", fontsize=8)
-        figure.tight_layout(rect=(0, .06, 1, .88))
+                axis.text(
+                    0.03,
+                    0.97,
+                    "\n".join(notes),
+                    transform=axis.transAxes,
+                    fontsize=8,
+                    va="top",
+                    bbox={"facecolor": "white", "alpha": 0.85, "edgecolor": "none"},
+                )
+        style = [
+            Line2D([], [], color="0.3", linestyle="--", label="p-model"),
+            Line2D([], [], color="0.3", marker="o", label="direct raw q"),
+            Line2D([], [], color="0.3", marker="s", linestyle=":", label="ideal HS z (processed)"),
+        ]
+        figure.legend(
+            handles=handles[: len(cases)] + style, loc="upper center", ncols=3, fontsize=8
+        )
+        figure.text(
+            0.5,
+            0.01,
+            smoke
+            + "Raw q and processed HS Elsasser fields differ; this comparison does not isolate sampling alone.",
+            ha="center",
+            fontsize=8,
+        )
+        figure.tight_layout(rect=(0, 0.06, 1, 0.88))
         outputs += _save_figure(figure, f"{prefix}_comparison", dpi)
     return outputs
 
 
-def postprocess_spatial_result(source, *, output_prefix=None, windows=None, method=None,
-                               show_scales=None, comparison_config=None):
+def postprocess_spatial_result(
+    source,
+    *,
+    output_prefix=None,
+    windows=None,
+    method=None,
+    show_scales=None,
+    comparison_config=None,
+):
     source = Path(source).expanduser().resolve()
     result = read_spatial_result(source)
     options = result["config"]
@@ -579,10 +772,18 @@ def postprocess_spatial_result(source, *, output_prefix=None, windows=None, meth
         options.setdefault("plot", {})["show_cascade_scales"] = show_scales
     options.setdefault("plot", {})["enabled"] = True
     for case in result["cases"]:
-        derive_spatial_case(case, options["scale_ranges_km"], options["min_fit_bins"], options["local_slope_method"])
-    result["metadata"].setdefault("sampling_product", result["metadata"].get("source_spatial_product", str(source)))
+        derive_spatial_case(
+            case, options["scale_ranges_km"], options["min_fit_bins"], options["local_slope_method"]
+        )
+    result["metadata"].setdefault(
+        "sampling_product", result["metadata"].get("source_spatial_product", str(source))
+    )
     result["metadata"]["source_spatial_product"] = str(source)
-    prefix = Path(output_prefix).expanduser().resolve() if output_prefix else source.with_name(source.stem + "_postprocess").with_suffix("")
+    prefix = (
+        Path(output_prefix).expanduser().resolve()
+        if output_prefix
+        else source.with_name(source.stem + "_postprocess").with_suffix("")
+    )
     target = Path(f"{prefix}.h5")
     if target == source:
         raise ValueError("cached post-processing must use a separate output prefix")

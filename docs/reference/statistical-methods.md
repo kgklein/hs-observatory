@@ -515,7 +515,7 @@ Python entry points live in `analysis.structure_function_local`, notably
 #### Interpretation of the current production results
 
 Current numerical findings, figures and open questions are maintained in
-[Ongoing Research: Intermittency recovery](../research-notes/intermittency-recovery.md#local-slope-findings).
+[Research Notes: Intermittency recovery](../research-notes/intermittency-recovery.md#local-slope-findings).
 The nine-bin production results provide seven overlapping three-point estimates;
 this limits the evidence for an extended plateau.
 

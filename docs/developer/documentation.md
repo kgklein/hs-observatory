@@ -143,6 +143,22 @@ check local links/anchors/assets, and retain practical compatibility links.
 Strict builds validate site links but cannot establish scientific correctness or
 public availability of external inputs.
 
+### Research-note navigation and source hygiene
+
+Keep the workflow sections in `mkdocs.yml` and use the
+[Research Notes landing page](../research-notes/index.md) to link detailed reports.
+Only a small selection belongs in the sidebar. Add intentionally unlisted pages
+to `not_in_nav`; they are still built, searched, and checked for broken links.
+MkDocs 1.6 supports this setting. Navigation omissions are warnings so newly
+added pages require an explicit navigation decision.
+
+Use `exclude_docs` only for material that should not be published. The legacy
+`architecture/README.md` conflicts with that directory's maintained `index.md`
+and remains excluded. Editor backups (`*~`) are excluded from the site as well
+as ignored by Git; MkDocs does not apply `.gitignore` to documentation sources.
+Keep figures, equation SVGs, and architecture diagrams with their source pages
+and check relative paths after moving a report.
+
 ## Equation rendering without new dependencies
 
 Display and inline TeX equations in timing/gradient references have local SVG

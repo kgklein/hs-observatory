@@ -66,6 +66,12 @@ generation/*.yaml
 !analysis/malara-ts-502a_sf-duration.yaml
 !scripts/structure_function_duration_a.sh
 
+# Curated 1500-second endpoints for the duration/raw-field study recipes.
+!generation/malara-ts-500-t1500.yaml
+!generation/malara-ts-500a-t1500.yaml
+!generation/malara-ts-502-t1500.yaml
+!generation/malara-ts-502a-t1500.yaml
+
 # Study A moment-convergence runner.
 !scripts/structure_function_moment_convergence.sh
 
@@ -74,3 +80,6 @@ generation/*.yaml
 
 # Visualization-only geometry movie runner.
 !scripts/geometry_movie.sh
+
+# Editor Generated backup files
+*~

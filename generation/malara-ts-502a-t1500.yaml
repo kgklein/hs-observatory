@@ -1,0 +1,134 @@
+spacecraft:
+  source: cdf
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-08-25T12:00:00"
+  fallback_synthetic: true
+  velocity_km_s: [105.0, 145.0, 205.0]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 1500.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.125
+
+field:
+  model: malara_turbulence
+
+  domain:
+    L: [100000.0, 100000.0, 100000.0]
+    units: km
+    origin: [0.0, 0.0, 0.0]
+
+  turbulence:
+    geometry: isotropic
+    # direct, chunked, cached, or parallel. Cached is the package default.
+    backend: parallel
+    chunk_size: 500
+    n_workers: 4
+    use_cache: true
+    n_scales: 14
+    injection_scale_index: 2
+    spectral_exponent_h: 0.3333333333333333
+    intermittency_p: 0.5
+    base_seed: 12345
+    realization: 1
+
+  output_fields:
+    n:
+      background: 5.0
+      fluctuation: constant
+
+    v:
+      background: [400.0, 0.0, 0.0]
+      fluctuation: malara
+      amplitude: 10.0
+
+    B:
+      background: [0.0, 0.0, 5.0]
+      fluctuation: malara
+      amplitude: 0.5
+
+measurement:
+  velocity_frame: spacecraft
+
+errors:
+  model: observatory
+  random_seed: 12345
+  n_mc: 0
+
+  timing:
+    enabled: true
+    requirement_ms: 12.5
+    sigma_level: 3
+    model: constant_per_spacecraft
+
+  position:
+    enabled: true
+    requirement_magnitude_km: 2.5
+    sigma_level: 2
+    model: isotropic_3d_gaussian_position_error
+
+  density:
+    enabled: true
+    requirement_fraction: 0.06
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_speed:
+    enabled: true
+    requirement_fraction: 0.03
+    sigma_level: 2
+    model: multiplicative_bias_plus_ou
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+
+  velocity_angle:
+    enabled: true
+    requirement_deg: 0.25
+    sigma_level: 2
+    model: transverse_ou_rotation
+    ou_correlation_time_s: 300.0
+
+  magnetic_dc:
+    enabled: true
+    requirement_nT_per_axis: 0.15
+    sigma_level: 3
+    model: constant_per_axis_offset
+
+  magnetic_ac:
+    enabled: true
+    model: colored_gaussian_noise_merged_product
+    requirement_interpretation: total_vector_asd
+    sigma_level: 3
+    component_distribution: uniform
+    anchors:
+      - {frequency_Hz: 0.001, asd_pT_per_sqrtHz: 1500.0}
+      - {frequency_Hz: 1.0, asd_pT_per_sqrtHz: 15.0}
+      - {frequency_Hz: 10.0, asd_pT_per_sqrtHz: 1.5}
+    extrapolate_above_10Hz: continue_last_loglog_slope
+
+  alignment:
+    enabled: true
+    requirement_deg_per_axis: 3.0
+    sigma_level: 3
+    model: independent_constant_rotation_B_and_V
+
+output:
+  path: outputs/malara-ts-502a-t1500.h5
+  write_errors: true
+
+visualization:
+  enabled: true
+  alfven_enabled: true
+  alfven_fluctuations: true
+  truth_velocity_frame: spacecraft
+  truth_path: outputs/malara-ts-502a-t1500_truth.png
+  geometry_path: outputs/malara-ts-502a-t1500_geometry.png
+  alfven_path: outputs/malara-ts-502a-t1500_alfven.png
+  dpi: 150

@@ -234,9 +234,9 @@ source coordinate/field hashes, config and timing/memory metadata:
 - 400 numerical results: `outputs/structure_function_stage2/malara-prod-400_truth_convergence.h5`
 - 402 numerical results: `outputs/structure_function_stage2/malara-prod-402_truth_convergence.h5`
 - Derived summary: `outputs/structure_function_stage2/figures/summary.json`
-- [Exponent convergence](assets/figures/sf-stage2-xi-convergence.png)
-- [High-order SF variability](assets/figures/sf-stage2-high-order-convergence.png)
-- [Updated truth-only SFs](assets/figures/sf-stage2-truth-structure-functions.png)
+- [Exponent convergence](../../assets/figures/sf-stage2-xi-convergence.png)
+- [High-order SF variability](../../assets/figures/sf-stage2-high-order-convergence.png)
+- [Updated truth-only SFs](../../assets/figures/sf-stage2-truth-structure-functions.png)
 
 The three linked PNGs are documentation snapshots of the existing results.
 Their original PNG/PDF products and the numerical files remain in the repository's ignored

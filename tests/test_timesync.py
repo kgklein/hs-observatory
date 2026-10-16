@@ -3,6 +3,7 @@ import inspect
 
 import h5py
 import numpy as np
+import pytest
 
 from hs_observatory.analyze import analyze_from_config
 from hs_observatory.analysis.registry import list_analyses
@@ -128,10 +129,15 @@ def test_idw_returns_exact_spacecraft_values_at_matching_point():
 def test_timesync_masked_planes_are_nan_when_too_few_spacecraft(tmp_path):
     input_path = _write_timesync_input(tmp_path / "masked.h5", field="constant")
 
-    result = compute_timesync_reconstruction(
-        input_path,
-        _config(min_spacecraft_per_plane=5),
-    )
+    with pytest.warns(
+        RuntimeWarning,
+        match="^Timesync left one or more axial planes masked because too few "
+        "spacecraft were available$",
+    ):
+        result = compute_timesync_reconstruction(
+            input_path,
+            _config(min_spacecraft_per_plane=5),
+        )
 
     assert np.isnan(result["B_reconstructed"]).all()
     np.testing.assert_array_equal(
@@ -145,7 +151,12 @@ def test_timesync_defaults_to_seven_spacecraft_per_plane(tmp_path):
     config = _config()
     del config["min_spacecraft_per_plane"]
 
-    result = compute_timesync_reconstruction(input_path, config)
+    with pytest.warns(
+        RuntimeWarning,
+        match="^Timesync left one or more axial planes masked because too few "
+        "spacecraft were available$",
+    ):
+        result = compute_timesync_reconstruction(input_path, config)
 
     assert result["settings"]["min_spacecraft_per_plane"] == 7
     assert np.isnan(result["B_reconstructed"]).all()

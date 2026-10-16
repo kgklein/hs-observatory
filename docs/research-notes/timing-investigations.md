@@ -161,15 +161,19 @@ and three-method products remain under `outputs/affine_projection_investigation/
 
 ## Instrument-noise paired experiment
 
-**Currently incomplete reproduction:** `analysis/timing_noise_experiment.py`
-is absent. The original command below is retained as a historical record and
-must not be presented as executable with this checkout. The spectrum and timing
-comparison configurations are also untracked. No experiment has been rerun here.
+**Release review needed:** `analysis/timing_noise_experiment.py` and
+`configs/helioswarm_mag_scm_noise.yaml` are now tracked. The previous reproduction
+note described them as unavailable or untracked. Availability of the exact
+historical comparison configurations and agreement with the current script still
+need review. No experiment has been rerun here; the results below remain a
+historical record, not new release validation.
 
-### Reproducible paired experiments
+<a id="reproducible-paired-experiments"></a>
+
+### Historical paired-experiment command
 
 ```text
-# Historical command; script unavailable
+# Historical command; not rerun for this documentation review
 .venv/bin/python analysis/timing_noise_experiment.py
 ```
 
