@@ -1,5 +1,7 @@
 # HelioSwarm Synthetic Observatory
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23423894.svg)](https://doi.org/10.5281/zenodo.23423894)
+
 HS Observatory generates synthetic multipoint spacecraft observations from
 representative HelioSwarm (HS) positions and analyzes the resulting products.
 YAML files specify the generation of data, including
@@ -11,8 +13,7 @@ YAML files also specify the details of the analysis methods.
 Output HDF5 products retain nominal true measurements, Monte Carlo observations,
 and generation details.
 
-Field, error and analysis models provide specific locations for growth through
-community input.
+The modular field, error, and analysis models provide opportunities for community contributions.
 Scientific assumptions and validation limits are documented per method.
 *Some methods, e.g. timing calibration via $\nabla \cdot \mathbf{B}=0$, are currently under development.*
 

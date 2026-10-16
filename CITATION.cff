@@ -9,6 +9,7 @@ message: >-
 title: "HS Observatory"
 type: software
 version: "0.1.0"
+doi: 10.5281/zenodo.23423894
 
 authors:
   - family-names: Klein
