@@ -39,18 +39,35 @@ def test_generation_signature_matches_canonical_implementation():
 
 @pytest.mark.parametrize(
     "overrides",
-    [{}, {"truth_velocity_frame": "plasma", "configuration_3d_extra_connections": ["N1-N2"]}],
+    [
+        {},
+        {
+            "truth_velocity_frame": "plasma",
+            "configuration_3d_extra_connections": ["N1-N2"],
+        },
+        {
+            "plot_full_domain_geometry": True,
+        },
+        {
+            "truth_velocity_frame": "plasma",
+            "configuration_3d_extra_connections": ["N1-N2"],
+            "plot_full_domain_geometry": False,
+        },
+    ],
 )
 def test_generation_forwards_arguments_and_result(overrides):
     canonical = importlib.import_module("hs_observatory.generate")
     config_path = Path("not-read.yaml")
     output = Path("not-written.h5")
+
     with patch.object(canonical, "generate_from_config", return_value=output) as implementation:
         assert hs_observatory.generate_from_config(config_path, **overrides) is output
+
         implementation.assert_called_once_with(
             config_path,
             truth_velocity_frame=overrides.get("truth_velocity_frame"),
             configuration_3d_extra_connections=overrides.get("configuration_3d_extra_connections"),
+            plot_full_domain_geometry=overrides.get("plot_full_domain_geometry"),
         )
 
 
