@@ -175,10 +175,11 @@ def test_coincident_frames_keep_axes_and_colorbars(snapshots, variant):
     try:
         figure.set_dpi(32)
         figure.canvas.draw()
+        # LogNorm/colorbar transforms can round-trip 10 km a few ulps away.
         if variant == "formation":
-            assert figure.axes[-1].get_xlim() == (1.0, 10.0)
+            np.testing.assert_allclose(figure.axes[-1].get_xlim(), (1.0, 10.0), rtol=1e-14, atol=0)
         elif variant == "polyhedra":
-            assert figure.axes[-1].get_ylim() == (1.0, 10.0)
+            np.testing.assert_allclose(figure.axes[-1].get_ylim(), (1.0, 10.0), rtol=1e-14, atol=0)
     finally:
         plt.close(figure)
 

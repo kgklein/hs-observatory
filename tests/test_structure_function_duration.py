@@ -1,7 +1,6 @@
 """Small saved-truth tests; never generate or analyze production fields."""
 
 import json
-from pathlib import Path
 
 import h5py
 import numpy as np
@@ -15,9 +14,42 @@ def inputs(tmp_path, durations=(1.0, 2.0)):
     root = tmp_path
     (root / "generation").mkdir()
     (root / "data").mkdir()
-    config = yaml.safe_load(Path(study.DEFAULT_CONFIG).read_text())
-    config["duration_study"].update(durations_s=list(durations), fit_pairs=8, outside_pairs=4)
-    config["output"] = {"directory": "results", "report": "report.md"}
+    # Keep synthetic saved-truth tests independent of production recipes/budgets.
+    config = {
+        "analysis": {"method": "structure_function_duration_convergence"},
+        "output": {"directory": "results", "report": "report.md"},
+        "duration_study": {
+            "generation_glob": "generation/malara-ts-502-t*.yaml",
+            "durations_s": list(durations),
+            "seeds": [12345, 23456, 34567, 45678, 56789],
+            "fit_pairs": 8,
+            "outside_pairs": 4,
+            "peak_interval_km": [700.0, 1500.0],
+            "coverage_cells_per_axis": 64,
+        },
+        "structure_function": {
+            "increment_mode": "all_spacetime_pairs",
+            "min_pair_lambda_km": 70.0,
+            "max_pair_lambda_km": 20000.0,
+            "pair_sampling": {
+                "mode": "geometry_stratified",
+                "chunk_size": 100000,
+                "target_pairs_per_bin": 8,
+            },
+            "min_order": 1,
+            "max_order": 6,
+            "lambda_bins_km": np.geomspace(70.0, 20000.0, 41).tolist(),
+            "scale_ranges_km": {"primary": [150.0, 1200.0], "sensitivity": [200.0, 1000.0]},
+            "min_fit_bins": 3,
+            "elsasser": {
+                "velocity": {"frame": "auto", "spacecraft_correction": "auto"},
+                "density_normalization": {"method": "global_per_spacecraft", "species": "proton"},
+                "mean_subtraction": {"method": "global_per_spacecraft"},
+                "timebase": {"method": "slower_of_n_and_v", "interpolation": "linear"},
+            },
+            "plot": {"enabled": False, "publication": {"enabled": False}},
+        },
+    }
     for duration in durations:
         times = np.arange(round(duration * 8) + 1) / 8
         starts = np.array([[0.0, 0.0, 0.0], [90.0, 130.0, 0.0], [300.0, 350.0, 0.0]])

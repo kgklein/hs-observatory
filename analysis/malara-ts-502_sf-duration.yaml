@@ -1,0 +1,110 @@
+# Dedicated truth-only duration study. Run via scripts/structure_function_duration.sh.
+analysis:
+  method: structure_function_duration_convergence
+output:
+  directory: outputs/structure_function_duration_convergence
+  report: docs/structure_function_duration_convergence.md
+duration_study:
+  generation_glob: generation/malara-ts-502-t*.yaml
+  durations_s:
+  - 300
+  - 600
+  - 900
+  - 1200
+  - 1500
+  seeds:
+  - 12345
+  - 23456
+  - 34567
+  - 45678
+  - 56789
+  fit_pairs: 500000
+  outside_pairs: 10000
+  verification:
+    durations_s:
+    - 300
+    - 1500
+    fit_pairs: 1000000
+    outside_pairs: 10000
+  peak_interval_km:
+  - 700.0
+  - 1500.0
+  coverage_cells_per_axis: 64
+structure_function:
+  increment_mode: all_spacetime_pairs
+  min_pair_lambda_km: 70.0
+  max_pair_lambda_km: 20000.0
+  pair_sampling:
+    mode: geometry_stratified
+    chunk_size: 100000
+    random_seed: 12345
+    target_pairs_per_bin: 100000
+  min_order: 1
+  max_order: 6
+  n_lambda_bins: 40
+  lambda_bins_km:
+  - 70.0
+  - 80.62994042369203
+  - 92.87410418183036
+  - 106.97762124406778
+  - 123.2228461082497
+  - 141.93501057922768
+  - 163.48873495770312
+  - 188.31552799406262
+  - 216.912425757391
+  - 249.85194237109945
+  - 287.79353183036386
+  - 331.4967903686591
+  - 381.836663686716
+  - 439.8209634948746
+  - 506.61054405260825
+  - 583.542542642514
+  - 672.1571492565092
+  - 774.2284414273004
+  - 891.799901523017
+  - 1027.2253275665032
+  - 1183.2159566199234
+  - 1362.894744151802
+  - 1569.8588860674688
+  - 1808.2518351031943
+  - 2082.846253362889
+  - 2399.1395617194257
+  - 2763.463998993711
+  - 3183.113394312582
+  - 3666.489190646853
+  - 4223.268642942377
+  - 4864.598558195576
+  - 5603.318456178387
+  - 6454.217618523394
+  - 7434.331172329777
+  - 8563.28113592781
+  - 9863.66925458835
+  - 11361.52949080661
+  - 13086.849228082234
+  - 15074.169622772997
+  - 17363.277123154487
+  - 20000.0
+  scale_ranges_km:
+    primary:
+    - 150.0
+    - 1200.0
+    sensitivity:
+    - 200.0
+    - 1000.0
+  min_fit_bins: 3
+  elsasser:
+    velocity:
+      frame: auto
+      spacecraft_correction: auto
+    density_normalization:
+      method: global_per_spacecraft
+      species: proton
+    mean_subtraction:
+      method: global_per_spacecraft
+    timebase:
+      method: slower_of_n_and_v
+      interpolation: linear
+  plot:
+    enabled: false
+    publication:
+      enabled: false

@@ -3,7 +3,6 @@
 from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 
 import h5py
 import numpy as np
@@ -18,11 +17,32 @@ from hs_observatory.fields.malara import MalaraTurbulenceField
 
 @pytest.fixture
 def workspace(tmp_path):
-    generation = yaml.safe_load(Path("generation/malara-ts-500a-t1500.yaml").read_text())
-    generation["field"]["turbulence"].update(n_scales=2, injection_scale_index=1, backend="cached")
-    generation["field"]["domain"].update(L=[4000.0] * 3, origin=[17.0, -29.0, 41.0])
-    generation["time"] = {"t_start_s": 0.0, "t_stop_s": 10.0, "cadence_s": 1.0}
-    generation["output"]["path"] = "tiny.h5"
+    # Exercise the shared-field contract without a production recipe or CDF input.
+    generation = {
+        "spacecraft": {"velocity_km_s": [105.0, 145.0, 205.0]},
+        "time": {"t_start_s": 0.0, "t_stop_s": 10.0, "cadence_s": 1.0},
+        "field": {
+            "model": "malara_turbulence",
+            "domain": {"L": [4000.0] * 3, "units": "km", "origin": [17.0, -29.0, 41.0]},
+            "turbulence": {
+                "geometry": "isotropic",
+                "backend": "cached",
+                "n_scales": 2,
+                "injection_scale_index": 1,
+                "spectral_exponent_h": 1 / 3,
+                "intermittency_p": 0.9,
+                "base_seed": 12345,
+                "realization": 1,
+            },
+            "output_fields": {
+                "n": {"background": 5.0, "fluctuation": "constant"},
+                "v": {"background": [400.0, 0.0, 0.0], "fluctuation": "malara", "amplitude": 10.0},
+                "B": {"background": [0.0, 0.0, 5.0], "fluctuation": "malara", "amplitude": 0.5},
+            },
+        },
+        "measurement": {"velocity_frame": "spacecraft"},
+        "output": {"path": "tiny.h5"},
+    }
     time = np.arange(11.0)
     # Includes positions outside the periodic domain; separation must stay unwrapped.
     positions = np.array([[3990.0, 0.0, 10.0], [4110.0, 50.0, 0.0], [4400.0, 200.0, 20.0]])[
