@@ -23,9 +23,11 @@ dependencies = [
 dev = ["pytest>=7.4", "ruff==0.15.20"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10"]
 simulation-bp = ["adios2>=2.10"]
+movie = ["imageio>=2.31", "imageio-ffmpeg>=0.4.9"]
 
 [project.scripts]
 hsobs-generate = "hs_observatory.cli:generate_main"
+hsobs-visualize = "hs_observatory.geometry_movie:main"
 hsobs-analyze = "hs_observatory.cli:analyze_main"
 hsobs-analyze-spatial-structure-function = "hs_observatory.cli:spatial_structure_function_main"
 hsobs-plot-spatial-structure-function = "hs_observatory.cli:plot_spatial_structure_function_main"

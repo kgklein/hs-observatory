@@ -40,6 +40,7 @@ not_in_nav: |
   /timing_quadratic_investigation.md
   /magnetic_gradient_divergence_audit.md
   /architecture/README.md
+  /geometry_movie.md
 nav:
   - Home: index.md
   - Getting Started:
@@ -50,6 +51,7 @@ nav:
   - Generate: user-guide/generation.md
   - Analyze: user-guide/analysis.md
   - Visualize: user-guide/visualization.md
+  - Movies: user-guide/movies.md
   - Scientific Reference:
       - Configuration and commands: reference/configuration.md
       - Data products: reference/data-products.md

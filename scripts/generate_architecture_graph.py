@@ -260,6 +260,8 @@ OVERVIEW_LABELS = {
 OVERVIEW_RELATIONSHIPS = (
     ("cli", "generation"),
     ("cli", "dispatch"),
+    ("cli", "io"),
+    ("cli", "visualization"),
     ("generation", "config"),
     ("generation", "spacecraft"),
     ("generation", "fields"),
@@ -286,6 +288,8 @@ OVERVIEW_RELATIONSHIPS = (
 def overview_group(name: str) -> str | None:
     """Map modules to responsibilities; low-level utilities are intentionally omitted."""
     name = short_name(name)
+    if name == "geometry_movie":
+        return "cli"
     if name in {"cli", "config", "visualization"}:
         return name
     if name == "generate":
@@ -300,6 +304,8 @@ def overview_group(name: str) -> str | None:
             "analysis.elsasser",
             "analysis.increment_pdf",
             "analysis.structure_function",
+            "analysis.spatial_structure_function",
+            "analysis.malara_raw_hs",
             "analysis.derived.",
         )
     ):

@@ -41,3 +41,4 @@ links require access while private. See [local documentation development](develo
 | Generate | [Generating observations](user-guide/generation.md) | [Fields](reference/fields.md), [errors](reference/errors.md), [data products](reference/data-products.md) |
 | Analyze | [Choosing and running analyses](user-guide/analysis.md) | [Statistics](reference/statistical-methods.md), [gradients](reference/magnetic-gradients.md), [reconstruction](reference/reconstruction.md), [shock timing](reference/shock-timing.md), [timing research](reference/timing-calibration.md) |
 | Visualize | [Figures and interpretation](user-guide/visualization.md) | Method-specific diagnostics and limitations |
+| Movies | [Animated geometry](user-guide/movies.md) | Mission CDF snapshots, GIF/MP4 output, and frame selection |

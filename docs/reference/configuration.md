@@ -59,6 +59,7 @@ exact arguments; uppercase arguments here are placeholders.
 | --- | --- |
 | `hsobs-generate` | Generation YAML; `--truth-velocity-frame`, repeatable `--3d-connection` |
 | `hsobs-analyze` | Analysis YAML |
+| `hsobs-visualize geometry-movie` | Mission `--cdf-path`; required `--start`, `--end`, `--cadence` (integer hours), `--output-dir`; `--kinds overview\|polyhedra\|formation\|all`, `--format gif\|mp4`, `--fps`, `--keep-frames`, `--dry-run`; [Movies](../user-guide/movies.md) |
 | `hsobs-analyze-spatial-structure-function` | Direct-spatial analysis YAML; `--field-config`, `--p`, `--n-pairs`, `--seed`, separation/backend controls, `--output-prefix` |
 | `hsobs-plot-spatial-structure-function` | Saved direct-spatial HDF5; fit windows, local-slope method, cascade context and comparison controls; no field evaluation |
 | `hsobs-plot-figure2` | `--malara`, `--simulation`, `--output`; units/frame/member/time controls |

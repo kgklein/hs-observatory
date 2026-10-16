@@ -29,7 +29,19 @@ def select_cdf_configuration_sample(
 ) -> dict[str, Any]:
     """Return the nearest valid CDF formation sample and its source context."""
 
-    epochs, positions, labels, sources = read_cdf_positions(path)
+    return select_cdf_record(*read_cdf_positions(path), requested_time=requested_time)
+
+
+def select_cdf_record(
+    epochs: np.ndarray,
+    positions: np.ndarray,
+    labels: list[str],
+    sources: list[str],
+    *,
+    requested_time: str | None = None,
+) -> dict[str, Any]:
+    """Select a nearest snapshot from already loaded CDF data (earlier record on ties)."""
+
     target = epochs[0] if requested_time is None else np.datetime64(requested_time)
     index = int(np.argmin(np.abs(epochs - target)))
     selected = positions[index]

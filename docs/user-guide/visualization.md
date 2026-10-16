@@ -1,6 +1,8 @@
 # Visualization and interpretation
 
-A plotting command needs its saved input product,
+Static plotting commands use their saved input products. To animate mission
+CDF formation geometry directly, use the separate [Movies](movies.md) workflow
+with `hsobs-visualize geometry-movie`.
 
 ## Default visualizations
 

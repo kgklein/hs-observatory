@@ -13,6 +13,7 @@ digraph module_dependencies {
     "hs_observatory.cli" [label="cli"];
     "hs_observatory.config" [label="config"];
     "hs_observatory.generate" [label="generate"];
+    "hs_observatory.geometry_movie" [label="geometry_movie"];
     "hs_observatory.visualization" [label="visualization"];
   }
   subgraph cluster_1 {
@@ -26,11 +27,20 @@ digraph module_dependencies {
     "hs_observatory.analysis.magnetic_gradient" [label="analysis.magnetic_gradient"];
     "hs_observatory.analysis.magnetic_gradient_correlation" [label="analysis.magnetic_gradient_correlation"];
     "hs_observatory.analysis.magnetic_gradient_wasserstein" [label="analysis.magnetic_gradient_wasserstein"];
+    "hs_observatory.analysis.malara_raw_hs" [label="analysis.malara_raw_hs"];
     "hs_observatory.analysis.rbf_reconstruction" [label="analysis.rbf_reconstruction"];
     "hs_observatory.analysis.registry" [label="analysis.registry"];
     "hs_observatory.analysis.shock_timing" [label="analysis.shock_timing"];
+    "hs_observatory.analysis.spatial_structure_function" [label="analysis.spatial_structure_function"];
     "hs_observatory.analysis.static_decorrelation" [label="analysis.static_decorrelation"];
     "hs_observatory.analysis.structure_function" [label="analysis.structure_function"];
+    "hs_observatory.analysis.structure_function_convergence" [label="analysis.structure_function_convergence"];
+    "hs_observatory.analysis.structure_function_duration" [label="analysis.structure_function_duration"];
+    "hs_observatory.analysis.structure_function_duration_plots" [label="analysis.structure_function_duration_plots"];
+    "hs_observatory.analysis.structure_function_local" [label="analysis.structure_function_local"];
+    "hs_observatory.analysis.structure_function_moment_convergence" [label="analysis.structure_function_moment_convergence"];
+    "hs_observatory.analysis.structure_function_publication" [label="analysis.structure_function_publication"];
+    "hs_observatory.analysis.structure_function_uniform_binning" [label="analysis.structure_function_uniform_binning"];
     "hs_observatory.analysis.timeseries_fft" [label="analysis.timeseries_fft"];
     "hs_observatory.analysis.timesync" [label="analysis.timesync"];
     "hs_observatory.analysis.timing_affine" [label="analysis.timing_affine"];
@@ -42,6 +52,7 @@ digraph module_dependencies {
     label="analysis.derived";
     color="#d0d5dd"; style="rounded"; fontcolor="#344054";
     "hs_observatory.analysis.derived.elsasser" [label="analysis.derived.elsasser"];
+    "hs_observatory.analysis.derived.geometry_pairs" [label="analysis.derived.geometry_pairs"];
     "hs_observatory.analysis.derived.pairs" [label="analysis.derived.pairs"];
   }
   subgraph cluster_3 {
@@ -100,6 +111,14 @@ digraph module_dependencies {
   "hs_observatory.analysis.magnetic_gradient" -> "hs_observatory.visualization" [style=solid];
   "hs_observatory.analysis.magnetic_gradient_correlation" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.magnetic_gradient_wasserstein" -> "hs_observatory.analysis.magnetic_gradient" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.derived.elsasser" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.spatial_structure_function" [style=dashed];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.structure_function_duration" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.analysis.structure_function_local" [style=solid];
+  "hs_observatory.analysis.malara_raw_hs" -> "hs_observatory.fields.malara" [style=solid];
   "hs_observatory.analysis.rbf_reconstruction" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.rbf_reconstruction" -> "hs_observatory.config" [style=solid];
   "hs_observatory.analysis.rbf_reconstruction" -> "hs_observatory.fields.simulation_sampled" [style=solid];
@@ -112,6 +131,7 @@ digraph module_dependencies {
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.magnetic_gradient_correlation" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.rbf_reconstruction" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.shock_timing" [style=dashed];
+  "hs_observatory.analysis.registry" -> "hs_observatory.analysis.spatial_structure_function" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.static_decorrelation" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.structure_function" [style=dashed];
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.timeseries_fft" [style=dashed];
@@ -119,11 +139,44 @@ digraph module_dependencies {
   "hs_observatory.analysis.registry" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
   "hs_observatory.analysis.shock_timing" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.shock_timing" -> "hs_observatory.visualization" [style=dashed];
+  "hs_observatory.analysis.spatial_structure_function" -> "hs_observatory.analysis.base" [style=solid];
+  "hs_observatory.analysis.spatial_structure_function" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.spatial_structure_function" -> "hs_observatory.analysis.structure_function_local" [style=solid];
+  "hs_observatory.analysis.spatial_structure_function" -> "hs_observatory.fields.malara" [style=solid];
   "hs_observatory.analysis.static_decorrelation" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.base" [style=solid];
+  "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.derived.pairs" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.analysis.elsasser" [style=solid];
   "hs_observatory.analysis.structure_function" -> "hs_observatory.io.hdf5" [style=solid];
+  "hs_observatory.analysis.structure_function_convergence" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.structure_function_convergence" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.structure_function_convergence" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_convergence" -> "hs_observatory.analysis.structure_function_local" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.structure_function_convergence" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.structure_function_duration_plots" [style=dashed];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.structure_function_local" [style=solid];
+  "hs_observatory.analysis.structure_function_duration" -> "hs_observatory.analysis.structure_function_uniform_binning" [style=solid];
+  "hs_observatory.analysis.structure_function_duration_plots" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_duration_plots" -> "hs_observatory.analysis.structure_function_convergence" [style=solid];
+  "hs_observatory.analysis.structure_function_local" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_moment_convergence" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.structure_function_moment_convergence" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.structure_function_moment_convergence" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analysis.structure_function_convergence" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analysis.structure_function_local" [style=solid];
+  "hs_observatory.analysis.structure_function_publication" -> "hs_observatory.analyze" [style=solid];
+  "hs_observatory.analysis.structure_function_uniform_binning" -> "hs_observatory.analysis.derived.geometry_pairs" [style=solid];
+  "hs_observatory.analysis.structure_function_uniform_binning" -> "hs_observatory.analysis.elsasser" [style=solid];
+  "hs_observatory.analysis.structure_function_uniform_binning" -> "hs_observatory.analysis.structure_function" [style=solid];
+  "hs_observatory.analysis.structure_function_uniform_binning" -> "hs_observatory.analysis.structure_function_convergence" [style=solid];
+  "hs_observatory.analysis.structure_function_uniform_binning" -> "hs_observatory.analysis.structure_function_local" [style=solid];
   "hs_observatory.analysis.timeseries_fft" -> "hs_observatory.analysis.base" [style=solid];
   "hs_observatory.analysis.timeseries_fft" -> "hs_observatory.visualization" [style=solid];
   "hs_observatory.analysis.timesync" -> "hs_observatory.analysis.base" [style=solid];
@@ -152,6 +205,7 @@ digraph module_dependencies {
   "hs_observatory.cli" -> "hs_observatory.analysis.magnetic_gradient_correlation" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.magnetic_gradient_wasserstein" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.structure_function" [style=dashed];
+  "hs_observatory.cli" -> "hs_observatory.analysis.structure_function_local" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.timing_affine" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.timing_calibrate" [style=dashed];
   "hs_observatory.cli" -> "hs_observatory.analysis.timing_influence" [style=dashed];
@@ -190,6 +244,8 @@ digraph module_dependencies {
   "hs_observatory.generate" -> "hs_observatory.io.hdf5" [style=solid];
   "hs_observatory.generate" -> "hs_observatory.spacecraft.configuration" [style=solid];
   "hs_observatory.generate" -> "hs_observatory.visualization" [style=solid];
+  "hs_observatory.geometry_movie" -> "hs_observatory.io.cdf_positions" [style=solid];
+  "hs_observatory.geometry_movie" -> "hs_observatory.visualization" [style=dashed];
   "hs_observatory.io.cdf_positions" -> "hs_observatory.spacecraft.configuration" [style=solid];
   "hs_observatory.io.simulation_bp" -> "hs_observatory.io.simulation_npy" [style=solid];
   "hs_observatory.visualization" -> "hs_observatory.analysis.derived.elsasser" [style=solid];

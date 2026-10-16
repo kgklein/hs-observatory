@@ -35,7 +35,8 @@ and can be downloaded separately from the software installation.
 
 ## Optional dependencies
 
-BP inputs additionally require `simulation-bp`.
+BP inputs additionally require `simulation-bp`; GIF/MP4 animation encoding
+requires `movie`. These extras are independent of documentation tooling.
 
 For the existing test and lint tools:
 
@@ -49,10 +50,20 @@ For ADIOS2 `.bp` simulation input:
 python3 -m pip install -e ".[simulation-bp]"
 ```
 
-To install both sets of optional scientific features, combine the extras:
+For [Movies](../user-guide/movies.md), install imageio and imageio-ffmpeg:
 
 ```bash
-python3 -m pip install -e ".[analysis,simulation-bp]"
+python -m pip install -e '.[movie]'
+```
+
+This also registers `hsobs-visualize geometry-movie`. The CDF geometry files
+must be obtained separately; installing the extra does not download them.
+The `--dry-run` preflight requires the CDF input but does not require encoders.
+
+To install movie encoding and ADIOS2 input support together, combine the extras:
+
+```bash
+python3 -m pip install -e ".[movie,simulation-bp]"
 ```
 
 The basic example uses a synthetic fallback and does not need simulation files
@@ -70,7 +81,13 @@ strict builds, and the optional system Graphviz executable used for [diagrams](.
 
 ## Environment checks
 
-Use `python -m pip` inside the activated environment and check `hsobs-generate --help`.
+Use `python -m pip` inside the activated environment and check the commands:
+
+```bash
+hsobs-generate --help
+hsobs-visualize geometry-movie --help
+```
+
 If commands are missing, verify activation and editable installation. BP examples
 require both ADIOS2 and the source files; installing an extra does not download
 mission, PLUME or simulation data.

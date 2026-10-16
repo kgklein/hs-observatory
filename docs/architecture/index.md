@@ -2,7 +2,8 @@
 
 HS Observatory separates physical field models, spacecraft sampling, instrument
 errors, storage, and analysis. Its main user-facing stages are generation of an
-observation HDF5 product and analysis of that saved product.
+observation HDF5 product and analysis of that saved product. A separate
+visualization workflow animates mission CDF geometry directly.
 
 ## Architectural areas
 
@@ -23,8 +24,12 @@ not create Python import edges. For the complete default static view, see
 
 ## Responsibilities
 
-**Orchestration and CLI.** `cli` provides installed commands; `config` loads and
-validates YAML. `generate` and `analyze` coordinate the two principal stages.
+**Orchestration and CLI.** `cli` provides most installed commands; `config` loads
+and validates YAML. `generate` and `analyze` coordinate the two principal stages.
+The `hsobs-visualize` entry point is declared separately as
+`hs_observatory.geometry_movie:main`; its `geometry-movie` subcommand handles
+the geometry-only movie workflow. The overview groups both command modules
+under CLI, with source-backed dependencies on CDF I/O and visualization.
 
 **Generation.** The generator constructs time grids, samples nominal and perturbed
 coordinates, applies measurement errors, and writes observations. Its workflow
@@ -70,6 +75,22 @@ time-series and geometry figures. Scientific modules also contain specialized
 plots and product writers. Standalone helpers in the repository's `visualization/`
 directory inspect reconstruction products and export them to ParaView; those
 helpers are outside the package-only graph.
+
+## Geometry movie workflow
+
+[Movies](../user-guide/movies.md) follow this independent path:
+
+**Mission CDF snapshots → existing static geometry plots → PNG frames → GIF/MP4.**
+
+`geometry_movie` loads CDF data once through `io.cdf_positions`, selects the
+nearest record for each requested time, and passes its positions to
+`visualization.plot_geometry_summary`. The overview, polyhedra, and formation
+variants retain their static styling and show the frame epoch. PNG frames
+are staged before imageio assembles each animation; MP4 uses imageio-ffmpeg.
+Encoder dependencies are checked only for an actual rendering/encoding run,
+so help and preflight remain available without the optional movie extra. This
+path does not invoke observation generation, field evaluation, measurement
+errors, or HDF5 output.
 
 ## Updating the diagrams
 

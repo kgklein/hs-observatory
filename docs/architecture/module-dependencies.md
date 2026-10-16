@@ -9,6 +9,11 @@ in the generator. Each displayed relationship must have an AST import witness;
 removing all witnesses removes the edge. Node/edge SVG tooltips show members and
 witnesses. Secondary CLI plotting paths, cross-family helper/validation edges,
 and low-level utilities are intentionally omitted from this newcomer view.
+The CLI group includes `cli` and the independent `geometry_movie` entry-point
+module. Its I/O and visualization relationships include source-import
+witnesses from the geometry movie workflow. Optional third-party encoders
+are outside this package-only graph.
+
 All overview arrows represent selected dependencies, not execution order or
 HDF5 product flow. The detailed view retains its existing edge semantics.
 

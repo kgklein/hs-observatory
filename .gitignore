@@ -71,3 +71,6 @@ generation/*.yaml
 
 # Direct-3D convergence campaign runner.
 !scripts/malara_direct3d_convergence.sh
+
+# Visualization-only geometry movie runner.
+!scripts/geometry_movie.sh

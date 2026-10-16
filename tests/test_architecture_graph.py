@@ -123,6 +123,30 @@ from .registry import register_analysis, get_analysis
             graph.make_overview_dot(dict(reversed(list(members.items()))), witnesses),
         )
 
+    def test_geometry_movie_entry_point_and_source_backed_relationships(self):
+        self.source("__init__.py", "")
+        self.source("io/__init__.py", "")
+        self.source("io/cdf_positions.py", "def read_cdf_positions(path): pass\n")
+        self.source("visualization.py", "def plot_geometry_summary(): pass\n")
+        self.source(
+            "geometry_movie.py",
+            "from .io.cdf_positions import read_cdf_positions\n"
+            "def render_frame():\n"
+            "    from .visualization import plot_geometry_summary\n",
+        )
+        modules, imports = self.extract()
+        nodes, edges, _ = graph.build_graph(modules, imports)
+        movie = "hs_observatory.geometry_movie"
+        self.assertEqual(graph.overview_group(movie), "cli")
+        self.assertFalse(edges[movie, "hs_observatory.io.cdf_positions"])
+        self.assertTrue(edges[movie, "hs_observatory.visualization"])
+        members, witnesses = graph.build_overview(nodes, edges)
+        self.assertIn(movie, members["cli"])
+        self.assertEqual(witnesses["cli", "io"], ["geometry_movie -> io.cdf_positions"])
+        self.assertEqual(witnesses["cli", "visualization"], ["geometry_movie -> visualization"])
+        _, without_edges = graph.build_overview(nodes, {})
+        self.assertEqual(without_edges, {})
+
     def test_current_source_group_coverage_and_witnesses(self):
         modules = graph.read_modules(ROOT / "src/hs_observatory")
         imports, warnings = graph.extract_imports(modules)
