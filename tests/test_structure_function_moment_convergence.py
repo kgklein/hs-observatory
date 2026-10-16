@@ -19,22 +19,23 @@ def records(amplitudes, midpoints=None):
 
 
 def test_moments_tails_concentration_and_cumulative():
-    x = np.arange(1., 1001.)
+    x = np.arange(1.0, 1001.0)
     result = study.moment_diagnostics(records(x), (0, 1000))
     for i, n in enumerate(study.ORDERS):
         weights = x**n
         assert result["S_n"][i] == pytest.approx(weights.mean())
-        assert result["N_conc"][i] == pytest.approx(weights.sum()**2 / np.sum(weights**2))
+        assert result["N_conc"][i] == pytest.approx(weights.sum() ** 2 / np.sum(weights**2))
         for j, count in enumerate((1, 10, 50)):
             assert result["tail_contribution"][i, j] == pytest.approx(
-                weights[-count:].sum()/weights.sum())
+                weights[-count:].sum() / weights.sum()
+            )
     normalized, cumulative = study.cumulative_distribution(x)
-    np.testing.assert_allclose(normalized, x / np.sqrt(np.mean(x*x)))
+    np.testing.assert_allclose(normalized, x / np.sqrt(np.mean(x * x)))
     np.testing.assert_allclose(cumulative[:, -1], 1)
-    np.testing.assert_allclose(cumulative[1], np.cumsum(x**4)/np.sum(x**4))
+    np.testing.assert_allclose(cumulative[1], np.cumsum(x**4) / np.sum(x**4))
     assert result["hist_counts"].sum() == len(x)
     assert np.sum(result["hist_pdf"] * np.diff(result["hist_edges_km_s"])) == pytest.approx(1)
-    _, tied = study.cumulative_distribution(np.array([1., 1., 2.]))
+    _, tied = study.cumulative_distribution(np.array([1.0, 1.0, 2.0]))
     np.testing.assert_allclose(tied[:, 0], tied[:, 1])
 
 
@@ -45,11 +46,11 @@ def test_numerical_stability_and_uniform_weights():
     assert result["N_conc"][2] == pytest.approx(65**2 / (1 + 64**2))
     uniform = study.moment_diagnostics(records(np.ones(20)), (0, 20))
     np.testing.assert_allclose(uniform["N_conc"], 20)
-    np.testing.assert_allclose(uniform["tail_contribution"], .05)
+    np.testing.assert_allclose(uniform["tail_contribution"], 0.05)
 
 
 def test_temporal_localization_and_canonical_lag_groups():
-    data = records([1., 2., 10., 3.], [0., 29.99, 30., 61.])
+    data = records([1.0, 2.0, 10.0, 3.0], [0.0, 29.99, 30.0, 61.0])
     data["spacecraft_left"] = [0, 1, 0, 0]
     data["spacecraft_right"] = [1, 0, 1, 1]
     data["lag_samples"] = [2, -2, 2, 3]
@@ -60,11 +61,11 @@ def test_temporal_localization_and_canonical_lag_groups():
     np.testing.assert_array_equal(result["group_keys"], [[0, 1, 2], [0, 1, 3]])
     np.testing.assert_array_equal(result["group_counts"], [3, 1])
     assert result["top_records"]["midpoint_s"][0] == 30
-    assert result["top_block_contribution"][2, 0] == pytest.approx(expected.max()/expected.sum())
+    assert result["top_block_contribution"][2, 0] == pytest.approx(expected.max() / expected.sum())
     assert result["top_block_contribution"][2, 1] == pytest.approx(1)
 
 
-@pytest.mark.parametrize("amplitude", [[], [0.], [7.]])
+@pytest.mark.parametrize("amplitude", [[], [0.0], [7.0]])
 def test_empty_zero_and_short_bins(amplitude):
     result = study.moment_diagnostics(records(amplitude), (0, 1), top_count=0)
     assert result["count"] == len(amplitude)
@@ -81,37 +82,43 @@ def test_empty_zero_and_short_bins(amplitude):
 
 
 def test_sampler_census_matches_bruteforce_and_partial_prefixes():
-    times = np.arange(7.)
+    times = np.arange(7.0)
     positions = np.zeros((7, 2, 3))
-    positions[:, :, 0] = 100*times[:, None] + [0, 80]
+    positions[:, :, 0] = 100 * times[:, None] + [0, 80]
     z_plus = np.zeros_like(positions)
-    z_plus[:, :, 0] = times[:, None]**2 + [0, 3]
-    edges = np.array([70., 250., 700., 800.])
+    z_plus[:, :, 0] = times[:, None] ** 2 + [0, 3]
+    edges = np.array([70.0, 250.0, 700.0, 800.0])
     plan = build_geometry_pair_plan(positions, edges)
     direct = []
     flat_r, flat_z = positions.reshape(-1, 3), z_plus.reshape(-1, 3)
     for a in range(len(flat_r)):
-        for b in range(a+1, len(flat_r)):
-            separation = np.linalg.norm(flat_r[b]-flat_r[a])
+        for b in range(a + 1, len(flat_r)):
+            separation = np.linalg.norm(flat_r[b] - flat_r[a])
             if edges[0] <= separation < edges[1]:
-                direct.append(np.linalg.norm(flat_z[b]-flat_z[a]))
+                direct.append(np.linalg.norm(flat_z[b] - flat_z[a]))
     census = study.sample_records(plan, positions, z_plus, times, 0, 10000, 1, 3)
     assert len(census) == plan.populations[0] == len(direct)
     np.testing.assert_allclose(np.sort(census["amplitude_km_s"]), np.sort(direct))
     for n in (2, 4, 6):
         result = study.moment_diagnostics(census, (0, 6))
-        assert result["S_n"][list(study.ORDERS).index(n)] == pytest.approx(np.mean(np.array(direct)**n))
+        assert result["S_n"][list(study.ORDERS).index(n)] == pytest.approx(
+            np.mean(np.array(direct) ** n)
+        )
     small = study.sample_records(plan, positions, z_plus, times, 0, 5, 21, 2)
     larger = study.sample_records(plan, positions, z_plus, times, 0, 10, 21, 4)
     np.testing.assert_array_equal(small, larger[:5])
-    identities = np.column_stack([larger[name] for name in
-                                 ("spacecraft_left", "spacecraft_right", "time_left_s", "time_right_s")])
+    identities = np.column_stack(
+        [
+            larger[name]
+            for name in ("spacecraft_left", "spacecraft_right", "time_left_s", "time_right_s")
+        ]
+    )
     assert len(np.unique(identities, axis=0)) == len(larger)
     assert not len(study.sample_records(plan, positions, z_plus, times, 2, 10, 1, 2))
 
 
 def test_saved_results_and_fingerprint(tmp_path):
-    result = study.moment_diagnostics(records([1., 2., 3.]), (0, 3))
+    result = study.moment_diagnostics(records([1.0, 2.0, 3.0]), (0, 3))
     path = tmp_path / "cache.h5"
     metadata = {"case": "synthetic"}
     metadata["fingerprint"] = study.fingerprint(metadata)
@@ -120,8 +127,10 @@ def test_saved_results_and_fingerprint(tmp_path):
     assert saved_metadata == metadata
     for key in result:
         np.testing.assert_array_equal(saved[key], result[key])
-    np.testing.assert_array_equal(study.cumulative_distribution(saved["sorted_amplitude_km_s"])[1],
-                                  study.cumulative_distribution(np.array([1., 2., 3.]))[1])
+    np.testing.assert_array_equal(
+        study.cumulative_distribution(saved["sorted_amplitude_km_s"])[1],
+        study.cumulative_distribution(np.array([1.0, 2.0, 3.0]))[1],
+    )
     with pytest.raises(ValueError, match="incompatible"):
         study.read_product(path, "different")
     assert study.fingerprint({"block_width": 30}) != study.fingerprint({"block_width": 60})
@@ -130,23 +139,26 @@ def test_saved_results_and_fingerprint(tmp_path):
 
 def make_input(tmp_path):
     (tmp_path / "generation").mkdir()
-    config = dict(output=dict(path="synthetic.h5"), errors=dict(n_mc=0),
-                  field=dict(turbulence=dict(intermittency_p=.9)))
+    config = dict(
+        output=dict(path="synthetic.h5"),
+        errors=dict(n_mc=0),
+        field=dict(turbulence=dict(intermittency_p=0.9)),
+    )
     generation = tmp_path / "generation/synthetic-t6.yaml"
     generation.write_text(yaml.safe_dump(config))
     source = tmp_path / "synthetic.h5"
-    time = np.arange(7.)
+    time = np.arange(7.0)
     positions = np.zeros((2, 7, 3))
-    positions[:, :, 0] = 100*time[None] + np.array([0, 80])[:, None]
+    positions[:, :, 0] = 100 * time[None] + np.array([0, 80])[:, None]
     with h5py.File(source, "w") as h:
         h.create_group("metadata").attrs["config_yaml"] = yaml.safe_dump(config)
         h.create_dataset("spacecraft/id", data=np.array(["S0", "S1"], dtype=h5py.string_dtype()))
         for variable in ("n", "v", "B"):
             h.create_dataset(f"time/{variable}", data=time)
             h.create_dataset(f"spacecraft/r/{variable}", data=positions)
-            values = np.full((7, 2), 5.) if variable == "n" else np.zeros((7, 2, 3))
+            values = np.full((7, 2), 5.0) if variable == "n" else np.zeros((7, 2, 3))
             if variable == "v":
-                values[:, :, 0] = time[:, None]**2 * [[1., 2.]]
+                values[:, :, 0] = time[:, None] ** 2 * [[1.0, 2.0]]
             h.create_dataset(f"truth/{variable}", data=values)
         # There are deliberately no observed/error datasets.
     return source, generation
@@ -155,9 +167,26 @@ def make_input(tmp_path):
 def test_cli_preflight_resume_and_plot_only_without_inputs(tmp_path, monkeypatch, capsys):
     source, generation = make_input(tmp_path)
     output = tmp_path / "diagnostics"
-    common = ["--root", str(tmp_path), "--cases", "synthetic", "--duration", "6",
-              "--separations", "300", "--budgets", "5", "10", "--seeds", "7", "8",
-              "--block-width", "2", "--output", str(output)]
+    common = [
+        "--root",
+        str(tmp_path),
+        "--cases",
+        "synthetic",
+        "--duration",
+        "6",
+        "--separations",
+        "300",
+        "--budgets",
+        "5",
+        "10",
+        "--seeds",
+        "7",
+        "8",
+        "--block-width",
+        "2",
+        "--output",
+        str(output),
+    ]
     study.main(common + ["--dry-run"])
     assert "eligible=" in capsys.readouterr().out
     assert not output.exists()
@@ -204,7 +233,7 @@ def test_selection_and_input_validation(tmp_path):
     with pytest.raises(ValueError, match="n_mc"):
         study.prepare_case(tmp_path, "synthetic", 6)
     config["errors"]["n_mc"] = 0
-    config["field"]["turbulence"]["intermittency_p"] = .5
+    config["field"]["turbulence"]["intermittency_p"] = 0.5
     generation.write_text(yaml.safe_dump(config))
     with pytest.raises(ValueError, match="differs"):
         study.prepare_case(tmp_path, "synthetic", 6)

@@ -33,7 +33,10 @@ def p_model_exponents(orders: np.ndarray, p: float) -> np.ndarray:
 
 
 def local_log_slopes(
-    centers: np.ndarray, values: np.ndarray, *, counts: np.ndarray | None = None,
+    centers: np.ndarray,
+    values: np.ndarray,
+    *,
+    counts: np.ndarray | None = None,
     method: str = "three-point",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return coordinates, slopes, and source validity; preserve all local gaps.
@@ -62,10 +65,10 @@ def local_log_slopes(
         coordinates = np.exp((log_x[:-1] + log_x[1:]) / 2)
         slopes = np.full((*values.shape[:-1], max(0, centers.size - 1)), np.nan)
         for k in range(centers.size - 1):
-            if not np.all(valid_centers[k:k + 2]) or centers[k + 1] <= centers[k]:
+            if not np.all(valid_centers[k : k + 2]) or centers[k + 1] <= centers[k]:
                 coordinates[k] = np.nan
                 continue
-            good = np.all(valid[..., k:k + 2], axis=-1)
+            good = np.all(valid[..., k : k + 2], axis=-1)
             difference = (log_y[..., k + 1] - log_y[..., k]) / (log_x[k + 1] - log_x[k])
             slopes[..., k] = np.where(good, difference, np.nan)
     else:
@@ -92,7 +95,10 @@ def derive_product(product: dict, quantity: str, orders: list[int], method: str)
     indices = [source_orders.index(order) for order in orders]
     centers = np.asarray(product["lambda_bin_centers_km"], dtype=float)
     coordinates, slopes, valid = local_log_slopes(
-        centers, values[:, indices, :], counts=np.asarray(product["counts"]), method=method,
+        centers,
+        values[:, indices, :],
+        counts=np.asarray(product["counts"]),
+        method=method,
     )
     return {
         "source_centers_km": centers,
@@ -130,7 +136,8 @@ def cascade_context(path: str | Path) -> dict:
     return {
         "generation_config": str(Path(path).resolve()),
         "domain_lengths_km": lengths.tolist(),
-        "injection_scale_index": injection, "maximum_scale_index": maximum,
+        "injection_scale_index": injection,
+        "maximum_scale_index": maximum,
         "spectral_exponent_h": h,
         "mark_indices": indices,
         "cell_sizes_km": [float(lengths[0] / 2.0**m) for m in indices],
@@ -166,8 +173,11 @@ def load_local_cases(config: dict, quantity: str, method: str, show_scales: bool
         if not orders:
             raise ValueError(f"case {name}: no requested orders available")
         case = {
-            "name": str(name), "p_value": p, "orders": np.asarray(orders, dtype=int),
-            "source_path": str(path), "theory": p_model_exponents(orders, p),
+            "name": str(name),
+            "p_value": p,
+            "orders": np.asarray(orders, dtype=int),
+            "source_path": str(path),
+            "theory": p_model_exponents(orders, p),
             "truth": derive_product(truth, quantity, orders, method),
         }
         if case["truth"]["slopes"].shape[0] != 1:
@@ -219,8 +229,16 @@ def _mark_scales(axis, case: dict, limits: tuple[float, float], *, label: bool =
         if limits[0] <= scale <= limits[1]:
             axis.axvline(scale, color="0.5", alpha=0.18, linewidth=0.7, zorder=0)
             if label:
-                axis.text(scale, 0.98, f"m={m}", transform=axis.get_xaxis_transform(),
-                          ha="center", va="top", fontsize=7, color="0.4")
+                axis.text(
+                    scale,
+                    0.98,
+                    f"m={m}",
+                    transform=axis.get_xaxis_transform(),
+                    ha="center",
+                    va="top",
+                    fontsize=7,
+                    color="0.4",
+                )
 
 
 def _plot_order(axis, case: dict, index: int, color: str, *, show_theory: bool) -> None:
@@ -228,34 +246,62 @@ def _plot_order(axis, case: dict, index: int, color: str, *, show_theory: bool) 
     truth = case["truth"]
     if "sampling_sd" in case:
         spread = case["sampling_sd"][index]
-        axis.fill_between(truth["coordinates_km"], truth["slopes"][0, index] - spread,
-                          truth["slopes"][0, index] + spread, color=color, alpha=0.12,
-                          linewidth=0)
-    axis.plot(truth["coordinates_km"], truth["slopes"][0, index], color=color,
-              marker=_ORDER_MARKERS[(order - 1) % len(_ORDER_MARKERS)], markersize=4,
-              linewidth=1.4)
+        axis.fill_between(
+            truth["coordinates_km"],
+            truth["slopes"][0, index] - spread,
+            truth["slopes"][0, index] + spread,
+            color=color,
+            alpha=0.12,
+            linewidth=0,
+        )
+    axis.plot(
+        truth["coordinates_km"],
+        truth["slopes"][0, index],
+        color=color,
+        marker=_ORDER_MARKERS[(order - 1) % len(_ORDER_MARKERS)],
+        markersize=4,
+        linewidth=1.4,
+    )
     if "mc" in case:
         mc = case["mc"]
-        axis.fill_between(mc["coordinates_km"], mc["p05"][index], mc["p95"][index],
-                          color=color, alpha=0.12, linewidth=0)
-        axis.plot(mc["coordinates_km"], mc["median"][index], color=color,
-                  linestyle="--", linewidth=1.2)
+        axis.fill_between(
+            mc["coordinates_km"],
+            mc["p05"][index],
+            mc["p95"][index],
+            color=color,
+            alpha=0.12,
+            linewidth=0,
+        )
+        axis.plot(
+            mc["coordinates_km"], mc["median"][index], color=color, linestyle="--", linewidth=1.2
+        )
     if show_theory:
-        axis.axhline(case["theory"][index], color=color, linestyle="--", alpha=0.45,
-                     linewidth=0.8, zorder=0)
+        axis.axhline(
+            case["theory"][index], color=color, linestyle="--", alpha=0.45, linewidth=0.8, zorder=0
+        )
 
 
 def plot_local_diagnostics(
-    cases: list[dict], prefix: Path, *, dpi: int, show_theory: bool,
-    curve_label: str = "sampled truth", focused: bool = True, caption_extra: str = "",
+    cases: list[dict],
+    prefix: Path,
+    *,
+    dpi: int,
+    show_theory: bool,
+    curve_label: str = "sampled truth",
+    focused: bool = True,
+    caption_extra: str = "",
 ) -> list[Path]:
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
-    centers = np.concatenate([
-        case[source]["source_centers_km"] for case in cases
-        for source in ("truth", "mc") if source in case
-    ])
+    centers = np.concatenate(
+        [
+            case[source]["source_centers_km"]
+            for case in cases
+            for source in ("truth", "mc")
+            if source in case
+        ]
+    )
     valid = centers[np.isfinite(centers) & (centers > 0)]
     if valid.size < 2 or valid.min() == valid.max():
         raise ValueError("local diagnostics require at least two distinct positive separations")
@@ -267,15 +313,19 @@ def plot_local_diagnostics(
     if any("sampling_sd" in case for case in cases):
         from matplotlib.patches import Patch
 
-        styles.append(Patch(color="0.5", alpha=0.12, label="spatial sampling variability: ±1 batch SD"))
+        styles.append(
+            Patch(color="0.5", alpha=0.12, label="spatial sampling variability: ±1 batch SD")
+        )
     if any("mc" in case for case in cases):
         styles.append(Line2D([], [], color="0.2", linestyle="--", label="MC median (bands: 5–95%)"))
     if show_theory:
-        styles.append(Line2D([], [], color="0.5", linestyle="--", linewidth=0.8,
-                             label="p-model reference"))
+        styles.append(
+            Line2D([], [], color="0.5", linestyle="--", linewidth=0.8, label="p-model reference")
+        )
     styles.append(Line2D([], [], color="0.4", linestyle=":", label="slope = 1"))
-    figure, axes = plt.subplots(len(cases), 1, figsize=(10, 3.2 * len(cases) + 1),
-                                sharex=True, squeeze=False)
+    figure, axes = plt.subplots(
+        len(cases), 1, figsize=(10, 3.2 * len(cases) + 1), sharex=True, squeeze=False
+    )
     for axis, case in zip(axes[:, 0], cases, strict=True):
         for i, order in enumerate(case["orders"]):
             _plot_order(axis, case, i, order_colors[int(order)], show_theory=show_theory)
@@ -287,13 +337,31 @@ def plot_local_diagnostics(
         axis.grid(alpha=0.15)
         _mark_scales(axis, case, limits)
         if "mc_limitation" in case:
-            axis.text(0.99, 0.03, "MC curves unavailable", transform=axis.transAxes,
-                      ha="right", fontsize=8)
-    order_handles = [Line2D([], [], color=order_colors[n],
-                            marker=_ORDER_MARKERS[(n - 1) % len(_ORDER_MARKERS)], label=f"n = {n}")
-                     for n in orders]
-    figure.legend(handles=order_handles, ncols=min(6, len(orders)), fontsize=8,
-                  loc="upper center", bbox_to_anchor=(0.5, 0.965))
+            axis.text(
+                0.99,
+                0.03,
+                "MC curves unavailable",
+                transform=axis.transAxes,
+                ha="right",
+                fontsize=8,
+            )
+    order_handles = [
+        Line2D(
+            [],
+            [],
+            color=order_colors[n],
+            marker=_ORDER_MARKERS[(n - 1) % len(_ORDER_MARKERS)],
+            label=f"n = {n}",
+        )
+        for n in orders
+    ]
+    figure.legend(
+        handles=order_handles,
+        ncols=min(6, len(orders)),
+        fontsize=8,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.965),
+    )
     axes[-1, 0].set_xlabel(r"$\lambda$ [km]")
     figure.legend(handles=styles, loc="upper center", ncols=len(styles), fontsize=8)
     caption = CASCADE_CAPTION if any("cascade" in case for case in cases) else ""
@@ -317,8 +385,13 @@ def plot_local_diagnostics(
         for ci, case in enumerate(cases):
             if order in case["orders"]:
                 i = list(case["orders"]).index(order)
-                _plot_order(axis, case, i, P_MODEL_RUN_COLORS.get(case["p_value"], colors[ci % len(colors)]),
-                            show_theory=show_theory)
+                _plot_order(
+                    axis,
+                    case,
+                    i,
+                    P_MODEL_RUN_COLORS.get(case["p_value"], colors[ci % len(colors)]),
+                    show_theory=show_theory,
+                )
         axis.set_title(f"n = {order}")
         axis.set_xscale("log")
         axis.set_xlim(limits)
@@ -333,8 +406,15 @@ def plot_local_diagnostics(
         axis.set_ylabel(r"$\xi_n^{\mathrm{local}}$")
     for axis in axes[-1]:
         axis.set_xlabel(r"$\lambda$ [km]")
-    case_handles = [Line2D([], [], color=P_MODEL_RUN_COLORS.get(c["p_value"], colors[i % len(colors)]),
-                           label=f"p = {c['p_value']:g}") for i, c in enumerate(cases)]
+    case_handles = [
+        Line2D(
+            [],
+            [],
+            color=P_MODEL_RUN_COLORS.get(c["p_value"], colors[i % len(colors)]),
+            label=f"p = {c['p_value']:g}",
+        )
+        for i, c in enumerate(cases)
+    ]
     figure.legend(handles=case_handles + styles, loc="upper center", ncols=4, fontsize=8)
     figure.text(0.5, 0.012, caption, ha="center", fontsize=8, wrap=True)
     figure.tight_layout(rect=(0, 0.06 if caption else 0.01, 1, 0.91))
@@ -349,8 +429,11 @@ def plot_local_diagnostics(
 
 
 def local_slopes_from_config(
-    config_path: str | Path, *, method: str = "three-point",
-    output_prefix: str | Path | None = None, show_cascade_scales: bool = False,
+    config_path: str | Path,
+    *,
+    method: str = "three-point",
+    output_prefix: str | Path | None = None,
+    show_cascade_scales: bool = False,
     show_p_model_override: bool | None = None,
 ) -> list[Path]:
     """Write derived HDF5 and diagnostic figures from saved publication JSONs."""
@@ -360,28 +443,39 @@ def local_slopes_from_config(
     quantity = str(config.get("quantity", "z_plus"))
     cases = load_local_cases(config, quantity, method, show_cascade_scales)
     default = Path(config.get("output", {}).get("figure", "structure_function.png"))
-    prefix = Path(output_prefix).expanduser() if output_prefix is not None else default.with_name(
-        default.stem + "_local_slopes"
+    prefix = (
+        Path(output_prefix).expanduser()
+        if output_prefix is not None
+        else default.with_name(default.stem + "_local_slopes")
     )
     prefix = prefix.resolve()
     targets = [Path(f"{prefix}{suffix}") for suffix in (".h5", ".png", ".pdf")]
     targets += [Path(f"{prefix}_focused{suffix}") for suffix in (".png", ".pdf")]
     sources = {Path(case["source_path"]) for case in cases} | {Path(config_path).resolve()}
     sources.add(default.expanduser().resolve())
-    sources.update(Path(case["cascade"]["generation_config"]) for case in cases if "cascade" in case)
+    sources.update(
+        Path(case["cascade"]["generation_config"]) for case in cases if "cascade" in case
+    )
     if any(target in sources for target in targets):
         raise ValueError("output prefix would overwrite an original input or publication figure")
     prefix.parent.mkdir(parents=True, exist_ok=True)
-    show_theory = (bool(config.get("show_p_model", True)) if show_p_model_override is None
-                   else show_p_model_override)
+    show_theory = (
+        bool(config.get("show_p_model", True))
+        if show_p_model_override is None
+        else show_p_model_override
+    )
     metadata = {
-        "estimator": method, "quantity": quantity, "config_path": str(Path(config_path).resolve()),
-        "created_utc": datetime.now(timezone.utc).isoformat(), "show_p_model": show_theory,
+        "estimator": method,
+        "quantity": quantity,
+        "config_path": str(Path(config_path).resolve()),
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "show_p_model": show_theory,
         "ensemble_policy": "slopes per realization, then finite-member 5th/50th/95th percentiles",
         "edge_policy": "NaN endpoints for three-point; no extrapolation or gap bridging",
         "show_cascade_scales": show_cascade_scales,
     }
-    outputs = plot_local_diagnostics(cases, prefix, dpi=int(config.get("dpi", 300)),
-                                     show_theory=show_theory)
+    outputs = plot_local_diagnostics(
+        cases, prefix, dpi=int(config.get("dpi", 300)), show_theory=show_theory
+    )
     write_local_results(targets[0], cases, metadata)
     return [targets[0], *outputs]

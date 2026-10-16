@@ -56,7 +56,7 @@ def test_invalid_values_do_not_bridge_gaps(bad, method):
 @pytest.mark.parametrize("bad", [0, np.nan, np.inf, 2])
 @pytest.mark.parametrize("method", ["three-point", "adjacent"])
 def test_invalid_or_nonincreasing_separations(bad, method):
-    centers = np.array([1, 2, 4, 8, 16, 32, 64.], dtype=float)
+    centers = np.array([1, 2, 4, 8, 16, 32, 64.0], dtype=float)
     values = centers[None, None, :].copy()
     centers[3] = bad
     _, slopes, _ = local.local_log_slopes(centers, values, method=method)
@@ -79,20 +79,21 @@ def test_empty_bin_masks_neighborhood(method):
 
 
 def saved_config(tmp_path, *, summary_only=False):
-    centers = np.array([1., 2., 4., 8., 16.])
+    centers = np.array([1.0, 2.0, 4.0, 8.0, 16.0])
     orders = [1, 2, 3, 4, 5, 6]
     truth_values = centers[None, None, :] ** (np.array(orders)[None, :, None] / 3)
     # Curves cross; the ensemble median curve changes membership with separation.
-    member_curves = np.array([[1, 4, 4, 4, 4],
-                              [2, 8, 8, 8, 8],
-                              [1024, 1, 1, 1, 1]], dtype=float)
+    member_curves = np.array([[1, 4, 4, 4, 4], [2, 8, 8, 8, 8], [1024, 1, 1, 1, 1]], dtype=float)
     mc_values = np.broadcast_to(member_curves[:, None, :], (3, 6, 5)).copy()
 
     def product(values):
-        return {"orders": orders, "lambda_bin_centers_km": centers.tolist(),
-                "lambda_bin_edges_km": [0.7, 1.4, 2.8, 5.6, 11.2, 22.4],
-                "counts": np.ones((len(values), 5)).tolist(),
-                "z_plus": {"S_n": values.tolist()}}
+        return {
+            "orders": orders,
+            "lambda_bin_centers_km": centers.tolist(),
+            "lambda_bin_edges_km": [0.7, 1.4, 2.8, 5.6, 11.2, 22.4],
+            "counts": np.ones((len(values), 5)).tolist(),
+            "z_plus": {"S_n": values.tolist()},
+        }
 
     result = {"products": {"truth": product(truth_values), "observed": product(mc_values)}}
     if summary_only:
@@ -100,15 +101,31 @@ def saved_config(tmp_path, *, summary_only=False):
     path = tmp_path / "saved.json"
     path.write_text(json.dumps(result))
     generation = tmp_path / "generation.yaml"
-    generation.write_text(yaml.safe_dump({"field": {
-        "model": "malara_turbulence", "domain": {"L": [64, 64, 64], "units": "km"},
-        "turbulence": {"geometry": "isotropic", "injection_scale_index": 2,
-                       "n_scales": 8, "spectral_exponent_h": 1/3},
-    }}))
-    config = {"cases": {"test": {"path": str(path), "p_value": 0.7,
-                                 "generation_config": str(generation)}},
-              "quantity": "z_plus", "dpi": 40, "fit_lambda_range_km": [4, 8],
-              "output": {"figure": str(tmp_path / "global.png")}}
+    generation.write_text(
+        yaml.safe_dump(
+            {
+                "field": {
+                    "model": "malara_turbulence",
+                    "domain": {"L": [64, 64, 64], "units": "km"},
+                    "turbulence": {
+                        "geometry": "isotropic",
+                        "injection_scale_index": 2,
+                        "n_scales": 8,
+                        "spectral_exponent_h": 1 / 3,
+                    },
+                }
+            }
+        )
+    )
+    config = {
+        "cases": {
+            "test": {"path": str(path), "p_value": 0.7, "generation_config": str(generation)}
+        },
+        "quantity": "z_plus",
+        "dpi": 40,
+        "fit_lambda_range_km": [4, 8],
+        "output": {"figure": str(tmp_path / "global.png")},
+    }
     cfg_path = tmp_path / "overlay.yaml"
     cfg_path.write_text(yaml.safe_dump(config))
     return cfg_path, config, result
@@ -125,7 +142,9 @@ def test_mc_statistics_are_from_member_slopes(tmp_path, method):
     for key, expected in (("p05", p05), ("median", median), ("p95", p95)):
         np.testing.assert_allclose(case["mc"][key], expected)
     _, summary_slopes, _ = local.local_log_slopes(
-        centers, np.median(values, axis=0)[None, ...], method=method,
+        centers,
+        np.median(values, axis=0)[None, ...],
+        method=method,
     )
     valid = np.isfinite(median)
     assert not np.allclose(median[valid], summary_slopes[0][valid])
@@ -163,15 +182,29 @@ def test_cli_postprocessing_roundtrip_never_calls_upstream(tmp_path, monkeypatch
 
     monkeypatch.setattr(generate, "generate_from_config", forbidden)
     monkeypatch.setattr(MalaraTurbulenceField, "evaluate_quantity", forbidden)
-    for name in ("compute_all_spacetime_structure_functions", "compute_pairwise_structure_functions",
-                 "compute_elsasser_analysis", "plot_structure_function_overlay_from_config"):
+    for name in (
+        "compute_all_spacetime_structure_functions",
+        "compute_pairwise_structure_functions",
+        "compute_elsasser_analysis",
+        "plot_structure_function_overlay_from_config",
+    ):
         monkeypatch.setattr(sf, name, forbidden)
     monkeypatch.setattr(sf.StructureFunctionAnalysis, "run", forbidden)
     prefix = tmp_path / "derived"
-    assert plot_structure_function_overlay_main([
-        str(cfg_path), "--local-slopes", "--local-slope-method", method,
-        "--show-cascade-scales", "--output-prefix", str(prefix),
-    ]) == 0
+    assert (
+        plot_structure_function_overlay_main(
+            [
+                str(cfg_path),
+                "--local-slopes",
+                "--local-slope-method",
+                method,
+                "--show-cascade-scales",
+                "--output-prefix",
+                str(prefix),
+            ]
+        )
+        == 0
+    )
     for suffix in (".h5", ".png", ".pdf", "_focused.png", "_focused.pdf"):
         assert Path(f"{prefix}{suffix}").stat().st_size > 0
     with h5py.File(f"{prefix}.h5") as handle:
@@ -185,9 +218,10 @@ def test_cli_postprocessing_roundtrip_never_calls_upstream(tmp_path, monkeypatch
         assert case["mc/slope_valid"].dtype == np.dtype(bool)
         context = json.loads(case.attrs["cascade_json"])
         assert context["cell_sizes_km"] == [16, 2, 0.25]
-        np.testing.assert_allclose(case["truth/slopes"][0, :, 1:-1],
-                                   np.broadcast_to(np.arange(1, 7)[:, None] / 3,
-                                                   case["truth/slopes"][0, :, 1:-1].shape))
+        np.testing.assert_allclose(
+            case["truth/slopes"][0, :, 1:-1],
+            np.broadcast_to(np.arange(1, 7)[:, None] / 3, case["truth/slopes"][0, :, 1:-1].shape),
+        )
     assert json.loads((tmp_path / "saved.json").read_text()) == result
     assert not (tmp_path / "global.png").exists()
 
@@ -226,8 +260,15 @@ def test_cascade_requires_explicit_valid_parameters(tmp_path, change):
         local.cascade_context(path)
 
 
-@pytest.mark.parametrize("option", [["--output", "bad.png"], ["--fit-range", "total"],
-                                    ["--fit-lambda-range", "1", "4"], ["--min-fit-bins", "3"]])
+@pytest.mark.parametrize(
+    "option",
+    [
+        ["--output", "bad.png"],
+        ["--fit-range", "total"],
+        ["--fit-lambda-range", "1", "4"],
+        ["--min-fit-bins", "3"],
+    ],
+)
 def test_local_cli_rejects_global_overrides(option):
     with pytest.raises(SystemExit) as exc:
         plot_structure_function_overlay_main(["unused.yaml", "--local-slopes", *option])
@@ -236,8 +277,11 @@ def test_local_cli_rejects_global_overrides(option):
 
 def test_default_cli_routes_to_existing_overlay(monkeypatch):
     called = []
-    monkeypatch.setattr(sf, "plot_structure_function_overlay_from_config",
-                        lambda *args, **kwargs: called.append((args, kwargs)) or Path("plot.png"))
+    monkeypatch.setattr(
+        sf,
+        "plot_structure_function_overlay_from_config",
+        lambda *args, **kwargs: called.append((args, kwargs)) or Path("plot.png"),
+    )
     assert plot_structure_function_overlay_main(["existing.yaml", "--fit-range", "total"]) == 0
     assert called[0][0] == ("existing.yaml",)
     assert called[0][1]["fit_range_override"] == "total"

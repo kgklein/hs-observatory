@@ -30,13 +30,16 @@ def geometry_targets(value, n_bins: int) -> np.ndarray:
 
 
 def _affine_model(positions: np.ndarray) -> tuple[np.ndarray, float]:
-    if (positions.ndim != 3 or positions.shape[-1] != 3
-            or positions.shape[0] < 1 or positions.shape[1] < 1
-            or not np.all(np.isfinite(positions))):
+    if (
+        positions.ndim != 3
+        or positions.shape[-1] != 3
+        or positions.shape[0] < 1
+        or positions.shape[1] < 1
+        or not np.all(np.isfinite(positions))
+    ):
         raise ValueError("geometry_stratified positions must be finite (time, spacecraft, 3)")
     n_time = len(positions)
-    step = ((positions[-1, 0] - positions[0, 0]) / (n_time - 1)
-            if n_time > 1 else np.zeros(3))
+    step = (positions[-1, 0] - positions[0, 0]) / (n_time - 1) if n_time > 1 else np.zeros(3)
     predicted = positions[0][None] + np.arange(n_time)[:, None, None] * step
     residual = float(np.max(np.linalg.norm(positions - predicted, axis=-1)))
     # Allow floating-point construction/offset roundoff, not formation evolution.
@@ -109,7 +112,11 @@ class GeometryPairPlan:
 
 
 def build_geometry_pair_plan(
-    positions_km, lambda_edges_km, *, min_pair_lambda_km=None, max_pair_lambda_km=None,
+    positions_km,
+    lambda_edges_km,
+    *,
+    min_pair_lambda_km=None,
+    max_pair_lambda_km=None,
 ) -> GeometryPairPlan:
     """Enumerate discrete lags, preserving the existing exact norm/bin predicate.
 
@@ -120,12 +127,17 @@ def build_geometry_pair_plan(
     positions = np.asarray(positions_km, dtype=float)
     step, error = _affine_model(positions)
     edges = np.asarray(lambda_edges_km, dtype=float)
-    if (edges.ndim != 1 or len(edges) < 2 or not np.all(np.isfinite(edges))
-            or np.any(np.diff(edges) <= 0)):
+    if (
+        edges.ndim != 1
+        or len(edges) < 2
+        or not np.all(np.isfinite(edges))
+        or np.any(np.diff(edges) <= 0)
+    ):
         raise ValueError("geometry_stratified requires finite increasing separation bin edges")
     lower, upper = min_pair_lambda_km, max_pair_lambda_km
-    boundaries = np.unique([0.0, *edges, *([] if lower is None else [lower]),
-                            *([] if upper is None else [upper])])
+    boundaries = np.unique(
+        [0.0, *edges, *([] if lower is None else [lower]), *([] if upper is None else [upper])]
+    )
     rows: list[list[np.ndarray]] = [[] for _ in edges[:-1]]
     row_counts = np.zeros(len(edges) - 1, dtype=np.int64)
     explicit: list[dict[int, np.ndarray]] = [{} for _ in edges[:-1]]
@@ -144,10 +156,17 @@ def build_geometry_pair_plan(
         for q in np.unique(classification[(classification >= 0) & ~near]):
             selected_lags = lags[(classification == q) & ~near]
             size = len(selected_lags)
-            rows[q].append(np.column_stack((
-                np.full(size, i), np.full(size, j), selected_lags,
-                np.maximum(0, -selected_lags), len(positions) - abs(selected_lags),
-            )))
+            rows[q].append(
+                np.column_stack(
+                    (
+                        np.full(size, i),
+                        np.full(size, j),
+                        selected_lags,
+                        np.maximum(0, -selected_lags),
+                        len(positions) - abs(selected_lags),
+                    )
+                )
+            )
             row_counts[q] += size
         for k in lags[near]:
             start0, weight = max(0, -int(k)), len(positions) - abs(int(k))
@@ -185,7 +204,10 @@ class GeometryPlanCache:
             self._plans.move_to_end(key)
             return self._plans[key], True
         plan = build_geometry_pair_plan(
-            positions, edges, min_pair_lambda_km=lower, max_pair_lambda_km=upper,
+            positions,
+            edges,
+            min_pair_lambda_km=lower,
+            max_pair_lambda_km=upper,
         )
         self._plans[key] = plan
         if len(self._plans) > self.max_entries:
@@ -194,7 +216,11 @@ class GeometryPlanCache:
 
 
 def geometry_pair_chunks(
-    plan: GeometryPairPlan, target_pairs_per_bin, *, random_seed: int, chunk_size: int,
+    plan: GeometryPairPlan,
+    target_pairs_per_bin,
+    *,
+    random_seed: int,
+    chunk_size: int,
 ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
     """Sample uniform ranks without replacement using sparse Fisher–Yates.
 
@@ -208,10 +234,10 @@ def geometry_pair_chunks(
     for q, (bin_plan, target) in enumerate(zip(plan.bins, targets)):
         population = bin_plan.population
         count = min(int(target), population)
-        words = np.asarray(plan.edges[q:q + 2], dtype="<f8").view("<u4")
-        rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence(
-            [int(random_seed), *map(int, words)]
-        )))
+        words = np.asarray(plan.edges[q : q + 2], dtype="<f8").view("<u4")
+        rng = np.random.Generator(
+            np.random.PCG64(np.random.SeedSequence([int(random_seed), *map(int, words)]))
+        )
         swaps: dict[int, int] = {}
         for start in range(0, count, chunk_size):
             stop = min(count, start + chunk_size)

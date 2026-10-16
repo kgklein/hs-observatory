@@ -19,19 +19,20 @@ def test_grid_coverage_and_half_width_edges():
         assert edges[0] == 70 and edges[-1] == 20000
         assert np.all(np.diff(edges) > 0)
         centers = np.sqrt(edges[:-1] * edges[1:])
-        np.testing.assert_array_equal(targets(edges),
-                                      np.where((centers >= 150) & (centers <= 1200),
-                                               100000, 10000))
-    step = np.diff(np.log(schemes['B']))[0]
-    np.testing.assert_allclose(np.diff(np.log(schemes['B'])), step)
-    np.testing.assert_allclose(np.diff(np.log(schemes['C'])),
-                               np.r_[step / 2, np.repeat(step, 39), step / 2])
+        np.testing.assert_array_equal(
+            targets(edges), np.where((centers >= 150) & (centers <= 1200), 100000, 10000)
+        )
+    step = np.diff(np.log(schemes["B"]))[0]
+    np.testing.assert_allclose(np.diff(np.log(schemes["B"])), step)
+    np.testing.assert_allclose(
+        np.diff(np.log(schemes["C"])), np.r_[step / 2, np.repeat(step, 39), step / 2]
+    )
 
 
 def test_population_and_sample_log_centers_against_exhaustive():
-    positions = np.arange(5)[:, None, None] * np.array([[[2., 0., 0.]]])
-    positions = positions + np.array([[[0., 0., 0.], [0., 3., 0.]]])
-    edges = np.array([1., 3., 5., 10., 20.])
+    positions = np.arange(5)[:, None, None] * np.array([[[2.0, 0.0, 0.0]]])
+    positions = positions + np.array([[[0.0, 0.0, 0.0], [0.0, 3.0, 0.0]]])
+    edges = np.array([1.0, 3.0, 5.0, 10.0, 20.0])
     plan = build_geometry_pair_plan(positions, edges)
     population, sample, counts = separation_statistics(plan, positions, plan.populations, 12345)
     flat = positions.reshape(-1, 3)
@@ -48,34 +49,42 @@ def test_population_and_sample_log_centers_against_exhaustive():
 
 
 def test_physical_fit_windows_use_representative_centers():
-    centers = np.array([100., 160., 210., 400., 800., 1100., 1400.])
+    centers = np.array([100.0, 160.0, 210.0, 400.0, 800.0, 1100.0, 1400.0])
     values = centers[None, None, :] ** np.arange(1, 7)[None, :, None]
-    product = {'lambda_bin_centers_km': centers, 'counts': np.ones((1, 7), dtype=int),
-               'z_plus': {'S_n': values}}
+    product = {
+        "lambda_bin_centers_km": centers,
+        "counts": np.ones((1, 7), dtype=int),
+        "z_plus": {"S_n": values},
+    }
     result = diagnostics(product, centers, centers)
     for entry in result.values():
-        np.testing.assert_allclose(entry['fits']['raw'][0],
-                                   np.tile(np.arange(1, 7), (2, 1)), atol=1e-13)
-        np.testing.assert_array_equal(entry['fits']['bins_used'][0],
-                                      np.tile([5, 3], (6, 1)).T)
+        np.testing.assert_allclose(
+            entry["fits"]["raw"][0], np.tile(np.arange(1, 7), (2, 1)), atol=1e-13
+        )
+        np.testing.assert_array_equal(entry["fits"]["bins_used"][0], np.tile([5, 3], (6, 1)).T)
 
 
 def test_empirical_center_crossing_window_boundary_changes_mask():
-    centers = np.array([100., 160., 210., 400., 800., 1100., 1400.])
+    centers = np.array([100.0, 160.0, 210.0, 400.0, 800.0, 1100.0, 1400.0])
     empirical = centers.copy()
-    empirical[2] = 199.
-    product = {'lambda_bin_centers_km': centers, 'counts': np.ones((1, 7), dtype=int),
-               'z_plus': {'S_n': centers[None, None, :] ** np.arange(1, 7)[None, :, None]}}
+    empirical[2] = 199.0
+    product = {
+        "lambda_bin_centers_km": centers,
+        "counts": np.ones((1, 7), dtype=int),
+        "z_plus": {"S_n": centers[None, None, :] ** np.arange(1, 7)[None, :, None]},
+    }
     result = diagnostics(product, empirical, empirical)
-    assert result['geometric']['fits']['bins_used'][0, 1, 0] == 3
-    assert result['population']['fits']['bins_used'][0, 1, 0] == 2
-    assert np.all(np.isnan(result['population']['fits']['raw'][0, 1]))
+    assert result["geometric"]["fits"]["bins_used"][0, 1, 0] == 3
+    assert result["population"]["fits"]["bins_used"][0, 1, 0] == 2
+    assert np.all(np.isnan(result["population"]["fits"]["raw"][0, 1]))
 
 
 def test_unequal_spacing_does_not_create_power_law_slope_spike():
-    centers = np.sqrt(grids()['A'][:-1] * grids()['A'][1:])
+    centers = np.sqrt(grids()["A"][:-1] * grids()["A"][1:])
     values = centers[None, None, :] ** np.arange(1, 7)[None, :, None]
     _, slopes, _ = local_log_slopes(centers, values)
-    np.testing.assert_allclose(slopes[0, :, 1:-1],
-                               np.repeat(np.arange(1, 7)[:, None], len(centers) - 2, axis=1),
-                               atol=1e-12)
+    np.testing.assert_allclose(
+        slopes[0, :, 1:-1],
+        np.repeat(np.arange(1, 7)[:, None], len(centers) - 2, axis=1),
+        atol=1e-12,
+    )

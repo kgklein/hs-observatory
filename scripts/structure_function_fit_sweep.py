@@ -76,7 +76,8 @@ def load_cases(config: dict, quantity: str, max_order: int | None) -> tuple[list
         truth_orders = result["products"]["truth"]["orders"]
         mc_orders = result["products"]["observed"]["orders"]
         selected = [
-            order for order in truth_orders
+            order
+            for order in truth_orders
             if order in mc_orders and (max_order is None or order <= max_order)
         ]
         if not selected:
@@ -122,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = []
     results_by_p = {p: result for _, p, result, _ in cases}
     for name, drop_small, drop_large in ranges:
-        retained = centers[drop_small:len(centers) - drop_large]
+        retained = centers[drop_small : len(centers) - drop_large]
         bounds = (float(retained[0]), float(retained[-1]))
         missing_truth = missing_mc = 0
         for run_id, p_value, result, orders in cases:
@@ -140,26 +141,28 @@ def main(argv: list[str] | None = None) -> int:
                 finite_mc = int(np.count_nonzero(np.isfinite(mc_xi)))
                 missing_truth += int(not np.isfinite(truth_xi))
                 missing_mc += len(mc_xi) - finite_mc
-                rows.append({
-                    "range": name,
-                    "drop_small": drop_small,
-                    "drop_large": drop_large,
-                    "retained_bins": len(retained),
-                    "lambda_min_km": bounds[0],
-                    "lambda_max_km": bounds[1],
-                    "run_id": run_id,
-                    "p_value": p_value,
-                    "quantity": quantity,
-                    "order": order,
-                    "truth_exponent": float(truth_xi),
-                    "truth_fit_bins": int(truth_fit["bins_used"][0, 0, ti]),
-                    "mc_median": float(median),
-                    "mc_p05": float(lower),
-                    "mc_p95": float(upper),
-                    "mc_finite_fits": finite_mc,
-                    "mc_fit_bins_min": int(mc_bins.min()),
-                    "mc_fit_bins_max": int(mc_bins.max()),
-                })
+                rows.append(
+                    {
+                        "range": name,
+                        "drop_small": drop_small,
+                        "drop_large": drop_large,
+                        "retained_bins": len(retained),
+                        "lambda_min_km": bounds[0],
+                        "lambda_max_km": bounds[1],
+                        "run_id": run_id,
+                        "p_value": p_value,
+                        "quantity": quantity,
+                        "order": order,
+                        "truth_exponent": float(truth_xi),
+                        "truth_fit_bins": int(truth_fit["bins_used"][0, 0, ti]),
+                        "mc_median": float(median),
+                        "mc_p05": float(lower),
+                        "mc_p95": float(upper),
+                        "mc_finite_fits": finite_mc,
+                        "mc_fit_bins_min": int(mc_bins.min()),
+                        "mc_fit_bins_max": int(mc_bins.max()),
+                    }
+                )
         figure_path = plot_structure_function_overlay(
             results_by_p,
             output_dir / f"{name}.png",

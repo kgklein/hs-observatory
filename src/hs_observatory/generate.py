@@ -331,7 +331,9 @@ def generate_from_config(
             observatory_config["timing"] if use_observatory_errors else errors_config.get("time")
         )
         position_config = (
-            observatory_config["position"] if use_observatory_errors else errors_config.get("position")
+            observatory_config["position"]
+            if use_observatory_errors
+            else errors_config.get("position")
         )
         time_offset_model = time_offset_model_from_config(time_config)
         position_offset_model = position_offset_model_from_config(position_config)
@@ -382,7 +384,9 @@ def generate_from_config(
             sampled_by_quantity[quantity] = sampled
 
         if use_observatory_errors:
-            result = apply_observatory_measurement_errors(sampled_by_quantity, time, errors_config, rng)
+            result = apply_observatory_measurement_errors(
+                sampled_by_quantity, time, errors_config, rng
+            )
             observed.update(result.observed)
             realized_errors.update(result.errors)
             measurement_error_names = {
