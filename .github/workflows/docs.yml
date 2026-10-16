@@ -52,5 +52,5 @@ jobs:
         run: python scripts/generate_architecture_graph.py
       - name: Build documentation
         run: mkdocs build --strict
-      # Build validation only. Future Pages steps are documented in
-      # docs/developer/documentation.md; there is no deployment permission/job.
+      # Build validation only; deployment is handled separately by
+      # .github/workflows/docs-deploy.yml on main.
