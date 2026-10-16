@@ -1,0 +1,120 @@
+# Truth-only pilot: run with scripts/structure_function_stage2.sh, not hsobs-analyze.
+input:
+  path: outputs/malara-prod-402.h5
+analysis:
+  method: structure_function_truth_convergence
+output:
+  path: outputs/structure_function_stage2/malara-prod-402_truth_convergence.h5
+structure_function:
+  increment_mode: all_spacetime_pairs
+  min_pair_lambda_km: 70.0
+  max_pair_lambda_km: 20000.0
+  pair_sampling:
+    mode: geometry_stratified
+    chunk_size: 100000
+    random_seed: 12345
+    target_pairs_per_bin:
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 100000
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+    - 10000
+  min_order: 1
+  max_order: 6
+  n_lambda_bins: 26
+  lambda_bins_km:
+  - 70.0
+  - 84.69277145171081
+  - 102.469507659596
+  - 123.97752275690705
+  - 150.0
+  - 174.01940792402448
+  - 201.88502889485355
+  - 234.21275464671297
+  - 271.717099279172
+  - 315.22699159596584
+  - 365.7040962613427
+  - 424.2640687119287
+  - 492.20121360458256
+  - 571.0170918063716
+  - 662.4537082042874
+  - 768.5320138585629
+  - 891.5965734821693
+  - 1034.3673854963727
+  - 1200.0
+  - 1705.7380592383859
+  - 2424.618605611947
+  - 3446.470195608171
+  - 4898.979485566358
+  - 6963.646466632191
+  - 9898.464007679533
+  - 14070.155654916924
+  - 20000.0
+  scale_ranges_km:
+    primary:
+    - 150.0
+    - 1200.0
+    sensitivity:
+    - 200.0
+    - 1000.0
+  min_fit_bins: 3
+  elsasser:
+    velocity:
+      frame: auto
+      spacecraft_correction: auto
+    density_normalization:
+      method: global_per_spacecraft
+      species: proton
+    mean_subtraction:
+      method: global_per_spacecraft
+    timebase:
+      method: slower_of_n_and_v
+      interpolation: linear
+  plot:
+    enabled: false
+    publication:
+      enabled: false
+      path: outputs/structure_function_stage2/malara-prod-402_truth_pilot.png
+      p_value: 0.5
+      quantity: z_plus
+      max_order: 6
+      fit_range: primary
+      dpi: 300
+stage2:
+  geometry_reference: outputs/malara-prod-402.h5
+  run_id: 402
+  data_group: truth
+  p_value: 0.5
+  budgets:
+  - 10000
+  - 25000
+  - 50000
+  - 100000
+  outside_target: 10000
+  seeds:
+  - 12345
+  - 23456
+  - 34567
+  - 45678
+  - 56789
