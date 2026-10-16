@@ -42,11 +42,10 @@ hsobs-generate configs/example_generate.yaml
 hsobs-analyze configs/example_analyze.yaml
 ```
 
-The sine-sum example enables synthetic geometry fallback,
-so mission CDF files are not required.
+
+Using mission CDF files are suggested; a synthetic fall back is available for testing.
 It writes `outputs/synthetic_observations.h5`,
 diagnostic figures under `outputs/`, and `outputs/diagnostics.json`.
-If the configured CDF directory exists, its geometry may be used instead.
 The [quick-start guide](docs/getting-started/quick-start.md) explains the products and equivalent Python API.
 See [example verification](docs/examples/index.md#starter-workflow)
 for the controlled-run record.

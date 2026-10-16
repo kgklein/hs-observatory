@@ -19,7 +19,7 @@ repository-code: "https://github.com/kgklein/hs-observatory"
 url: "https://kgklein.github.io/hs-observatory/"
 
 license: MIT
-date-released: 2026-09-29
+date-released: 2026-10-16
 
 keywords:
   - heliophysics
@@ -39,11 +39,6 @@ references:
       to generate synthetic multipoint observations.
 
   - type: article
-    authors:
-      - family-names: Klein
-        given-names: Kristopher G.
-      - family-names: Spence
-        given-names: Harlan
     title: >-
       HelioSwarm: A Multipoint, Multiscale Mission
       to Characterize Turbulence

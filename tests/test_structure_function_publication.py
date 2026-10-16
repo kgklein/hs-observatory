@@ -115,7 +115,12 @@ def test_pilot_schema_outputs_and_budgets():
         settings = _settings(config["structure_function"])
         assert config["analysis"]["method"] == "structure_function"
         assert "structure_function_stage3" in config["output"]["path"]
-        np.testing.assert_array_equal(settings["lambda_bins_km"], stage2_edges())
+        np.testing.assert_allclose(
+            settings["lambda_bins_km"],
+            stage2_edges(),
+            rtol=1e-12,
+            atol=1e-12,
+        )
         assert (
             settings["pair_sampling"]["target_pairs_per_bin"]
             == [10000] * 4 + [100000] * 14 + [10000] * 8

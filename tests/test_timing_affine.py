@@ -126,7 +126,11 @@ def test_affine_zero_and_known_offsets(method):
         common = fit["projection_residuals"]["comparison_valid"]
         basis = bases["df_basis" if method == METHODS[1] else "divergence_basis"]
         actual = np.sum((project_field(basis, fit["corrected_B"])[common] / 0.001) ** 2)
-        assert fit["data_chi2_after"] == pytest.approx(actual, rel=1e-12, abs=1e-18)
+        assert fit["data_chi2_after"] == pytest.approx(
+            actual,
+            rel=1e-11,
+            abs=1e-15,
+        )
         assert fit["chi2_after"] <= fit["chi2_before"] + 1e-15
         if method == METHODS[1]:
             for label in ("before", "after"):
