@@ -41,7 +41,7 @@ def options(tmp_path, **kwargs):
     return Namespace(**(values | kwargs))
 
 
-def fake_renderer(frame, spacecraft_ids, context, kind, path):
+def fake_renderer(frame, spacecraft_ids, context, kind, path, *, axis_limits=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new('RGB', (8, 6), (frame['selected_index'] * 50, 0, 0)).save(path)
 
@@ -136,6 +136,7 @@ def test_dry_run_has_no_render_or_encoder_dependency(geometry, tmp_path, monkeyp
         pytest.fail('dry-run rendered or imported encoding dependencies')
     monkeypatch.setattr(movie, 'movie_dependencies', forbidden)
     monkeypatch.setattr(movie, 'render_frame', forbidden)
+    monkeypatch.setattr(movie, 'movie_axis_limits', forbidden)
     outputs = movie.make_movie(options(tmp_path, dry_run=True, start='2030-08-25T00:20', end='2030-08-25T01:20'))
     assert len(outputs) == 3
     assert outputs[0].name == 'geometry_overview_20300825T002000Z_20300825T012000Z_1h.gif'
@@ -150,10 +151,15 @@ def test_frame_enumeration_retention_and_output_kinds(geometry, tmp_path, monkey
     encoder = Mock(side_effect=fake_encoder)
     monkeypatch.setattr(movie, 'render_frame', renderer)
     monkeypatch.setattr(movie, 'assemble_animation', encoder)
+    scan = Mock(wraps=movie.movie_axis_limits)
+    monkeypatch.setattr(movie, 'movie_axis_limits', scan)
     args = options(tmp_path, keep_frames=keep, fps=7.)
     outputs = movie.make_movie(args)
     assert len(outputs) == 3 and all(path.read_bytes() == b'animation' for path in outputs)
     assert renderer.call_count == 9
+    scan.assert_called_once()
+    fixed = renderer.call_args_list[0].kwargs['axis_limits']
+    assert all(call.kwargs['axis_limits'] is fixed for call in renderer.call_args_list)
     assert encoder.call_count == 3
     for call in encoder.call_args_list:
         assert [path.name for path in call.args[0]] == [f'frame_{index:06d}.png' for index in range(3)]
@@ -163,6 +169,8 @@ def test_frame_enumeration_retention_and_output_kinds(geometry, tmp_path, monkey
     assert len(retained) == int(keep)
     if keep:
         manifest = json.loads((retained[0] / 'frames.json').read_text())
+        assert manifest['axis_limits']['spatial_extent'] == fixed.spatial_extent
+        assert manifest['axis_limits']['baseline_colors'] == list(fixed.baseline_colors)
         assert manifest['spacecraft_ids'][0] == 'H'
         assert [frame['index'] for frame in manifest['frames']] == [0, 1, 2]
         assert manifest['frames'][0]['filename'] == 'frame_000000.png'

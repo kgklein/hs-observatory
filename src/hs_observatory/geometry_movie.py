@@ -6,6 +6,7 @@ This module does not import observation generation or field evaluation code.
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -102,7 +103,21 @@ def load_frames(cdf_path: Path, times: list[datetime]):
     return frames, ordered_labels, context[valid_context].swapaxes(0, 1)
 
 
-def render_frame(frame, spacecraft_ids, context, kind, path):
+def movie_axis_limits(frames, context):
+    """First pass: scan unique selected records, without allocating any figures."""
+    from hs_observatory.visualization import geometry_axis_limits
+
+    def snapshots():
+        seen = set()
+        for frame in frames:
+            if frame['selected_index'] not in seen:
+                seen.add(frame['selected_index'])
+                yield frame['position']
+
+    return geometry_axis_limits(snapshots(), context_trajectory=context)
+
+
+def render_frame(frame, spacecraft_ids, context, kind, path, *, axis_limits=None):
     """Render a fixed canvas with the static plot's styling and timestamp metadata."""
     import matplotlib.pyplot as plt
     from hs_observatory.visualization import plot_geometry_summary
@@ -110,7 +125,7 @@ def render_frame(frame, spacecraft_ids, context, kind, path):
     metadata = {key: frame[key] for key in ('requested_time', 'selected_time', 'source_file')}
     metadata['source'] = 'cdf'
     figure, _ = plot_geometry_summary(frame['position'], spacecraft_ids,
-        metadata=metadata, context_trajectory=context, variant=KINDS[kind])
+        metadata=metadata, context_trajectory=context, variant=KINDS[kind], axis_limits=axis_limits)
     try:
         if np.datetime64(frame['requested_time']) != np.datetime64(frame['selected_time']):
             # The static renderer already labels the selected epoch. Append the
@@ -194,13 +209,14 @@ def make_movie(args):
     movie_dependencies(args.format)  # Fail before rendering if the extra/encoder is missing.
     import matplotlib
     matplotlib.use('Agg')
+    axis_limits = movie_axis_limits(frames, context)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix='.geometry-frames-', dir=args.output_dir))
     try:
         manifest = {'cdf_path': str(args.cdf_path), 'start': time_label(utc_time(args.start)),
                     'end': time_label(utc_time(args.end)), 'cadence_hours': int(args.cadence),
                     'fps': args.fps, 'format': args.format, 'kinds': kinds,
-                    'spacecraft_ids': spacecraft_ids,
+                    'spacecraft_ids': spacecraft_ids, 'axis_limits': asdict(axis_limits),
                     'frames': [{key: value for key, value in frame.items() if key != 'position'}
                                | {'index': index, 'filename': f'frame_{index:06d}.png'}
                                for index, frame in enumerate(frames)]}
@@ -209,7 +225,7 @@ def make_movie(args):
             paths = []
             for index, frame in enumerate(frames):
                 path = staging / kind / f'frame_{index:06d}.png'
-                render_frame(frame, spacecraft_ids, context, kind, path)
+                render_frame(frame, spacecraft_ids, context, kind, path, axis_limits=axis_limits)
                 paths.append(path)
             assemble_animation(paths, output, args.fps)
     finally:

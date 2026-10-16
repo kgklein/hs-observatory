@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 import warnings
 
 import h5py
@@ -1566,6 +1567,130 @@ def _axis_limits(values: np.ndarray, pad: float = 0.08) -> tuple[float, float]:
     return lo - margin, hi + margin
 
 
+@dataclass(frozen=True)
+class GeometryAxisLimits:
+    """Shared geometry ranges; lengths in km, orbit context in Earth radii.
+
+    Supplying this configuration opts into fixed movie scaling. Omitting it from
+    ``plot_geometry_summary`` preserves the static figure's automatic scaling.
+    """
+
+    spatial_extent: float
+    formation_bounds: tuple[tuple[float, float], ...]
+    baseline_components: tuple[float, float]
+    context_x: tuple[float, float]
+    context_y: tuple[float, float]
+    polyhedron_size: tuple[float, float]
+    polyhedron_colors: tuple[float, float]
+    baseline_colors: tuple[float, float]
+    polyhedron_quality: tuple[float, float] = (0., float(np.sqrt(2) * 1.05))
+    shape: tuple[float, float] = (-0.02, 1.02)
+    positive_polyhedron_lengths: bool = True
+    positive_baseline_lengths: bool = True
+
+    def __post_init__(self):
+        if not np.isfinite(self.spatial_extent) or self.spatial_extent <= 0:
+            raise ValueError("spatial_extent must be finite and positive")
+        if len(self.formation_bounds) != 3:
+            raise ValueError("formation_bounds must contain x, y and z ranges")
+        names = ("baseline_components", "context_x", "context_y", "polyhedron_size",
+                 "polyhedron_colors", "baseline_colors", "polyhedron_quality", "shape")
+        for bounds in (*self.formation_bounds, *(getattr(self, name) for name in names)):
+            if len(bounds) != 2 or not np.all(np.isfinite(bounds)) or bounds[0] >= bounds[1]:
+                raise ValueError("geometry axis ranges must be finite increasing pairs")
+        for name in ("baseline_components", "polyhedron_size", "polyhedron_colors", "baseline_colors"):
+            if getattr(self, name)[0] <= 0:
+                raise ValueError(f"{name} must be positive for logarithmic scaling")
+
+
+def _geometry_log_range(low: float, high: float, *, pad=False) -> tuple[float, float]:
+    """Expand constant log ranges; reserve 1–10 km for no positive samples."""
+    if not np.isfinite(low):
+        return 1., 10.
+    if low == high:
+        return float(low / np.sqrt(10)), float(high * np.sqrt(10))
+    margin = (high / low) ** 0.05 if pad else 1.
+    return float(low / margin), float(high * margin)
+
+
+def geometry_axis_limits(
+    samples: Iterable[np.ndarray], *, context_trajectory: np.ndarray,
+    moon_position: np.ndarray | None = None,
+) -> GeometryAxisLimits:
+    """Scan hub-first snapshots once, without plotting or retaining subset catalogs.
+
+    Each sample is (9, 3). Context follows the plotter's convention: either
+    (spacecraft, time, 3) or a precomputed (time, 3) mesocenter trajectory.
+    """
+    relative_low, relative_high = np.full(3, np.inf), np.full(3, -np.inf)
+    component_low, component_high = np.inf, -np.inf
+    size_low, size_high = np.inf, -np.inf
+    color_low, color_high = np.inf, -np.inf
+    baseline_low, baseline_high = np.inf, -np.inf
+    context = np.asarray(context_trajectory, dtype=float)
+    if context.ndim == 3:
+        context = context.mean(axis=0)
+    if context.ndim != 2 or context.shape[1] != 3 or not len(context) or not np.all(np.isfinite(context)):
+        raise ValueError("context_trajectory must contain finite coordinates ending in xyz")
+    # Include the Earth disk, full trajectory, all selected centers, and optional Moon.
+    context_low = np.minimum(context.min(axis=0) / EARTH_RADIUS_KM, -1.)
+    context_high = np.maximum(context.max(axis=0) / EARTH_RADIUS_KM, 1.)
+    if moon_position is not None:
+        moon = np.asarray(moon_position, dtype=float)
+        if moon.shape != (3,) or not np.all(np.isfinite(moon)):
+            raise ValueError("moon_position must be a finite xyz vector")
+        context_low = np.minimum(context_low, moon / EARTH_RADIUS_KM)
+        context_high = np.maximum(context_high, moon / EARTH_RADIUS_KM)
+    found = False
+    for sample in samples:
+        sample = np.asarray(sample, dtype=float)
+        if sample.shape != (9, 3) or not np.all(np.isfinite(sample)):
+            raise ValueError("geometry samples must be finite hub-first (9, 3) snapshots")
+        found = True
+        relative = sample - sample[0]
+        relative_low = np.minimum(relative_low, relative.min(axis=0))
+        relative_high = np.maximum(relative_high, relative.max(axis=0))
+        center = sample.mean(axis=0) / EARTH_RADIUS_KM
+        context_low = np.minimum(context_low, center)
+        context_high = np.maximum(context_high, center)
+        baselines = unique_baselines(sample)
+        low, high = _baseline_component_limits(baselines)
+        component_low, component_high = min(component_low, low), max(component_high, high)
+        lengths = np.linalg.norm(baselines, axis=1)
+        positive = lengths[lengths > 0]
+        if positive.size:
+            baseline_low, baseline_high = min(baseline_low, positive.min()), max(baseline_high, positive.max())
+        sizes = np.asarray([record["L"] for record in polyhedron_metrics(sample)])
+        clipped = np.maximum(sizes, 1e-9)
+        size_low, size_high = min(size_low, clipped.min()), max(size_high, clipped.max())
+        positive = sizes[sizes > 0]
+        if positive.size:
+            color_low, color_high = min(color_low, positive.min()), max(color_high, positive.max())
+    if not found:
+        raise ValueError("at least one geometry snapshot is required")
+    margin = np.maximum(0.08 * (relative_high - relative_low), 20.)
+    return GeometryAxisLimits(
+        spatial_extent=max(float(np.max(np.abs([relative_low, relative_high]))) * 1.12, 1.),
+        formation_bounds=tuple((float(low), float(high))
+                               for low, high in zip(relative_low - margin, relative_high + margin)),
+        baseline_components=(float(component_low), float(component_high)),
+        context_x=_axis_limits(np.array([context_low[0], context_high[0]]), pad=.12),
+        context_y=_axis_limits(np.array([context_low[1], context_high[1]]), pad=.12),
+        polyhedron_size=_geometry_log_range(size_low, size_high, pad=True),
+        polyhedron_colors=_geometry_log_range(color_low, color_high),
+        baseline_colors=_geometry_log_range(baseline_low, baseline_high),
+        positive_polyhedron_lengths=bool(np.isfinite(color_low)),
+        positive_baseline_lengths=bool(np.isfinite(baseline_low)),
+    )
+
+
+def _geometry_spatial_ticks(extent):
+    from matplotlib.ticker import MaxNLocator
+
+    ticks = MaxNLocator(nbins=4, symmetric=True).tick_values(-extent, extent)
+    return ticks[(ticks >= -extent) & (ticks <= extent)]
+
+
 def _plot_summary_relative_projection(
     ax,
     relative: np.ndarray,
@@ -1573,10 +1698,12 @@ def _plot_summary_relative_projection(
     x_index: int,
     y_index: int,
     title: str,
+    axis_limits: GeometryAxisLimits | None = None,
 ) -> None:
     labels = ("X", "Y", "Z")
     extent = float(np.max(np.abs(relative[:, [x_index, y_index]])))
-    limit = 1.12 * extent if extent > 0 else 1.0
+    limit = (axis_limits.spatial_extent if axis_limits is not None
+             else 1.12 * extent if extent > 0 else 1.0)
     for index, spacecraft_id in enumerate(spacecraft_ids):
         is_hub = index == 0
         ax.scatter(
@@ -1597,8 +1724,13 @@ def _plot_summary_relative_projection(
         ylabel=rf"$\Delta {labels[y_index]}_{{GSE}}$ (km)",
         title=title,
     )
-    ax.set_xticks(np.arange(-2000.0, 2000.1, 1000.0))
-    ax.set_aspect("equal")
+    if axis_limits is None:
+        ax.set_xticks(np.arange(-2000.0, 2000.1, 1000.0))
+    else:
+        ticks = _geometry_spatial_ticks(limit)
+        ax.set_xticks(ticks)
+        ax.set_yticks(ticks)
+    ax.set_aspect("equal", adjustable="box")
     ax.grid(alpha=0.22, linewidth=0.5)
 
 
@@ -1610,6 +1742,7 @@ def _plot_context_projection(
     y_index: int,
     title: str,
     moon_position: np.ndarray | None = None,
+    axis_limits: GeometryAxisLimits | None = None,
 ) -> None:
     labels = ("X", "Y", "Z")
     trajectory_re = trajectory / EARTH_RADIUS_KM
@@ -1676,10 +1809,10 @@ def _plot_context_projection(
         extra_y.append(float(moon[y_index]))
     all_x = np.concatenate((trajectory_re[:, x_index], extra_x))
     all_y = np.concatenate((trajectory_re[:, y_index], extra_y))
-    ax.set_xlim(*_axis_limits(all_x, pad=0.12))
-    ax.set_ylim(*_axis_limits(all_y, pad=0.12))
+    ax.set_xlim(*(axis_limits.context_x if axis_limits else _axis_limits(all_x, pad=0.12)))
+    ax.set_ylim(*(axis_limits.context_y if axis_limits else _axis_limits(all_y, pad=0.12)))
     ax.grid(alpha=0.22, linewidth=0.5)
-    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_aspect("equal", adjustable="box" if axis_limits else "datalim")
 
 
 def _context_legend_handles(moon_position: np.ndarray | None = None) -> list[Line2D]:
@@ -1931,15 +2064,18 @@ def _highlight_plot_polyhedra(ax, selected, *, shape=False):
         )
 
 
-def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
+def _plot_polyhedron_shape(
+    ax, metrics: Sequence[Mapping[str, Any]], axis_limits: GeometryAxisLimits | None = None,
+) -> None:
     """Project elongation and planarity, coloring positive sizes logarithmically."""
 
     elongation = np.asarray([item["E"] for item in metrics], dtype=float)
     planarity = np.asarray([item["P"] for item in metrics], dtype=float)
     lengths = np.asarray([item["L"] for item in metrics], dtype=float)
     positive = lengths > 0
-    if np.any(positive):
-        low, high = float(lengths[positive].min()), float(lengths[positive].max())
+    if np.any(positive) or axis_limits is not None:
+        low, high = (axis_limits.polyhedron_colors if axis_limits else
+                     (float(lengths[positive].min()), float(lengths[positive].max())))
         # A constant-size formation still needs a nonzero logarithmic color range.
         if low == high:
             low, high = low / np.sqrt(10), high * np.sqrt(10)
@@ -1954,7 +2090,7 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
             edgecolors="none",
         )
         ax.figure.colorbar(points, ax=ax, pad=0.01, fraction=0.03).set_label("L (km)")
-    else:
+    if not np.any(positive):
         ax.text(
             0.5,
             0.5,
@@ -1977,8 +2113,8 @@ def _plot_polyhedron_shape(ax, metrics: Sequence[Mapping[str, Any]]) -> None:
         xlabel="Elongation E",
         ylabel="Planarity P",
         title="Polyhedral Shape",
-        xlim=(-0.02, 1.02),
-        ylim=(-0.02, 1.02),
+        xlim=axis_limits.shape if axis_limits else (-0.02, 1.02),
+        ylim=axis_limits.shape if axis_limits else (-0.02, 1.02),
     )
     theta = np.linspace(0, np.pi / 2, 181)
     e = REGULAR_POLYHEDRON_Q_LIMIT * np.cos(theta)
@@ -2005,6 +2141,7 @@ def _plot_summary_formation(
     spacecraft_ids: Sequence[str],
     baseline_pairs: Sequence[tuple[int, int]],
     baseline_colors: np.ndarray,
+    axis_limits: GeometryAxisLimits | None = None,
 ) -> None:
     """Draw hub-relative GSE sampling volume, without an orbit inset."""
 
@@ -2053,7 +2190,8 @@ def _plot_summary_formation(
         )
     span = np.ptp(relative, axis=0)
     margin = np.maximum(0.08 * span, 20.0)
-    low, high = relative.min(axis=0) - margin, relative.max(axis=0) + margin
+    low, high = (np.asarray(axis_limits.formation_bounds).T if axis_limits else
+                 (relative.min(axis=0) - margin, relative.max(axis=0) + margin))
     ax.set(
         xlim=(low[0], high[0]),
         ylim=(low[1], high[1]),
@@ -2071,7 +2209,7 @@ def _plot_summary_formation(
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.015), ncol=5, fontsize=18, frameon=False)
 
 
-def _style_publication_geometry(fig, variant, relative, metadata):
+def _style_publication_geometry(fig, variant, relative, metadata, axis_limits=None):
     """Apply physical aspect, common scales, and typography to existing panels."""
     from matplotlib.ticker import MaxNLocator
     from matplotlib.patches import Patch
@@ -2079,7 +2217,8 @@ def _style_publication_geometry(fig, variant, relative, metadata):
     fig.suptitle("HelioSwarm Design Reference Geometry", x=0.055, y=0.985, ha="left", fontsize=27)
     epoch = _selected_time_title_label(metadata)
     fig.text(0.055, 0.94, f"Epoch: {epoch} UTC", fontsize=24, color="#555555")
-    extent = max(float(np.max(np.abs(relative))) * 1.12, 1.0)
+    extent = (axis_limits.spatial_extent if axis_limits else
+              max(float(np.max(np.abs(relative))) * 1.12, 1.0))
     ticks = MaxNLocator(nbins=4, symmetric=True).tick_values(-extent, extent)
     ticks = ticks[(ticks >= -extent) & (ticks <= extent)]
     limit = extent
@@ -2143,8 +2282,9 @@ def plot_geometry_summary(
     moon_position: np.ndarray | None = None,
     hub_index: int = 0,
     variant: str = "summary",
+    axis_limits: GeometryAxisLimits | None = None,
 ):
-    """Return the original summary, a polyhedra view, or a 3D formation view."""
+    """Return a geometry view; optional shared limits fix movie axes and colors."""
 
     if variant not in {"summary", "polyhedra", "formation"}:
         raise ValueError(f"Unknown geometry summary variant: {variant}")
@@ -2184,9 +2324,13 @@ def plot_geometry_summary(
         baseline_magnitudes = np.linalg.norm(baseline_vectors, axis=1)
         positive_lengths = baseline_magnitudes[baseline_magnitudes > 0.0]
         baseline_cmap = cm.batlow
-        if positive_lengths.size:
-            baseline_norm = LogNorm(vmin=positive_lengths.min(), vmax=positive_lengths.max())
+        if positive_lengths.size or axis_limits is not None:
+            low, high = (axis_limits.baseline_colors if axis_limits else
+                         (positive_lengths.min(), positive_lengths.max()))
+            baseline_norm = LogNorm(vmin=low, vmax=high)
             baseline_colors = baseline_cmap(baseline_norm(baseline_magnitudes))
+            if axis_limits is not None:
+                baseline_colors[baseline_magnitudes <= 0] = matplotlib.colors.to_rgba("#777777")
         else:
             baseline_colors = np.tile(baseline_cmap(0.0), (len(baseline_pairs), 1))
     mesocenter = np.mean(sample, axis=0)
@@ -2229,12 +2373,13 @@ def plot_geometry_summary(
                 0,
                 1,
                 r"$\Delta Y_{GSE}$ vs $\Delta X_{GSE}$",
+                axis_limits=axis_limits,
             )
 
         else:
             formation_ax = fig.add_subplot(grid[:, :2], projection="3d")
             _plot_summary_formation(
-                formation_ax, relative, spacecraft_ids, baseline_pairs, baseline_colors
+                formation_ax, relative, spacecraft_ids, baseline_pairs, baseline_colors, axis_limits
             )
 
         context_ax = fig.add_subplot(grid[0, 1 if variant == "polyhedra" else 3])
@@ -2246,6 +2391,7 @@ def plot_geometry_summary(
             1,
             r"",
             moon_position=moon_position,
+            axis_limits=axis_limits,
         )
         context_ax.legend(
             handles=_context_legend_handles(moon_position),
@@ -2259,7 +2405,8 @@ def plot_geometry_summary(
         # context_ax.set_title(r"Orbit Context:")
 
         if variant != "polyhedra":
-            baseline_limits = _baseline_component_limits(baselines)
+            baseline_limits = (axis_limits.baseline_components if axis_limits else
+                               _baseline_component_limits(baselines))
             lambda_y_x_ax = fig.add_subplot(grid[0, 2])
             _plot_baseline_components(
                 lambda_y_x_ax,
@@ -2305,7 +2452,11 @@ def plot_geometry_summary(
                 linestyle="--",
             )
             poly_ax.set_yscale("log")
-            poly_ax.set_xlim(left=0.0)
+            if axis_limits is None:
+                poly_ax.set_xlim(left=0.0)
+            else:
+                poly_ax.set_xlim(*axis_limits.polyhedron_quality)
+                poly_ax.set_ylim(*axis_limits.polyhedron_size)
             poly_ax.set(
                 xlabel=r"$\sqrt{E^2 + P^2}$",
                 ylabel=r"$L$ (km)",
@@ -2330,6 +2481,7 @@ def plot_geometry_summary(
                 0,
                 2,
                 r"$\Delta Z_{GSE}$ vs $\Delta X_{GSE}$",
+                axis_limits=axis_limits,
             )
             _plot_summary_relative_projection(
                 fig.add_subplot(grid[1, 1]),
@@ -2338,6 +2490,7 @@ def plot_geometry_summary(
                 1,
                 2,
                 r"$\Delta Z_{GSE}$ vs $\Delta Y_{GSE}$",
+                axis_limits=axis_limits,
             )
         if variant != "polyhedra":
             lambda_z_x_ax = fig.add_subplot(grid[1, 2])
@@ -2361,7 +2514,7 @@ def plot_geometry_summary(
                 baseline_colors=baseline_colors,
             )
         else:
-            _plot_polyhedron_shape(fig.add_subplot(grid[1, 2]), metrics)
+            _plot_polyhedron_shape(fig.add_subplot(grid[1, 2]), metrics, axis_limits)
 
         if variant == "formation":
             # Letter the five publication panels consecutively.
@@ -2393,8 +2546,8 @@ def plot_geometry_summary(
             ha="left",
         )
     if variant != "summary":
-        _style_publication_geometry(fig, variant, relative, metadata)
-        if variant == "formation" and positive_lengths.size:
+        _style_publication_geometry(fig, variant, relative, metadata, axis_limits)
+        if variant == "formation" and (positive_lengths.size or axis_limits is not None):
             # Use spare header space without resizing any of the existing panels.
             colorbar_ax = fig.add_axes((0.52, 0.955, 0.15, 0.012))
             colorbar = fig.colorbar(
@@ -2405,6 +2558,8 @@ def plot_geometry_summary(
             colorbar.set_label(r"$|\lambda|$ (km)", fontsize=16)
             colorbar.ax.xaxis.set_label_position("top")
             colorbar.ax.tick_params(labelsize=14)
+            if axis_limits is not None and not positive_lengths.size:
+                colorbar.set_label("|lambda| (km); no positive lengths in this frame", fontsize=12)
         if variant == "polyhedra":
             selected = _selected_plot_polyhedra(metrics)
             _highlight_plot_polyhedra(poly_ax, selected)

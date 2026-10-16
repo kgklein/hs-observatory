@@ -46,6 +46,54 @@ its centisecond time resolution; MP4 is preferable for precise high frame rates.
 The current static styling and 150 DPI are retained. Frames have fixed canvas
 sizes; MP4 receives edge padding to even dimensions where necessary.
 
+## Fixed axes and colors across frames
+
+Movies use two passes: first scan each unique selected CDF record for global
+ranges, then render every frame with the same `GeometryAxisLimits` configuration.
+Repeated nearest-record selections do not repeat the scan. No preliminary
+figures are rendered to discover bounds. The scan reuses the existing baseline
+and polyhedron calculations; it adds work proportional to the selected snapshots,
+not to the full mission trajectory or all possible observation pairs.
+
+Every corresponding panel retains the same x/y limits after drawing, and the
+formation panel also retains its z limits. Hub-relative projections use one
+symmetric spatial extent and fixed ticks. The 3D formation retains per-axis
+bounds with the existing 8% margins (at least 20 km), orthographic projection,
+and equal physical coordinate scaling. Separation-component plots share global
+logarithmic limits and retain their kinetic/MHD reference regions.
+
+The orbit panel keeps the existing **full valid CDF trajectory** context, even
+when the movie covers a shorter interval. Its fixed Earth-radius bounds include
+the Earth disk and selected mesocenters; equal aspect adjusts the panel box
+rather than changing coordinate limits. Polyhedral quality spans the full
+0–sqrt(2) domain with padding, size uses a global logarithmic range, and
+elongation/planarity retain their existing -0.02–1.02 bounds. These figures have
+no histograms or other panels that require per-frame axis scaling.
+
+Spacecraft-count colors remain discrete and fixed. Polyhedron-size and formation
+baseline-length colors use global logarithmic normalization, so the same color
+represents the same length throughout the movie. Zero lengths are excluded when
+calculating color bounds and shown neutrally where length controls color.
+Existing logarithmic-coordinate clipping conventions are retained. Constant
+positive color ranges expand by a factor of sqrt(10) in either direction.
+If an entire interval has no positive lengths, the color scale uses a labeled
+1–10 km fallback; colorbars remain present even in coincident-spacecraft frames.
+Frames without positive lengths carry an explanatory label.
+
+A large formation expansion can make smaller snapshots occupy less of a panel;
+this is the expected consequence of comparable coordinate ranges. Fixed ranges
+do not fix panel pixel positions: existing constrained layout still accommodates
+labels and legends. Resolved axes and color ranges are recorded in the retained
+`frames.json` manifest.
+
+For Python callers, `visualization.geometry_axis_limits(samples,
+context_trajectory=...)` accepts an iterable of hub-first `(9, 3)` snapshots.
+Pass the result as `axis_limits=` to `visualization.plot_geometry_summary`.
+The immutable `GeometryAxisLimits` configuration can also be supplied explicitly.
+Static plotters retain their current automatic scaling when this optional
+argument is omitted. The movie CLI applies global limits automatically and
+requires no additional options; dry-run still performs no polyhedron scan.
+
 ## Preflight and shell runner
 
 The following preflight loads and validates geometry but neither renders figures
@@ -83,13 +131,14 @@ published independently, so a completed kind remains available if a later kind f
 ## Focused validation
 
 ```bash
-.venv/bin/python -m pytest -q tests/test_geometry_movie.py
-.venv/bin/python -m ruff check src/hs_observatory/geometry_movie.py src/hs_observatory/io/cdf_positions.py tests/test_geometry_movie.py
+.venv/bin/python -m pytest -q tests/test_geometry_movie.py tests/test_geometry_axis_limits.py tests/test_geometry_summary.py tests/test_geometry_variants.py
+.venv/bin/python -m ruff check src/hs_observatory/geometry_movie.py src/hs_observatory/visualization.py tests/test_geometry_movie.py tests/test_geometry_axis_limits.py
 bash -n scripts/geometry_movie.sh
 ```
 
 The tests use fabricated geometry, a small static-renderer smoke check, tiny GIF
-frames, and a mocked MP4 writer. The GIF test skips if the optional imageio package
+frames, and a mocked MP4 writer. Fixed-range checks compare every main and
+colorbar axis after canvas drawing, including degenerate formations. The GIF test skips if the optional imageio package
 is absent. To exercise the installed MP4 encoder without loading CDFs or rendering
 mission figures, optionally run this tiny fabricated-image smoke command:
 
