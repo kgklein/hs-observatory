@@ -121,7 +121,14 @@ def test_diagnostics_select_second_largest_per_case_and_compute_each_mc(tmp_path
     first = _write_product(tmp_path / "001.h5")
     second = _write_product(tmp_path / "011.h5", np.array([101.0, 201.0, 401.0, 801.0]))
     missing = tmp_path / "021.h5"
-    with pytest.warns(RuntimeWarning, match="not found"):
+    with (
+        pytest.warns(
+            RuntimeWarning,
+            match=r"Selected lag grids differ across cases; nearest lags were selected "
+            r"independently: 001=400 km, 011=401 km",
+        ),
+        pytest.warns(RuntimeWarning, match=r"Skipping case 021: saved PDF product not found:"),
+    ):
         result = compute_increment_pdf_wasserstein_diagnostics(
             {
                 "001": {"path": first, "label": "all errors"},

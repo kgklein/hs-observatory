@@ -174,12 +174,48 @@ def test_hdf5_units_moving_geometry_truth_independence_cli_and_default(tmp_path)
     config = make_config()
     prepared = compute_timing_calibration(source, config)
     assert prepared["variance"].shape == (len(time), 1)
-    noise = write_timing_calibration_product(prepared, tmp_path / "noise.h5")
+
+    def write_affine_product(prepared, path):
+        # The zero-offset affine field has only roundoff divergence. Strict
+        # comparison still reports an increase, amplified by legacy near-zero
+        # ideal-divergence weights; this is not a meaningful timing correction.
+        with pytest.warns(
+            UserWarning, match="^MC 0: resampled corrected chi-square exceeds baseline$"
+        ) as caught:
+            product = write_timing_calibration_product(prepared, path)
+        assert len(caught) == 1
+        with h5py.File(product) as handle:
+            assert np.max(np.abs(handle["timing/correction_s"][0])) < 1e-12
+            diagnostics = handle["diagnostics"]
+            assert diagnostics["prior_chi2_before"][0] == 0
+            assert diagnostics["prior_chi2_after"][0] == pytest.approx(
+                np.sum((handle["timing/correction_s"][0] / prepared["sigma_t"]) ** 2),
+                rel=1e-12,
+                abs=0,
+            )
+            name = next(iter(handle["configurations"]))
+            group = handle[f"configurations/{name}"]
+            common = group["comparison_valid"][0].astype(bool)
+            variance = group["sigma_d_squared"][...]
+            for label, key in (("before", "measured"), ("after", "corrected")):
+                divergence = group[f"{key}_divergence"][0]
+                assert np.max(np.abs(divergence[common])) < 1e-12
+                data = np.sum((divergence**2 / variance)[common])
+                assert diagnostics[f"divergence_chi2_{label}"][0] == pytest.approx(
+                    data, rel=1e-12, abs=0
+                )
+                assert diagnostics[f"chi2_{label}"][0] == pytest.approx(
+                    data + diagnostics[f"prior_chi2_{label}"][0], rel=1e-12, abs=0
+                )
+            assert diagnostics["chi2_after"][0] > diagnostics["chi2_before"][0]
+        return product
+
+    noise = write_affine_product(prepared, tmp_path / "noise.h5")
     legacy_config = {"sigma_t_s": 0.0125, "polyhedron_filter": {"allowed_n": [9]}}
-    legacy = write_timing_calibration_product(
+    legacy = write_affine_product(
         compute_timing_calibration(source, legacy_config), tmp_path / "legacy.h5"
     )
-    explicit = write_timing_calibration_product(
+    explicit = write_affine_product(
         compute_timing_calibration(
             source, {**legacy_config, "divergence_normalization": "ideal_divergence"}
         ),
@@ -204,7 +240,7 @@ def test_hdf5_units_moving_geometry_truth_independence_cli_and_default(tmp_path)
         )
     with h5py.File(source, "r+") as handle:
         handle["truth/B"][...] = 12345
-    changed = write_timing_calibration_product(
+    changed = write_affine_product(
         compute_timing_calibration(source, config), tmp_path / "changed.h5"
     )
     with h5py.File(noise) as a, h5py.File(changed) as b:

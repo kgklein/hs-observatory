@@ -156,11 +156,42 @@ def test_quadratic_hdf5_mc_truth_independence_and_four_method_cli(tmp_path):
     products = []
     for method in methods:
         config = {"calibration_method": method, "sigma_t_s": 0.0125, "sigma_B_nT": 0.1}
-        products.append(
-            write_timing_calibration_product(
-                compute_timing_calibration(source, config), tmp_path / f"{method}.h5"
-            )
-        )
+        prepared = compute_timing_calibration(source, config)
+        output = tmp_path / f"{method}.h5"
+        if method == "all_nine_divergence":
+            # An affine divergence model cannot represent this quadratic field.
+            # Its linear fit improves, but the large correction worsens the
+            # independently resampled objective, including the timing prior.
+            with pytest.warns(
+                UserWarning, match="^MC [01]: resampled corrected chi-square exceeds baseline$"
+            ) as caught:
+                product = write_timing_calibration_product(prepared, output)
+            assert [str(w.message) for w in caught] == [
+                f"MC {mc}: resampled corrected chi-square exceeds baseline" for mc in range(2)
+            ]
+            with h5py.File(product) as handle:
+                diagnostics = handle["diagnostics"]
+                common = handle["projection/comparison_valid"][...].astype(bool)
+                np.testing.assert_array_equal(diagnostics["prior_chi2_before"], np.zeros(2))
+                np.testing.assert_allclose(
+                    diagnostics["prior_chi2_after"],
+                    np.sum((handle["timing/correction_s"][...] / prepared["sigma_t"]) ** 2, axis=1),
+                )
+                for label in ("before", "after"):
+                    residual = handle[f"projection/divergence_residual_{label}"][...]
+                    data = np.sum(
+                        np.where(common[..., None], (residual / 0.1) ** 2, 0), axis=(1, 2)
+                    )
+                    np.testing.assert_allclose(diagnostics[f"data_chi2_{label}"], data)
+                    prior = diagnostics[f"prior_chi2_{label}"][...]
+                    np.testing.assert_allclose(diagnostics[f"chi2_{label}"], data + prior)
+                assert np.all(diagnostics["chi2_after"][...] > diagnostics["chi2_before"][...])
+                assert np.all(
+                    diagnostics["linear_chi2_after"][...] < diagnostics["linear_chi2_before"][...]
+                )
+        else:
+            product = write_timing_calibration_product(prepared, output)
+        products.append(product)
     with h5py.File(products[-1]) as handle:
         assert handle["metadata"].attrs["complete"]
         assert handle["projection/quadratic_basis"].shape == (1, 27, 1)
