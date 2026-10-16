@@ -1308,7 +1308,7 @@ def geometry_summary_paths(
 ) -> tuple[Path, Path]:
     """Return PDF and PNG paths for a geometry summary variant."""
 
-    if variant not in {"summary", "polyhedra", "formation"}:
+    if variant not in {"summary", "polyhedra", "formation", "full_domain"}:
         raise ValueError(f"Unknown geometry summary variant: {variant}")
 
     output = Path(output_path)
@@ -1318,6 +1318,147 @@ def geometry_summary_paths(
     directory = output.parent / "geometry_overviews"
     base = directory / f"{output.stem}_geometry_{variant}_{safe_tag}"
     return base.with_suffix(".pdf"), base.with_suffix(".png")
+
+
+def plot_malara_full_domain_geometry(
+    position: np.ndarray,
+    spacecraft_ids: Sequence[str],
+    *,
+    domain_size: Sequence[float],
+    origin: Sequence[float],
+    time: np.ndarray | None = None,
+    metadata: Mapping[str, Any] | None = None,
+):
+    """Plot nominal trajectories in the primary Malara box, in km.
+
+    Retain the configured origin and wrap exactly as the periodic evaluator
+    does. Break paths whenever their unwrapped periodic cell changes; connecting
+    opposite box faces would suggest a trajectory through unsampled space.
+    Markers denote the first sample, rather than a hub-relative formation.
+    """
+    positions = np.asarray(position, dtype=float)
+    if positions.ndim == 2:
+        positions = positions[:, None, :]
+    if (
+        positions.ndim != 3
+        or positions.shape[-1] != 3
+        or positions.shape[0] != len(spacecraft_ids)
+        or not positions.shape[0]
+        or not positions.shape[1]
+        or not np.all(np.isfinite(positions))
+    ):
+        raise ValueError("position must contain finite (spacecraft, [time,] xyz) coordinates")
+    lengths = np.asarray(domain_size, dtype=float)
+    lower = np.asarray(origin, dtype=float)
+    if (
+        lengths.shape != (3,)
+        or lower.shape != (3,)
+        or not np.all(np.isfinite(lengths))
+        or not np.all(np.isfinite(lower))
+        or np.any(lengths <= 0)
+    ):
+        raise ValueError("Malara box requires three finite positive lengths and a finite origin")
+    upper = lower + lengths
+    if not np.all(np.isfinite(upper)) or np.any(upper <= lower):
+        raise ValueError("Malara box bounds must be finite and strictly increasing")
+    if time is not None:
+        time = np.asarray(time, dtype=float)
+        if time.shape != (positions.shape[1],) or not np.all(np.isfinite(time)):
+            raise ValueError("time must contain one finite value per trajectory sample")
+    colors = [spacecraft_color(label) for label in spacecraft_ids]
+    wrapped = lower + np.mod(positions - lower, lengths)
+    cells = np.floor((positions - lower) / lengths)
+
+    figure = plt.figure(figsize=(12, 10), constrained_layout=True)
+    figure.get_layout_engine().set(rect=(0.0, 0.08, 1.0, 0.86))
+    axes = [figure.add_subplot(2, 2, index) for index in (1, 2, 3)]
+    axis3d = figure.add_subplot(2, 2, 4, projection="3d")
+    projections = ((0, 1), (0, 2), (1, 2))
+    labels = ("X", "Y", "Z")
+    handles = []
+    for index, (spacecraft_id, color) in enumerate(zip(spacecraft_ids, colors)):
+        crossings = np.any(np.diff(cells[index], axis=0) != 0, axis=1)
+        path = np.insert(wrapped[index], np.flatnonzero(crossings) + 1, np.nan, axis=0)
+        first = wrapped[index, 0]
+        for axis, (horizontal, vertical) in zip(axes, projections):
+            axis.plot(path[:, horizontal], path[:, vertical], color=color, lw=1)
+            axis.scatter(first[horizontal], first[vertical], color=color, s=25)
+        axis3d.plot(*path.T, color=color, lw=1)
+        axis3d.scatter(*first, color=color, s=25, depthshade=False)
+        handles.append(
+            Line2D(
+                [],
+                [],
+                color=color,
+                marker="o",
+                lw=1,
+                label="Hub" if spacecraft_id == "H" else spacecraft_id,
+            )
+        )
+    for axis, (horizontal, vertical) in zip(axes, projections):
+        axis.set(
+            title=f"{labels[horizontal]}–{labels[vertical]} projection",
+            xlabel=f"{labels[horizontal]} [km]",
+            ylabel=f"{labels[vertical]} [km]",
+            xlim=(lower[horizontal], upper[horizontal]),
+            ylim=(lower[vertical], upper[vertical]),
+        )
+        axis.set_aspect("equal", adjustable="box")
+        axis.set_autoscale_on(False)
+        axis.grid(alpha=0.25)
+    corners = np.array([np.where(bits, upper, lower) for bits in np.ndindex(2, 2, 2)])
+    for first, second in combinations(corners, 2):
+        if np.count_nonzero(first != second) == 1:
+            axis3d.plot(*np.stack((first, second)).T, color="0.5", lw=0.7)
+    axis3d.set(
+        title="3D simulation box",
+        xlabel="X [km]",
+        ylabel="Y [km]",
+        zlabel="Z [km]",
+        xlim=(lower[0], upper[0]),
+        ylim=(lower[1], upper[1]),
+        zlim=(lower[2], upper[2]),
+    )
+    # Some Matplotlib versions normalize an ndarray aspect argument in place.
+    axis3d.set_box_aspect(lengths.copy())
+    axis3d.set_autoscale_on(False)
+    interval = "" if time is None else f"; t={time[0]:g}–{time[-1]:g} s"
+    figure.suptitle(
+        f"Malara full-domain geometry: {_selected_time_title_label(metadata)}\n"
+        f"Periodic box coordinates; markers = first sample{interval}"
+    )
+    figure.legend(handles=handles, loc="lower center", ncol=min(5, len(handles)))
+    return figure
+
+
+def save_malara_full_domain_geometry(
+    *,
+    output_path: str | Path,
+    config: dict,
+    position: np.ndarray,
+    spacecraft_ids: Sequence[str],
+    domain_size: Sequence[float],
+    origin: Sequence[float],
+    time: np.ndarray | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> tuple[Path, Path]:
+    """Save an additional time-tagged Malara box view alongside geometry summaries."""
+    pdf_path, png_path = geometry_summary_paths(output_path, metadata, variant="full_domain")
+    figure = plot_malara_full_domain_geometry(
+        position,
+        spacecraft_ids,
+        domain_size=domain_size,
+        origin=origin,
+        time=time,
+        metadata=metadata,
+    )
+    try:
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(pdf_path)
+        figure.savefig(png_path, dpi=int(config.get("dpi", 150)))
+    finally:
+        plt.close(figure)
+    return pdf_path, png_path
 
 
 def configuration_3d_paths(

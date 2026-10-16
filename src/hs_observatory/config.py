@@ -75,6 +75,8 @@ def load_generation_config(path: str | Path) -> LoadedConfig:
     visualization = cfg.get("visualization", {})
     if not isinstance(visualization, dict):
         raise ValueError("Configuration section 'visualization' must be a mapping")
+    if not isinstance(visualization.get("plot_full_domain_geometry", False), bool):
+        raise ValueError("visualization.plot_full_domain_geometry must be a boolean")
     if int(visualization.get("dpi", 150)) <= 0:
         raise ValueError("visualization.dpi must be positive")
     if int(visualization.get("mc_index", 0)) < 0:

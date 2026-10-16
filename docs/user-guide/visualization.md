@@ -61,6 +61,41 @@ visualization:
 For a one-run override, repeat `hsobs-generate --3d-connection N2-N5` as
 needed. Valid labels are `Hub` and `N1` through `N8`.
 
+## Malara full-domain geometry
+
+For `field.model: malara_turbulence`, request an additional four-panel figure
+with X–Y, X–Z, Y–Z, and 3D views of the actual periodic simulation box:
+
+```yaml
+visualization:
+  enabled: true
+  plot_full_domain_geometry: true  # default: false
+```
+
+For a one-run override:
+
+```bash
+hsobs-generate configs/example_generate_malara.yaml --plot-full-domain-geometry
+```
+
+`--no-plot-full-domain-geometry` overrides a YAML request. Both flags respect
+`visualization.enabled`; requesting this feature for another field model raises
+an error before generation. Existing geometry outputs remain unchanged.
+
+The figure uses nominal positions over the configured generation interval, at
+the highest available instrument cadence. Markers identify the first sample.
+Coordinates are `origin + ((position - origin) % L)`, using the Malara field's
+validated `field.domain.L` and `field.domain.origin` (default `[0, 0, 0]`) in km.
+Axes stay fixed to `[origin, origin + L]`; no hub or formation center is
+subtracted. Paths break at periodic boundary crossings rather than drawing
+artificial lines across the box. The 3D panel shows the twelve box edges.
+
+Files are saved beside the other geometry summaries as
+`geometry_overviews/<hdf5_stem>_geometry_full_domain_<timestamp>.png` and `.pdf`.
+Their paths are recorded as `full_domain_geometry_png_path` and
+`full_domain_geometry_pdf_path` in HDF5 metadata only when enabled. This view
+does not plot observed Monte Carlo positions or alter field sampling.
+
 ## Geometry summary variants
 
 When visualization is enabled, `geometry_overviews/` contains three time-tagged

@@ -23,6 +23,12 @@ def generate_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate synthetic HelioSwarm observations")
     parser.add_argument("config", help="YAML configuration file")
     parser.add_argument(
+        "--plot-full-domain-geometry",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="plot nominal Malara trajectories in the full periodic simulation box",
+    )
+    parser.add_argument(
         "--truth-velocity-frame",
         choices=("spacecraft", "plasma"),
         help="override the velocity frame used only in the truth visualization",
@@ -42,6 +48,7 @@ def generate_main(argv: list[str] | None = None) -> int:
         args.config,
         truth_velocity_frame=args.truth_velocity_frame,
         configuration_3d_extra_connections=args.configuration_3d_extra_connections,
+        plot_full_domain_geometry=args.plot_full_domain_geometry,
     )
     print(output)
     return 0
