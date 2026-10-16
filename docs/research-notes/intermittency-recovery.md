@@ -12,9 +12,9 @@ The snapshots below come from existing workspace products; the underlying
 production JSON/HDF5 files are generated artifacts and are not distributed with
 these docs. A versioned input/commit record is still needed for publication.
 
-Detailed reports cover [Stage 1 geometry-stratified sampling](../structure_function_geometry_stage1.md)
-and [Stage 2 truth-only sampling convergence](../structure_function_stage2_convergence.md).
-Both are also listed under **Ongoing Research**.
+Detailed reports cover [Stage 1 geometry-stratified sampling](sf/structure_function_geometry_stage1.md)
+and [Stage 2 truth-only sampling convergence](sf/structure_function_stage2_convergence.md).
+Both are also listed under **Research Notes**.
 
 ## Status and input products
 
@@ -282,7 +282,7 @@ moment and exponent stability.
 
 Saved numerical evidence: `outputs/malara_direct3d_convergence/convergence_report.md`
 (with separate seed/budget HDF5 products) and
-`docs/malara_field_validation_audit.md`. The field-validation audit documents
+[the field-validation audit](sf/malara_field_validation_audit.md). The audit documents
 provenance, sampler behavior, finite-width versus exact-separation differences,
 and the raw-q / per-spacecraft-mean caveat. The present campaign does **not**
 measure variability across independent Malara realizations.

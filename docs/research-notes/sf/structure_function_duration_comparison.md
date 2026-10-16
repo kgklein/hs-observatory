@@ -182,9 +182,9 @@ cells; its repeat fraction must not be read as a true return probability.
 ## Saved products and reproduction
 
 - p=0.9: `outputs/structure_function_duration_convergence_500/` and
-  `docs/structure_function_duration_convergence_500.md` (with CSV).
+  [structure_function_duration_convergence_500.md](structure_function_duration_convergence_500.md) (with CSV).
 - p=0.5: `outputs/structure_function_duration_convergence/` and
-  `docs/structure_function_duration_convergence.md` (with CSV).
+  [structure_function_duration_convergence.md](structure_function_duration_convergence.md) (with CSV).
 - Each output directory includes `derived.json`, `manifest.json`, `validation.json`,
   individual seed moments, and PNG/PDF versions of `exponents_vs_duration`,
   `local_slopes`, `structure_functions`, and `duration_summary`.

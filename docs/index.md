@@ -14,7 +14,7 @@ Some methods, e.g. timing calibration, are areas of active research.
 
 The [intermittency recovery investigation](research-notes/intermittency-recovery.md)
 tracks fit-range sensitivity, local logarithmic slopes, and direct 3D Malara
-sampling under **Ongoing Research**. It distinguishes current findings from
+sampling under **Research Notes**. It distinguishes current findings from
 smoke-test validation and the pilot calculations still to be run.
 
 ## Developer path

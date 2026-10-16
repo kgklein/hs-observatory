@@ -74,3 +74,6 @@ generation/*.yaml
 
 # Visualization-only geometry movie runner.
 !scripts/geometry_movie.sh
+
+# Editor Generated backup files
+*~

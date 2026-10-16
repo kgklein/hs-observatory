@@ -90,8 +90,8 @@ figures:
 
 After a full run or saved-moment derivation, the reports and CSV tables are:
 
-- `docs/structure_function_duration_convergence_500a.md` and `.csv`
-- `docs/structure_function_duration_convergence_502a.md` and `.csv`
+- [structure_function_duration_convergence_500a.md](structure_function_duration_convergence_500a.md) and `.csv`
+- [structure_function_duration_convergence_502a.md](structure_function_duration_convergence_502a.md) and `.csv`
 
 Resume and plot-only behavior match the original duration workflow. Existing
 500/502 outputs and publication figures are untouched. Pair-seed variability

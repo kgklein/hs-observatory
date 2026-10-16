@@ -26,21 +26,34 @@ markdown_extensions:
   - toc:
       permalink: true
 validation:
+  nav:
+    omitted_files: warn
   links:
     not_found: warn
     anchors: warn
     unrecognized_links: warn
 exclude_docs: |
   /architecture/README.md
+  *~
 not_in_nav: |
   /reference/analysis_methods.md
-  /observatory_error_model.md
-  /timing_calibration.md
-  /timing_affine_investigation.md
-  /timing_quadratic_investigation.md
-  /magnetic_gradient_divergence_audit.md
-  /architecture/README.md
-  /geometry_movie.md
+  /research-notes/gradient/magnetic_gradient_divergence_audit.md
+  /research-notes/timing/timing_calibration.md
+  /research-notes/timing/timing_affine_investigation.md
+  /research-notes/timing/timing_quadratic_investigation.md
+  /research-notes/sf/malara_direct3d_convergence.md
+  /research-notes/sf/malara_field_validation_audit.md
+  /research-notes/sf/malara_raw_hs_structure_function.md
+  /research-notes/sf/structure_function_duration_angle_a.md
+  /research-notes/sf/structure_function_duration_comparison.md
+  /research-notes/sf/structure_function_duration_convergence.md
+  /research-notes/sf/structure_function_duration_convergence_500.md
+  /research-notes/sf/structure_function_duration_convergence_500a.md
+  /research-notes/sf/structure_function_duration_convergence_502a.md
+  /research-notes/sf/structure_function_moment_convergence.md
+  /research-notes/sf/structure_function_pair_sampling_audit.md
+  /research-notes/sf/structure_function_stage3_publication.md
+  /research-notes/sf/structure_function_uniform_binning_test.md
 nav:
   - Home: index.md
   - Getting Started:
@@ -68,10 +81,11 @@ nav:
       - Development: developer/index.md
       - Design contracts: developer/design.md
       - Documentation: developer/documentation.md
-  - Ongoing Research:
+  - Research Notes:
+      - Overview: research-notes/index.md
       - Intermittency recovery: research-notes/intermittency-recovery.md
-      - Geometry sampling (Stage 1): structure_function_geometry_stage1.md
-      - Sampling convergence (Stage 2): structure_function_stage2_convergence.md
+      - Geometry sampling (Stage 1): research-notes/sf/structure_function_geometry_stage1.md
+      - Sampling convergence (Stage 2): research-notes/sf/structure_function_stage2_convergence.md
       - Timing calibration: reference/timing-calibration.md
       - Divergence audit: research-notes/magnetic-gradient-divergence-audit.md
       - Timing investigations: research-notes/timing-investigations.md
