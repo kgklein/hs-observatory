@@ -56,9 +56,16 @@ class ADSClient:
         docs: list[dict] = []
         start = 0
         while True:
-            data = self.request("GET", "/search/query", params={
-                "q": query, "fl": fields, "rows": PAGE_SIZE, "start": start,
-            })
+            data = self.request(
+                "GET",
+                "/search/query",
+                params={
+                    "q": query,
+                    "fl": fields,
+                    "rows": PAGE_SIZE,
+                    "start": start,
+                },
+            )
             result = data.get("response", {})
             count = result.get("numFound")
             batch = result.get("docs")
@@ -101,14 +108,15 @@ class ADSClient:
         new = sorted(found - existing)
         print(f"  {len(new)} new citing records to add")
         for index in range(0, len(new), PAGE_SIZE):
-            batch = new[index:index + PAGE_SIZE]
-            self.request("POST", f"/biblib/documents/{LIBRARY_ID}",
-                         json={"bibcode": batch, "action": "add"})
+            batch = new[index : index + PAGE_SIZE]
+            self.request(
+                "POST", f"/biblib/documents/{LIBRARY_ID}", json={"bibcode": batch, "action": "add"}
+            )
 
     def metadata(self, bibcodes: list[str]) -> dict[str, dict]:
         records: dict[str, dict] = {}
         for index in range(0, len(bibcodes), METADATA_BATCH):
-            batch = bibcodes[index:index + METADATA_BATCH]
+            batch = bibcodes[index : index + METADATA_BATCH]
             # Short batches keep the ordinary search/query endpoint practical.
             query = "bibcode:(" + " OR ".join(batch) + ")"
             for doc in self.search(query, FIELDS):
@@ -151,8 +159,11 @@ def title_and_link(doc: dict) -> tuple[str, str]:
     dois = doc.get("doi") or []
     doi = plain(dois[0]) if isinstance(dois, list) and dois else ""
     bibcode = str(doc["bibcode"])
-    url = ("https://doi.org/" + quote(doi, safe="/.-_")) if doi else (
-        "https://ui.adsabs.harvard.edu/abs/" + quote(bibcode, safe="") + "/abstract")
+    url = (
+        ("https://doi.org/" + quote(doi, safe="/.-_"))
+        if doi
+        else ("https://ui.adsabs.harvard.edu/abs/" + quote(bibcode, safe="") + "/abstract")
+    )
     return md(title), url
 
 
@@ -176,8 +187,9 @@ def record_key(doc: dict) -> tuple:
 def citations_section(docs: list[dict]) -> tuple[str, int]:
     # Prefer refereed records if multiple library entries share the same DOI.
     chosen: dict[tuple, dict] = {}
-    for doc in sorted(docs, key=lambda d: (
-        "REFEREED" not in (d.get("property") or []), str(d["bibcode"]))):
+    for doc in sorted(
+        docs, key=lambda d: ("REFEREED" not in (d.get("property") or []), str(d["bibcode"]))
+    ):
         chosen.setdefault(record_key(doc), doc)
     years: dict[str, list[dict]] = {}
     for doc in chosen.values():
@@ -185,9 +197,14 @@ def citations_section(docs: list[dict]) -> tuple[str, int]:
     sections: list[str] = []
     for year in sorted(years, key=int, reverse=True):
         sections.append(f"### {year}\n")
-        items = sorted(years[year], key=lambda d: (
-            plain((d.get("author") or [""])[0]).casefold(),
-            first(d.get("title")).casefold(), d["bibcode"]))
+        items = sorted(
+            years[year],
+            key=lambda d: (
+                plain((d.get("author") or [""])[0]).casefold(),
+                first(d.get("title")).casefold(),
+                d["bibcode"],
+            ),
+        )
         sections.extend(entry(doc) for doc in items)
         sections.append("")
     return "\n".join(sections).strip(), len(chosen)
@@ -207,8 +224,12 @@ def replace_block(contents: str, name: str, replacement: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sync", action="store_true", help="Add newly citing papers to SciX library")
-    parser.add_argument("--dry-run", action="store_true", help="Validate and summarize without writing the page")
+    parser.add_argument(
+        "--sync", action="store_true", help="Add newly citing papers to SciX library"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Validate and summarize without writing the page"
+    )
     args = parser.parse_args()
     token = os.environ.get("ADS_API_TOKEN")
     if not token:
@@ -229,7 +250,9 @@ def main() -> int:
     metadata = client.metadata(list(dict.fromkeys([*FOUNDATIONAL, *bibcodes])))
     missing = sorted(set([*FOUNDATIONAL, *bibcodes]) - set(metadata))
     if missing:
-        raise RuntimeError(f"ADS metadata missing for {len(missing)} bibcodes: {', '.join(missing[:10])}")
+        raise RuntimeError(
+            f"ADS metadata missing for {len(missing)} bibcodes: {', '.join(missing[:10])}"
+        )
     foundations = "\n".join(entry(metadata[code]) for code in FOUNDATIONAL)
     citing_docs = [metadata[code] for code in bibcodes if code not in FOUNDATIONAL]
     # Do not publish partial/invalid results.
@@ -241,14 +264,17 @@ def main() -> int:
         raise RuntimeError("Citing-paper bibliography would be empty; refusing to overwrite page")
     updated = replace_block(source, "FOUNDATIONAL", foundations)
     updated = replace_block(updated, "CITATIONS", citations)
-    print(f"Library: {len(bibcodes)} records | citations: {len(citing_docs)} | "
-          f"displayed: {displayed} | deduplicated: {len(citing_docs)-displayed}")
+    print(
+        f"Library: {len(bibcodes)} records | citations: {len(citing_docs)} | "
+        f"displayed: {displayed} | deduplicated: {len(citing_docs) - displayed}"
+    )
     print(f"Page: {'changed' if updated != source else 'unchanged'} ({PAGE})")
     if args.dry_run:
         return 0
     if updated != source:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=PAGE.parent,
-                                         prefix=".publications-", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=PAGE.parent, prefix=".publications-", delete=False
+        ) as handle:
             temporary = Path(handle.name)
             handle.write(updated)
         try:
