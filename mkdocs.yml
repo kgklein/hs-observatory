@@ -65,6 +65,7 @@ nav:
   - Analyze: user-guide/analysis.md
   - Visualize: user-guide/visualization.md
   - Movies: user-guide/movies.md
+  - Publications: publications.md
   - Scientific Reference:
       - Configuration and commands: reference/configuration.md
       - Data products: reference/data-products.md
