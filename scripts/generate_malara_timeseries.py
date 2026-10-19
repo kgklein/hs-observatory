@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def discover_cases(root, overwrite=False):
     """Read durations and output paths from recipes, without modifying them."""
     cases = []
-    #for path in sorted((root / "generation").glob("malara-ts-*-t*.yaml")):
+    # for path in sorted((root / "generation").glob("malara-ts-*-t*.yaml")):
     for path in sorted((root / "generation").glob("malara-prod-6*.yaml")):
         config = yaml.safe_load(path.read_text())
         duration = float(config["time"]["t_stop_s"]) - float(config["time"]["t_start_s"])
