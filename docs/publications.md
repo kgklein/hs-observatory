@@ -9,7 +9,10 @@ The bibliography is generated from the [public HelioSwarm SciX library](https://
 The following publications define the mission concept and scientific goals.
 
 <!-- BEGIN GENERATED FOUNDATIONAL -->
+- **Chen *et al.* (2019).** [Challenges and the next transformative steps in understanding plasma turbulence from the perspective of multi-spacecraft measurements](https://doi.org/10.48550/arXiv.1908.04192). *arXiv e-prints*.
 - **Klein *et al.* (2019).** [\[Plasma 2020 Decadal\] Multipoint Measurements of the Solar Wind: A Proposed Advance for Studying Magnetized Turbulence](https://doi.org/10.48550/arXiv.1903.05740). *arXiv e-prints*.
+- **Matthaeus *et al.* (2019).** [\[Plasma 2020 Decadal\] The essential role of multi-point measurements in turbulence investigations: the solar wind beyond single scale and beyond the Taylor Hypothesis](https://doi.org/10.48550/arXiv.1903.06890). *arXiv e-prints*.
+- **TenBarge *et al.* (2019).** [\[Plasma 2020 Decadal\] Disentangling the Spatiotemporal Structure of Turbulence Using Multi-Spacecraft Data](https://doi.org/10.48550/arXiv.1903.05710). *arXiv e-prints*.
 - **Klein *et al.* (2023).** [HelioSwarm: A Multipoint, Multiscale Mission to Characterize Turbulence](https://doi.org/10.1007/s11214-023-01019-0). *Space Science Reviews*.
 <!-- END GENERATED FOUNDATIONAL -->
 
