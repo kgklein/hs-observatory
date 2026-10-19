@@ -1,4 +1,4 @@
-# A Synthetic HelioSwarm Observatory
+# HelioSwarm Integrated Virtual Explorer
 
 This code generates synthetic multipoint spacecraft measurements using representative HelioSwarm trajectories.
 These synthetic data can then be analyzed with a variety of specified techniques.
