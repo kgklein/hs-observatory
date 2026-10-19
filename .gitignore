@@ -32,6 +32,9 @@ __pycache__/
 # Local HelioSwarm mission inputs; do not ignore other data/ content
 /data/helioswarm_cdf/
 
+#HPC scripts
+/hpc/
+
 # Logs and disposable editor/OS artifacts
 *.log
 *~
