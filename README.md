@@ -1,8 +1,8 @@
-# HelioSwarm Synthetic Observatory
+# HelioSwarm Integrated Virtual Explorer (HIVE)
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23423894.svg)](https://doi.org/10.5281/zenodo.23423894)
 
-HS Observatory generates synthetic multipoint spacecraft observations from
+HIVE generates synthetic multipoint spacecraft observations from
 representative HelioSwarm (HS) positions and analyzes the resulting products.
 YAML files specify the generation of data, including
 physical fields,
@@ -64,8 +64,7 @@ Follow the researcher workflow:
 The [documentation home](docs/index.md) links scientific references and research notes.
 Developers can start with [extension and validation guidance](docs/developer/index.md)
 and the [architecture](docs/architecture/index.md).
-The intended public site is [HS Observatory](https://kgklein.github.io/hs-observatory/);
-**this will be available once the repo is made public.**
+The public site is [here](https://kgklein.github.io/hs-observatory/).
 
 ### Preview the site locally
 
