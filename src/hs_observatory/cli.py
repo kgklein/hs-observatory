@@ -54,10 +54,32 @@ def generate_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _positive_workers(value: str) -> int:
+    try:
+        workers = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("workers must be a positive integer") from error
+    if workers < 1:
+        raise argparse.ArgumentTypeError("workers must be a positive integer")
+    return workers
+
+
 def analyze_main(argv: list[str] | None = None) -> int:
     from hs_observatory.analyze import analyze_from_config
 
-    return _run("Analyze synthetic HelioSwarm observations", analyze_from_config, argv)
+    parser = argparse.ArgumentParser(description="Analyze synthetic HelioSwarm observations")
+    parser.add_argument("config", help="YAML configuration file")
+    parser.add_argument(
+        "--workers",
+        type=_positive_workers,
+        default=1,
+        metavar="N",
+        help="SF member processes using spawn (default: 1, existing serial path)",
+    )
+    args = parser.parse_args(argv)
+    output = analyze_from_config(args.config, workers=args.workers)
+    print(output)
+    return 0
 
 
 def spatial_structure_function_main(argv: list[str] | None = None) -> int:
