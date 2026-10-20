@@ -58,7 +58,9 @@ def positive_int(value):
 
 def arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("config", nargs="?", default="analysis/malara-prod-600_sf-short-mc-v00.yaml")
+    parser.add_argument(
+        "config", nargs="?", default="analysis/malara-prod-600_sf-short-mc-v00.yaml"
+    )
     parser.add_argument("--workers", nargs="+", type=positive_int, default=[1, 2, 4, 8])
     parser.add_argument("--repetitions", type=positive_int, default=3)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "outputs/sf_parallel_benchmark")
