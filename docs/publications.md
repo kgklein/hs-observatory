@@ -18,10 +18,8 @@ The following publications define the mission concept and scientific goals.
 
 ## Papers citing the HelioSwarm mission
 
-The papers below cite the 2019 HelioSwarm concept preprint and/or the 2023
-*Space Science Reviews* mission paper. Citation does not imply use of
-HS Observatory software. Entries are grouped by publication year, newest first,
-then sorted by first-author surname.
+The papers below cite the 2019 HelioSwarm concept preprints and/or the 2023 *Space Science Reviews* mission paper.
+Entries are grouped by publication year, newest first, then sorted by first-author surname.
 
 <!-- BEGIN GENERATED CITATIONS -->
 ### 2026
@@ -153,7 +151,7 @@ then sorted by first-author surname.
 - **Verscharen *et al.* (2019).** [The multi-scale nature of the solar wind](https://doi.org/10.1007/s41116-019-0021-0). *Living Reviews in Solar Physics*.
 <!-- END GENERATED CITATIONS -->
 
-## Research using HS Observatory
+## Research using HelioSwarm Integrated Virtual Explorer
 
-Publications that explicitly use HS Observatory software or its synthetic
+Publications that explicitly use HIVE software or its synthetic
 measurements will be listed here as they become available.
