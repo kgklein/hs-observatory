@@ -33,7 +33,6 @@ from hs_observatory.analysis.elsasser import (
     compute_elsasser_analysis,
 )
 from hs_observatory.analysis.registry import register_analysis
-from hs_observatory.io.hdf5 import read_observations
 
 FIELDS = ("z_plus", "z_minus")
 POSITION_VARIABLES = ("v", "n", "B")
@@ -53,6 +52,22 @@ def _mapping(config: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def _settings(config: dict[str, Any]) -> dict[str, Any]:
+    data_groups = config.get("data_groups")
+    if data_groups is not None or "data_groups" in config:
+        if not isinstance(data_groups, list) or not data_groups:
+            raise ValueError("structure_function.data_groups must be a nonempty list")
+        if any(group not in ("truth", "observed") for group in data_groups):
+            raise ValueError("structure_function.data_groups accepts only 'truth' and 'observed'")
+        if len(set(data_groups)) != len(data_groups):
+            raise ValueError("structure_function.data_groups must not contain duplicates")
+    mc_indices = config.get("mc_indices", "all")
+    if mc_indices != "all":
+        if not isinstance(mc_indices, list) or not mc_indices:
+            raise ValueError("structure_function.mc_indices must be 'all' or a nonempty list")
+        if any(type(index) is not int or index < 0 for index in mc_indices):
+            raise ValueError("structure_function.mc_indices must contain nonnegative integers")
+        if len(set(mc_indices)) != len(mc_indices):
+            raise ValueError("structure_function.mc_indices must not contain duplicates")
     min_order = int(config.get("min_order", 1))
     max_order = int(config.get("max_order", 6))
     if min_order < 1 or max_order < min_order:
@@ -175,6 +190,8 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
     if max_pairs is not None and max_pairs < 1:
         raise ValueError("structure_function.pair_sampling.max_pairs must be positive or null")
     return {
+        "data_groups": data_groups,
+        "mc_indices": mc_indices,
         "orders": list(range(min_order, max_order + 1)),
         "n_lambda_bins": n_lambda_bins,
         "lambda_bins_km": lambda_bins_km,
@@ -207,6 +224,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             "member": int(plot.get("member", 0)),
             "data_group": str(plot.get("data_group", "observed")),
             "normalized_exponents": bool(plot.get("normalized_exponents", False)),
+            "p_value": None if plot.get("p_value") is None else float(plot["p_value"]),
             "dpi": int(plot.get("dpi", 150)),
             "publication": {
                 "enabled": bool(publication.get("enabled", False)),
@@ -774,12 +792,6 @@ def compute_all_spacetime_structure_functions(
     return products
 
 
-def _observed_member_count(data: dict[str, Any]) -> int:
-    observed = np.asarray(data["observed"]["n"])
-    truth = np.asarray(data["truth"]["n"])
-    return int(observed.shape[0]) if observed.ndim == truth.ndim + 1 else 1
-
-
 def _interpolate_positions_with_offsets(
     position_sc_time_km: np.ndarray,
     source_time: np.ndarray,
@@ -843,11 +855,12 @@ def _positions_for_group_member(
             candidates[0],
         )
         path, dataset, source_time, group_specific = exact
-        position = np.asarray(dataset, dtype=float)
-        if position.ndim == 4:
-            if member_index >= position.shape[0]:
+        if dataset.ndim == 4:
+            if member_index >= dataset.shape[0]:
                 raise IndexError(f"member {member_index} is outside /{path}")
-            position = position[member_index]
+            position = np.asarray(dataset[member_index], dtype=float)
+        else:
+            position = np.asarray(dataset, dtype=float)
         if position.shape != (n_spacecraft, source_time.size, 3):
             raise ValueError(f"/{path} must have shape (spacecraft, time, 3)")
         position_offset = None
@@ -860,8 +873,10 @@ def _positions_for_group_member(
         # /spacecraft/r.
         if group_name == "observed" and not group_specific:
             if "errors/position_offset" in handle:
-                offsets = np.asarray(handle["errors/position_offset"], dtype=float)
-                position_offset = offsets[member_index] if offsets.ndim == 3 else offsets
+                offsets = handle["errors/position_offset"]
+                position_offset = np.asarray(
+                    offsets[member_index] if offsets.ndim == 3 else offsets, dtype=float
+                )
                 notes.append("observed positions use /errors/position_offset on nominal r")
         positions_km = _interpolate_positions_with_offsets(
             position,
@@ -897,13 +912,39 @@ class StructureFunctionAnalysis(AnalysisMethod):
     config_section = "structure_function"
 
     def run(self, input_path: str | Path) -> dict[str, Any]:
-        data = read_observations(input_path)
         settings = _settings(self.config)
-        groups = ["observed"]
-        if "truth" in data:
-            groups.append("truth")
-        n_observed = _observed_member_count(data)
-        pairs = list(combinations(range(len(data["spacecraft"]["id"])), 2))
+        with h5py.File(input_path, "r") as handle:
+            # Preserve the legacy default order and optional truth group.
+            groups = settings["data_groups"]
+            if groups is None:
+                groups = ["observed"] + (["truth"] if "truth" in handle else [])
+            for group in groups:
+                if group not in handle:
+                    raise ValueError(f"structure_function.data_groups: input is missing /{group}")
+            if settings["plot"]["publication"]["enabled"] and set(groups) != {"truth", "observed"}:
+                raise ValueError(
+                    "structure_function.plot.publication.enabled requires both truth and observed "
+                    "in data_groups and in the input file"
+                )
+            observed_indices = []
+            if "observed" in groups:
+                density = handle["observed/n"]
+                n_observed = density.shape[0] if density.ndim == 3 else 1
+                observed_indices = (
+                    list(range(n_observed))
+                    if settings["mc_indices"] == "all"
+                    else settings["mc_indices"]
+                )
+                if not observed_indices:
+                    raise ValueError(
+                        "structure_function.mc_indices selects no observed realizations"
+                    )
+                if any(index >= n_observed for index in observed_indices):
+                    raise ValueError(
+                        f"structure_function.mc_indices is out of range: /observed has "
+                        f"{n_observed} realizations (zero-based indices)"
+                    )
+            pairs = list(combinations(range(len(handle["spacecraft/id"])), 2))
 
         first_pass: dict[str, list[dict[str, Any]]] = {}
         all_separations: list[np.ndarray] = []
@@ -912,10 +953,10 @@ class StructureFunctionAnalysis(AnalysisMethod):
         notes: list[str] = []
         field_names_used: dict[str, Any] = {}
         for group_name in groups:
-            n_members = n_observed if group_name == "observed" else 1
+            member_indices = observed_indices if group_name == "observed" else [0]
             first_pass[group_name] = []
             field_names_used[group_name] = {"positions": []}
-            for member_index in range(n_members):
+            for member_index in member_indices:
                 elsasser = compute_elsasser_analysis(
                     input_path,
                     _analysis_config(settings, group_name, member_index),
@@ -985,6 +1026,9 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     max_pair_lambda_km=settings["max_pair_lambda_km"],
                     geometry_plan_cache=geometry_plan_cache,
                 )
+            # The member axis follows the requested order; retain source identities.
+            if group_name == "observed" and settings["mc_indices"] != "all":
+                group_result["mc_indices"] = observed_indices
             group_result["n_members"] = positions.shape[0]
             group_result["time_s"] = np.stack(
                 [member["elsasser"]["time"] for member in members], axis=0
@@ -1047,6 +1091,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 field=settings["plot"]["field"],
                 member=settings["plot"]["member"],
                 normalized_exponents=settings["plot"]["normalized_exponents"],
+                p_value=settings["plot"]["p_value"],
                 dpi=settings["plot"]["dpi"],
             )
         publication = settings["plot"]["publication"]
@@ -1902,12 +1947,15 @@ def plot_structure_function_diagnostic(
     field: str = "z_plus",
     member: int = 0,
     normalized_exponents: bool = False,
+    p_value: float | None = None,
     dpi: int = 150,
 ) -> Path:
-    """Create a three-panel structure-function, exponent, and flatness summary."""
+    """Plot moments, exponents, flatness, and coverage, with an optional p-model."""
 
     import matplotlib.pyplot as plt
 
+    if p_value is not None and (not np.isfinite(p_value) or not 0.0 <= p_value <= 1.0):
+        raise ValueError("p_value must be between 0 and 1")
     if field not in FIELDS:
         raise ValueError("field must be 'z_plus' or 'z_minus'")
     products = result["products"][data_group]
@@ -1946,6 +1994,17 @@ def plot_structure_function_diagnostic(
     else:
         axes[1].axhline(1.0, color="0.35", linestyle="--", linewidth=1.0)
         axes[1].set_ylabel(r"$\xi_n/\xi_2$")
+    if p_value is not None:
+        prediction = 1.0 - np.log2(p_value ** (orders / 3.0) + (1.0 - p_value) ** (orders / 3.0))
+        if normalized_exponents:
+            prediction /= 1.0 - np.log2(p_value ** (2.0 / 3.0) + (1.0 - p_value) ** (2.0 / 3.0))
+        axes[1].plot(
+            orders,
+            prediction,
+            color="black",
+            linestyle=":",
+            label=rf"$p$-model ($p={p_value:g}$)",
+        )
     axes[1].set_xlabel("order n")
     axes[1].set_title("scaling exponents")
     axes[1].grid(True, alpha=0.22)
