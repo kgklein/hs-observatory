@@ -811,9 +811,7 @@ def test_invalid_sf_selections_fail_before_computing(tmp_path, monkeypatch, sele
 @pytest.mark.parametrize("group", ["truth", "observed"])
 def test_single_group_publication_is_configuration_error(tmp_path, group):
     path = _write_structure_input(tmp_path / "input.h5")
-    config = _selection_config(
-        data_groups=[group], plot={"publication": {"enabled": True}}
-    )
+    config = _selection_config(data_groups=[group], plot={"publication": {"enabled": True}})
     with pytest.raises(ValueError, match="publication.enabled requires both truth and observed"):
         StructureFunctionAnalysis(config).run(path)
 

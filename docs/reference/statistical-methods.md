@@ -366,6 +366,9 @@ Binned Elsasser vector-increment structure functions. The default uses same-time
   - `elsasser`: nested settings passed to the `elsasser` calculation.
   - `plot.enabled`, `plot.path`, `plot.field`, `plot.member`,
     `plot.data_group`, `plot.normalized_exponents`, `plot.dpi`.
+  - `plot.p_value`: optional p-model reference in the diagnostic exponent panel,
+    for example `0.9`; omitted by default. With normalized exponents the reference
+    is also divided by its order-2 exponent.
 - Returned products include `S_n[member, order, bin]`, `counts[member, bin]`,
   `flatness = S4 / S2^2` when orders 2 and 4 are available, and raw plus
   order-2-normalized scaling exponents for each named scale range.

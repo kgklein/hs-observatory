@@ -224,6 +224,7 @@ def _settings(config: dict[str, Any]) -> dict[str, Any]:
             "member": int(plot.get("member", 0)),
             "data_group": str(plot.get("data_group", "observed")),
             "normalized_exponents": bool(plot.get("normalized_exponents", False)),
+            "p_value": None if plot.get("p_value") is None else float(plot["p_value"]),
             "dpi": int(plot.get("dpi", 150)),
             "publication": {
                 "enabled": bool(publication.get("enabled", False)),
@@ -935,7 +936,9 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     else settings["mc_indices"]
                 )
                 if not observed_indices:
-                    raise ValueError("structure_function.mc_indices selects no observed realizations")
+                    raise ValueError(
+                        "structure_function.mc_indices selects no observed realizations"
+                    )
                 if any(index >= n_observed for index in observed_indices):
                     raise ValueError(
                         f"structure_function.mc_indices is out of range: /observed has "
@@ -1088,6 +1091,7 @@ class StructureFunctionAnalysis(AnalysisMethod):
                 field=settings["plot"]["field"],
                 member=settings["plot"]["member"],
                 normalized_exponents=settings["plot"]["normalized_exponents"],
+                p_value=settings["plot"]["p_value"],
                 dpi=settings["plot"]["dpi"],
             )
         publication = settings["plot"]["publication"]
@@ -1943,12 +1947,15 @@ def plot_structure_function_diagnostic(
     field: str = "z_plus",
     member: int = 0,
     normalized_exponents: bool = False,
+    p_value: float | None = None,
     dpi: int = 150,
 ) -> Path:
-    """Create a three-panel structure-function, exponent, and flatness summary."""
+    """Plot moments, exponents, flatness, and coverage, with an optional p-model."""
 
     import matplotlib.pyplot as plt
 
+    if p_value is not None and (not np.isfinite(p_value) or not 0.0 <= p_value <= 1.0):
+        raise ValueError("p_value must be between 0 and 1")
     if field not in FIELDS:
         raise ValueError("field must be 'z_plus' or 'z_minus'")
     products = result["products"][data_group]
@@ -1987,6 +1994,17 @@ def plot_structure_function_diagnostic(
     else:
         axes[1].axhline(1.0, color="0.35", linestyle="--", linewidth=1.0)
         axes[1].set_ylabel(r"$\xi_n/\xi_2$")
+    if p_value is not None:
+        prediction = 1.0 - np.log2(p_value ** (orders / 3.0) + (1.0 - p_value) ** (orders / 3.0))
+        if normalized_exponents:
+            prediction /= 1.0 - np.log2(p_value ** (2.0 / 3.0) + (1.0 - p_value) ** (2.0 / 3.0))
+        axes[1].plot(
+            orders,
+            prediction,
+            color="black",
+            linestyle=":",
+            label=rf"$p$-model ($p={p_value:g}$)",
+        )
     axes[1].set_xlabel("order n")
     axes[1].set_title("scaling exponents")
     axes[1].grid(True, alpha=0.22)
