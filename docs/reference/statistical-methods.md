@@ -415,6 +415,73 @@ Normalization, SF definitions, pair sampling, seeds, and fitting procedures are
 unchanged. Automatic separation bins use the selected datasets' geometry; supply
 identical explicit `lambda_bins_km` when comparing subset and full-run values.
 
+### Member processes
+
+`hsobs-analyze` accepts a positive integer `--workers N` for `structure_function`.
+The default, `--workers 1`, uses the existing serial execution path. Larger values
+use spawned processes across selected truth/MC members, with at most `N` active
+workers (and never more workers than members). No YAML worker option is needed.
+
+```bash
+# Existing serial path
+.venv/bin/hsobs-analyze analysis/malara-prod-600_sf-short-v00.yaml --workers 1
+
+# One workstation analysis with four member processes
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  .venv/bin/hsobs-analyze analysis/malara-prod-600_sf-short-v00.yaml --workers 4
+```
+
+Select both truth and observed members to benefit from member parallelism;
+a truth-only selection has just one member. Workers open the input HDF5 file
+independently and read only their member. Input files must remain unchanged during
+the run. Pair samplers, seeds, chunk sizes, moment accumulation, and estimators
+are unchanged. Results retain selection order and are fitted after assembly
+using each group's common fit ranges. Geometry `plan_reused` diagnostics describe
+the logical serial two-entry cache, not physical reuse between processes.
+Worker count is not added to the output schema or scientific configuration.
+
+For a single-node Puma allocation, adapt the following batch-script fragment to
+the partition and memory allocation appropriate for the input:
+
+```bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+srun .venv/bin/hsobs-analyze analysis/malara-prod-600_sf-short-v00.yaml \
+  --workers "$SLURM_CPUS_PER_TASK"
+```
+
+Set numerical-library thread limits before starting Python, and choose a worker
+count within the allocated CPU and memory budget. This pool uses one node;
+it does not distribute work across nodes. Python callers can use
+`analyze_from_config(path, workers=4)` or
+`StructureFunctionAnalysis(options).run(input_path, workers=4)` from an importable
+script protected by `if __name__ == "__main__":` for spawn safety. Other analysis
+methods reject worker counts greater than one.
+
+Stage 1 retains a serial common-bin preparation pass, discards each prepared
+member's large field arrays, then rereads/recomputes preprocessing in workers.
+This trades repeated I/O for bounded preparation memory. Peak memory grows with
+active workers and each sampler's workspace; compressed HDF5 reads can contend
+for I/O. Each selected member keeps its existing seed, including shared pair
+identities where the serial sampler shares them. Exact equality is validated
+within the same numerical environment, not guaranteed across library versions
+or CPU architectures.
+
+`scripts/run-structure-functions.sh` already starts three configurations with
+`xargs -P3`. Giving each configuration `N` workers would create up to `3N` compute
+processes plus parents. Prefer one configuration per allocation when using all
+its CPUs, or divide CPUs and memory explicitly between configurations.
+
+A worker failure aborts the entire calculation with dataset/member context.
+No JSON or plots are written until all members have completed and passed result
+validation, so previous outputs survive a calculation failure. Pending work is
+cancelled; running workers may finish during shutdown. There is no checkpointing
+or resume, and the existing post-calculation writer is not a multi-file
+transaction.
+
 The publication summary plot reads this JSON result directly and keeps sampled
 truth separate from the observed Monte Carlo ensemble:
 

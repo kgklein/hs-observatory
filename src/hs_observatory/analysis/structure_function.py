@@ -911,7 +911,9 @@ class StructureFunctionAnalysis(AnalysisMethod):
     name = "structure_function"
     config_section = "structure_function"
 
-    def run(self, input_path: str | Path) -> dict[str, Any]:
+    def run(self, input_path: str | Path, *, workers: int = 1) -> dict[str, Any]:
+        if type(workers) is not int or workers < 1:
+            raise ValueError("workers must be a positive integer")
         settings = _settings(self.config)
         with h5py.File(input_path, "r") as handle:
             # Preserve the legacy default order and optional truth group.
@@ -946,96 +948,107 @@ class StructureFunctionAnalysis(AnalysisMethod):
                     )
             pairs = list(combinations(range(len(handle["spacecraft/id"])), 2))
 
-        first_pass: dict[str, list[dict[str, Any]]] = {}
-        all_separations: list[np.ndarray] = []
-        lambda_lower_km = np.inf
-        lambda_upper_km = -np.inf
-        notes: list[str] = []
-        field_names_used: dict[str, Any] = {}
-        for group_name in groups:
-            member_indices = observed_indices if group_name == "observed" else [0]
-            first_pass[group_name] = []
-            field_names_used[group_name] = {"positions": []}
-            for member_index in member_indices:
-                elsasser = compute_elsasser_analysis(
-                    input_path,
-                    _analysis_config(settings, group_name, member_index),
-                )
-                positions_km, position_source, position_notes = _positions_for_group_member(
-                    input_path,
-                    group_name,
-                    member_index,
-                    np.asarray(elsasser["time"], dtype=float),
-                    len(elsasser["spacecraft_ids"]),
-                )
-                first_pass[group_name].append({"elsasser": elsasser, "positions_km": positions_km})
-                field_names_used[group_name]["positions"].append(position_source)
-                notes.extend(position_notes)
-                if settings["increment_mode"] == "same_time_pairs":
-                    for left, right in pairs:
-                        all_separations.append(
-                            np.linalg.norm(positions_km[:, left] - positions_km[:, right], axis=1)
-                        )
-                elif settings["lambda_bins_km"] is None:
-                    lower, upper = _spacetime_lambda_bounds_km(
-                        positions_km,
-                        settings["pair_sampling"],
-                        settings["min_pair_lambda_km"],
-                        settings["max_pair_lambda_km"],
-                    )
-                    lambda_lower_km = min(lambda_lower_km, lower)
-                    lambda_upper_km = max(lambda_upper_km, upper)
+        if workers > 1:
+            from hs_observatory.analysis.structure_function_parallel import run_members
 
-        if settings["increment_mode"] == "same_time_pairs":
-            lambda_edges_km = _lambda_edges_km(np.concatenate(all_separations), settings)
+            products, field_names_used, notes = run_members(
+                input_path, settings, groups, observed_indices, pairs, workers
+            )
         else:
-            lambda_edges_km = _lambda_edges_from_bounds_km(
-                lambda_lower_km,
-                lambda_upper_km,
-                settings,
-            )
-        products: dict[str, Any] = {}
-        geometry_plan_cache = GeometryPlanCache()
-        for group_name, members in first_pass.items():
-            positions = np.stack([member["positions_km"] for member in members], axis=0)
-            z_plus = np.stack([member["elsasser"]["z_plus"] for member in members], axis=0)
-            z_minus = np.stack([member["elsasser"]["z_minus"] for member in members], axis=0)
+            first_pass: dict[str, list[dict[str, Any]]] = {}
+            all_separations: list[np.ndarray] = []
+            lambda_lower_km = np.inf
+            lambda_upper_km = -np.inf
+            notes: list[str] = []
+            field_names_used: dict[str, Any] = {}
+            for group_name in groups:
+                member_indices = observed_indices if group_name == "observed" else [0]
+                first_pass[group_name] = []
+                field_names_used[group_name] = {"positions": []}
+                for member_index in member_indices:
+                    elsasser = compute_elsasser_analysis(
+                        input_path,
+                        _analysis_config(settings, group_name, member_index),
+                    )
+                    positions_km, position_source, position_notes = _positions_for_group_member(
+                        input_path,
+                        group_name,
+                        member_index,
+                        np.asarray(elsasser["time"], dtype=float),
+                        len(elsasser["spacecraft_ids"]),
+                    )
+                    first_pass[group_name].append(
+                        {"elsasser": elsasser, "positions_km": positions_km}
+                    )
+                    field_names_used[group_name]["positions"].append(position_source)
+                    notes.extend(position_notes)
+                    if settings["increment_mode"] == "same_time_pairs":
+                        for left, right in pairs:
+                            all_separations.append(
+                                np.linalg.norm(
+                                    positions_km[:, left] - positions_km[:, right], axis=1
+                                )
+                            )
+                    elif settings["lambda_bins_km"] is None:
+                        lower, upper = _spacetime_lambda_bounds_km(
+                            positions_km,
+                            settings["pair_sampling"],
+                            settings["min_pair_lambda_km"],
+                            settings["max_pair_lambda_km"],
+                        )
+                        lambda_lower_km = min(lambda_lower_km, lower)
+                        lambda_upper_km = max(lambda_upper_km, upper)
+
             if settings["increment_mode"] == "same_time_pairs":
-                group_result = compute_pairwise_structure_functions(
-                    positions,
-                    z_plus,
-                    z_minus,
-                    settings["orders"],
-                    lambda_edges_km,
-                    scale_ranges_km=settings["scale_ranges_km"] or None,
-                    min_fit_bins=settings["min_fit_bins"],
-                    min_pair_lambda_km=settings["min_pair_lambda_km"],
-                    max_pair_lambda_km=settings["max_pair_lambda_km"],
-                )
+                lambda_edges_km = _lambda_edges_km(np.concatenate(all_separations), settings)
             else:
-                group_result = compute_all_spacetime_structure_functions(
-                    positions,
-                    z_plus,
-                    z_minus,
-                    settings["orders"],
-                    lambda_edges_km,
-                    pair_sampling=settings["pair_sampling"],
-                    scale_ranges_km=settings["scale_ranges_km"] or None,
-                    min_fit_bins=settings["min_fit_bins"],
-                    min_pair_lambda_km=settings["min_pair_lambda_km"],
-                    max_pair_lambda_km=settings["max_pair_lambda_km"],
-                    geometry_plan_cache=geometry_plan_cache,
+                lambda_edges_km = _lambda_edges_from_bounds_km(
+                    lambda_lower_km,
+                    lambda_upper_km,
+                    settings,
                 )
-            # The member axis follows the requested order; retain source identities.
-            if group_name == "observed" and settings["mc_indices"] != "all":
-                group_result["mc_indices"] = observed_indices
-            group_result["n_members"] = positions.shape[0]
-            group_result["time_s"] = np.stack(
-                [member["elsasser"]["time"] for member in members], axis=0
-            )
-            products[group_name] = group_result
-            for field in FIELDS:
-                notes.extend(group_result[field]["scaling_exponents"]["notes"])
+            products: dict[str, Any] = {}
+            geometry_plan_cache = GeometryPlanCache()
+            for group_name, members in first_pass.items():
+                positions = np.stack([member["positions_km"] for member in members], axis=0)
+                z_plus = np.stack([member["elsasser"]["z_plus"] for member in members], axis=0)
+                z_minus = np.stack([member["elsasser"]["z_minus"] for member in members], axis=0)
+                if settings["increment_mode"] == "same_time_pairs":
+                    group_result = compute_pairwise_structure_functions(
+                        positions,
+                        z_plus,
+                        z_minus,
+                        settings["orders"],
+                        lambda_edges_km,
+                        scale_ranges_km=settings["scale_ranges_km"] or None,
+                        min_fit_bins=settings["min_fit_bins"],
+                        min_pair_lambda_km=settings["min_pair_lambda_km"],
+                        max_pair_lambda_km=settings["max_pair_lambda_km"],
+                    )
+                else:
+                    group_result = compute_all_spacetime_structure_functions(
+                        positions,
+                        z_plus,
+                        z_minus,
+                        settings["orders"],
+                        lambda_edges_km,
+                        pair_sampling=settings["pair_sampling"],
+                        scale_ranges_km=settings["scale_ranges_km"] or None,
+                        min_fit_bins=settings["min_fit_bins"],
+                        min_pair_lambda_km=settings["min_pair_lambda_km"],
+                        max_pair_lambda_km=settings["max_pair_lambda_km"],
+                        geometry_plan_cache=geometry_plan_cache,
+                    )
+                # The member axis follows the requested order; retain source identities.
+                if group_name == "observed" and settings["mc_indices"] != "all":
+                    group_result["mc_indices"] = observed_indices
+                group_result["n_members"] = positions.shape[0]
+                group_result["time_s"] = np.stack(
+                    [member["elsasser"]["time"] for member in members], axis=0
+                )
+                products[group_name] = group_result
+                for field in FIELDS:
+                    notes.extend(group_result[field]["scaling_exponents"]["notes"])
 
         result = {
             "method": self.name,
