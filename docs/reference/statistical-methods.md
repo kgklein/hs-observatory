@@ -370,6 +370,48 @@ Binned Elsasser vector-increment structure functions. The default uses same-time
   `flatness = S4 / S2^2` when orders 2 and 4 are available, and raw plus
   order-2-normalized scaling exponents for each named scale range.
 
+Dataset and realization selection is optional. With no selection controls, the
+runner processes every observed realization and also truth when present, as before.
+Explicit `data_groups` must be a nonempty list containing `truth`, `observed`, or
+both; explicitly requested groups must exist in the input. `mc_indices` defaults
+to `all`, or accepts a nonempty list of distinct zero-based nonnegative integers.
+Indices must be in range when `observed` is selected. Duplicate groups and indices
+are errors. MC selection applies only to `observed`.
+
+For example, establish scale coverage and convergence from the sampled truth
+without reading or computing the observed ensemble:
+
+```yaml
+structure_function:
+  data_groups: [truth]
+  plot:
+    enabled: false
+    publication:
+      enabled: false
+```
+
+To compare truth with three observed realizations:
+
+```yaml
+structure_function:
+  data_groups: [truth, observed]
+  mc_indices: [0, 1, 2]
+```
+
+For observed-only analysis, use `data_groups: [observed]` with either
+`mc_indices: all` or an explicit list. The member axis follows the list's order.
+For an explicit MC list, `products.observed.mc_indices` records the original
+indices corresponding to that axis; existing product arrays keep their format.
+Diagnostic `plot.member` selects a position on this output member axis.
+
+Publication plotting requires both truth and at least one observed realization;
+`plot.publication.enabled: true` with a single selected group raises a
+configuration error before computation. With a subset, the publication plot
+computes its usual ensemble intervals from the selected members only.
+Normalization, SF definitions, pair sampling, seeds, and fitting procedures are
+unchanged. Automatic separation bins use the selected datasets' geometry; supply
+identical explicit `lambda_bins_km` when comparing subset and full-run values.
+
 The publication summary plot reads this JSON result directly and keeps sampled
 truth separate from the observed Monte Carlo ensemble:
 

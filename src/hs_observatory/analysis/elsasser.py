@@ -136,7 +136,7 @@ def _read_selected(
     path = f"{settings['data_group']}/{dataset_name}"
     if path not in handle:
         raise KeyError(f"Input file is missing /{path}")
-    values = np.asarray(handle[path], dtype=float)
+    values = handle[path]
     expected_ndim = 2 if variable == "n" else 3
     if settings["data_group"] == "observed":
         if values.ndim == expected_ndim + 1:
@@ -150,6 +150,7 @@ def _read_selected(
             raise ValueError(
                 f"/{path} must have shape with or without a leading Monte Carlo dimension"
             )
+    values = np.asarray(values, dtype=float)
     if values.ndim != expected_ndim or (variable != "n" and values.shape[-1] != 3):
         shape = "(time, spacecraft)" if variable == "n" else "(time, spacecraft, 3)"
         raise ValueError(f"/{path} must have shape {shape} after selection")

@@ -684,3 +684,183 @@ def test_shared_summary_limits_can_exclude_kurtosis():
     )
 
     assert len(limits) == 2
+
+
+def _selection_config(**selection):
+    return {
+        "min_order": 2,
+        "max_order": 4,
+        "lambda_bins_km": [0.1, 2.0, 5.0, 50.0],
+        "min_fit_bins": 2,
+        "scale_ranges_km": {"total": [0.1, 50.0]},
+        **selection,
+    }
+
+
+def test_truth_only_does_not_require_observed_data(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    reference = StructureFunctionAnalysis(_selection_config()).run(path)
+    with h5py.File(path, "a") as handle:
+        del handle["observed"]
+        del handle["errors"]
+    result = StructureFunctionAnalysis(_selection_config(data_groups=["truth"])).run(path)
+    assert list(result["products"]) == ["truth"]
+    np.testing.assert_equal(result["products"]["truth"], reference["products"]["truth"])
+
+
+@pytest.mark.parametrize("indices", [[1], [1, 0]])
+@pytest.mark.parametrize("mode", ["same_time_pairs", "all_spacetime_pairs"])
+def test_selected_mc_members_preserve_identity_and_values(tmp_path, monkeypatch, indices, mode):
+    import hs_observatory.analysis.structure_function as sf
+
+    path = _write_structure_input(tmp_path / "input.h5")
+    config = _selection_config(
+        increment_mode=mode,
+        pair_sampling={"mode": "random", "n_pairs": 12, "random_seed": 12345},
+    )
+    reference = StructureFunctionAnalysis(config).run(path)
+    calls = []
+    compute = sf.compute_elsasser_analysis
+
+    def tracked_compute(input_path, settings):
+        calls.append((settings["data_group"], settings["mc_index"]))
+        return compute(input_path, settings)
+
+    monkeypatch.setattr(sf, "compute_elsasser_analysis", tracked_compute)
+    asarray = h5py.Dataset.__array__
+
+    def reject_full_ensemble_read(dataset, *args, **kwargs):
+        assert dataset.name not in ("/observed/n", "/observed/v", "/observed/B")
+        return asarray(dataset, *args, **kwargs)
+
+    monkeypatch.setattr(h5py.Dataset, "__array__", reject_full_ensemble_read)
+    result = StructureFunctionAnalysis({**config, "mc_indices": indices}).run(path)
+    assert calls == [("observed", index) for index in indices] + [("truth", 0)]
+    observed = result["products"]["observed"]
+    assert observed["mc_indices"] == indices
+    assert observed["n_members"] == len(indices)
+    original = reference["products"]["observed"]
+    for key in ("counts", "time_s", "pair_separations_km"):
+        if original.get(key) is not None:
+            np.testing.assert_equal(observed[key], np.asarray(original[key])[indices])
+    for field in ("z_plus", "z_minus"):
+        for key in ("S_n", "flatness"):
+            np.testing.assert_equal(observed[field][key], np.asarray(original[field][key])[indices])
+        for key in ("raw", "normalized_by_order2"):
+            np.testing.assert_equal(
+                observed[field]["scaling_exponents"][key],
+                np.asarray(original[field]["scaling_exponents"][key])[indices],
+            )
+
+
+def test_observed_only_does_not_require_truth(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    reference = StructureFunctionAnalysis(_selection_config()).run(path)
+    with h5py.File(path, "a") as handle:
+        del handle["truth"]
+    result = StructureFunctionAnalysis(_selection_config(data_groups=["observed"])).run(path)
+    assert list(result["products"]) == ["observed"]
+    np.testing.assert_equal(result["products"]["observed"], reference["products"]["observed"])
+    # The legacy default also permits inputs without truth.
+    default = StructureFunctionAnalysis(_selection_config()).run(path)
+    np.testing.assert_equal(default["products"], result["products"])
+
+
+def test_explicit_defaults_match_legacy_selection(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    default = StructureFunctionAnalysis(_selection_config()).run(path)
+    explicit = StructureFunctionAnalysis(
+        _selection_config(data_groups=["truth", "observed"], mc_indices="all")
+    ).run(path)
+    assert list(default["products"]) == ["observed", "truth"]
+    np.testing.assert_equal(default["products"], explicit["products"])
+    assert "mc_indices" not in default["products"]["observed"]
+
+
+@pytest.mark.parametrize(
+    "selection, message",
+    [
+        ({"data_groups": []}, "data_groups.*nonempty"),
+        ({"data_groups": "truth"}, "data_groups.*nonempty"),
+        ({"data_groups": None}, "data_groups.*nonempty"),
+        ({"data_groups": ["other"]}, "data_groups.*only"),
+        ({"data_groups": ["truth", "truth"]}, "data_groups.*duplicates"),
+        ({"mc_indices": []}, "mc_indices.*nonempty"),
+        ({"mc_indices": "0"}, "mc_indices.*nonempty"),
+        ({"mc_indices": None}, "mc_indices.*nonempty"),
+        ({"mc_indices": [-1]}, "mc_indices.*nonnegative integers"),
+        ({"mc_indices": [True]}, "mc_indices.*nonnegative integers"),
+        ({"mc_indices": [0.5]}, "mc_indices.*nonnegative integers"),
+        ({"mc_indices": [0, 0]}, "mc_indices.*duplicates"),
+        ({"mc_indices": [2]}, "mc_indices.*out of range"),
+    ],
+)
+def test_invalid_sf_selections_fail_before_computing(tmp_path, monkeypatch, selection, message):
+    import hs_observatory.analysis.structure_function as sf
+
+    path = _write_structure_input(tmp_path / "input.h5")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("invalid selection must fail before Elsasser computation")
+
+    monkeypatch.setattr(sf, "compute_elsasser_analysis", forbidden)
+    with pytest.raises(ValueError, match=message):
+        StructureFunctionAnalysis(_selection_config(**selection)).run(path)
+
+
+@pytest.mark.parametrize("group", ["truth", "observed"])
+def test_single_group_publication_is_configuration_error(tmp_path, group):
+    path = _write_structure_input(tmp_path / "input.h5")
+    config = _selection_config(
+        data_groups=[group], plot={"publication": {"enabled": True}}
+    )
+    with pytest.raises(ValueError, match="publication.enabled requires both truth and observed"):
+        StructureFunctionAnalysis(config).run(path)
+
+
+def test_explicit_missing_group_is_configuration_error(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    with h5py.File(path, "a") as handle:
+        del handle["truth"]
+    with pytest.raises(ValueError, match="input is missing /truth"):
+        StructureFunctionAnalysis(_selection_config(data_groups=["truth"])).run(path)
+
+
+def test_empty_observed_ensemble_is_configuration_error(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    with h5py.File(path, "a") as handle:
+        del handle["observed/n"]
+        handle.create_dataset("observed/n", shape=(0, 4, 3), dtype=float)
+    with pytest.raises(ValueError, match="mc_indices selects no observed realizations"):
+        StructureFunctionAnalysis(_selection_config()).run(path)
+
+
+def test_observed_without_mc_dimension_supports_index_zero(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    with h5py.File(path, "a") as handle:
+        for variable in ("n", "v", "B"):
+            values = handle[f"observed/{variable}"][0]
+            del handle[f"observed/{variable}"]
+            handle.create_dataset(f"observed/{variable}", data=values)
+    config = _selection_config(data_groups=["observed"], mc_indices=[0])
+    result = StructureFunctionAnalysis(config).run(path)
+    assert result["products"]["observed"]["n_members"] == 1
+    assert result["products"]["observed"]["mc_indices"] == [0]
+    with pytest.raises(ValueError, match="mc_indices is out of range"):
+        StructureFunctionAnalysis({**config, "mc_indices": [1]}).run(path)
+
+
+def test_publication_supports_selected_mc_member(tmp_path):
+    path = _write_structure_input(tmp_path / "input.h5")
+    plot_path = tmp_path / "subset.png"
+    analysis = StructureFunctionAnalysis(
+        _selection_config(
+            data_groups=["truth", "observed"],
+            mc_indices=[1],
+            plot={"publication": {"enabled": True, "path": str(plot_path), "dpi": 40}},
+        )
+    )
+    result = analysis.run(path)
+    analysis.write_result(result, tmp_path / "subset.json")
+    assert result["products"]["observed"]["mc_indices"] == [1]
+    assert plot_path.is_file()
