@@ -42,6 +42,9 @@ def write_observations(
 
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
+    error_config = metadata.get("observatory_error_config", {})
+    if isinstance(error_config, (str, bytes)):
+        error_config = json.loads(error_config)
     with h5py.File(output, "w") as handle:
         meta_group = handle.create_group("metadata")
         for key, value in metadata.items():
@@ -84,6 +87,39 @@ def write_observations(
                     "velocity_angle_beta",
                 }:
                     dataset.attrs["units"] = "rad"
+                for component in ("density", "velocity_speed"):
+                    if name in {
+                        f"{component}_bias",
+                        f"{component}_log_error",
+                        f"{component}_fractional_error",
+                    }:
+                        section = error_config.get(component, {})
+                        interpretation = section.get(
+                            "error_interpretation",
+                            "fractional_error"
+                            if section.get("model") == "gaussian_fractional_bias_plus_ou"
+                            else "log_multiplier",
+                        )
+                        if name.endswith("_fractional_error"):
+                            interpretation = "fractional_error"
+                        elif name.endswith("_log_error"):
+                            interpretation = "log_multiplier"
+                        dataset.attrs["units"] = "1"
+                        dataset.attrs["interpretation"] = interpretation + (
+                            "_bias" if name.endswith("_bias") else ""
+                        )
+                        if "model" in section:
+                            dataset.attrs["model"] = section["model"]
+                if name in {"velocity_angle_alpha", "velocity_angle_beta"}:
+                    section = error_config.get("velocity_angle", {})
+                    if "model" in section:
+                        dataset.attrs["model"] = section["model"]
+                        dataset.attrs["requirement_interpretation"] = section.get(
+                            "requirement_interpretation",
+                            "total_angle_confidence_radius"
+                            if section["model"] == "transverse_ou_rotation_total_angle"
+                            else "per_transverse_component",
+                        )
     return output
 
 

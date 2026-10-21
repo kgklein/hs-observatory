@@ -168,6 +168,30 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
         if sigma_level not in {2, 3} or sigma_level != section["sigma_level"]:
             raise ValueError(f"{section_name}.sigma_level must be 2 or 3")
         section["sigma_level"] = sigma_level
+        if section_name in {"density", "velocity_speed", "velocity_angle"}:
+            if section_name == "velocity_angle":
+                interpretations = {
+                    "transverse_ou_rotation": "per_transverse_component",
+                    "transverse_ou_rotation_total_angle": "total_angle_confidence_radius",
+                }
+                key = "requirement_interpretation"
+                requirement = float(section["requirement_deg"])
+            else:
+                interpretations = {
+                    "multiplicative_bias_plus_ou": "log_multiplier",
+                    "gaussian_fractional_bias_plus_ou": "fractional_error",
+                }
+                key = "error_interpretation"
+                requirement = float(section["requirement_fraction"])
+            model = section["model"]
+            if model not in interpretations:
+                raise ValueError(f"Unsupported {section_name}.model: {model!r}")
+            interpretation = interpretations[model]
+            if section.get(key, interpretation) != interpretation:
+                raise ValueError(f"{section_name}.{key} conflicts with model {model!r}")
+            section[key] = interpretation
+            if not np.isfinite(requirement) or requirement < 0:
+                raise ValueError(f"{section_name} requirement must be finite and non-negative")
     return merged
 
 
@@ -429,6 +453,58 @@ def _apply_multiplicative_bias_ou(
     return sampled * np.exp(log_error), bias, log_error
 
 
+def _apply_gaussian_fractional_bias_ou(
+    sampled: np.ndarray,
+    time: np.ndarray,
+    section: Mapping[str, Any],
+    component: str,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Apply 1 + Gaussian bias + stationary OU, without clipping or resampling.
+
+    Draw order matches the legacy lognormal helper, so later error components
+    retain their seeded realizations when this option is selected.
+    """
+    sigma_total = sigma_from_requirement(
+        float(section["requirement_fraction"]), int(section["sigma_level"])
+    )
+    sigma_bias, sigma_ou = _variance_partition(section, sigma_total)
+    n_mc, n_times, n_spacecraft = sampled.shape
+    bias = rng.normal(scale=sigma_bias, size=(n_mc, n_spacecraft))
+    ou = generate_ou_process(
+        n_times,
+        _time_intervals(time),
+        sigma_ou,
+        float(section["ou_correlation_time_s"]),
+        rng,
+        sample_shape=(n_mc, n_spacecraft),
+    )
+    fractional_error = bias[:, None, :] + np.moveaxis(ou, 0, 1)
+    factor = 1.0 + fractional_error
+    invalid = ~np.isfinite(factor) | (factor <= 0)
+    if np.any(invalid):
+        index = tuple(int(i) for i in np.unravel_index(np.argmax(invalid), invalid.shape))
+        raise ValueError(
+            f"{component} gaussian_fractional_bias_plus_ou requires finite positive "
+            f"multiplicative factors; factor={factor[index]!r} at "
+            f"(mc, time, spacecraft)={index}"
+        )
+    return sampled * factor, bias, fractional_error
+
+
+def transverse_component_sigma_rad(section: Mapping[str, Any]) -> float:
+    """Convert the selected angular requirement, preserving legacy arithmetic."""
+    if section["model"] == "transverse_ou_rotation":
+        return np.deg2rad(
+            sigma_from_requirement(float(section["requirement_deg"]), section["sigma_level"])
+        )
+    if section["model"] != "transverse_ou_rotation_total_angle":
+        raise ValueError(f"Unsupported velocity_angle.model: {section['model']!r}")
+    # erfc is 1 - erf but avoids subtractive cancellation in the tail.
+    tail = math.erfc(section["sigma_level"] / np.sqrt(2.0))
+    return np.deg2rad(float(section["requirement_deg"])) / np.sqrt(-2.0 * math.log(tail))
+
+
 def magnetic_asd_total(
     frequency: np.ndarray,
     anchors: list[Mapping[str, Any]],
@@ -576,48 +652,53 @@ def apply_observatory_measurement_errors(
     errors: dict[str, np.ndarray] = {}
 
     n_sampled = np.asarray(sampled["n"], dtype=float)
+    n_fractional = cfg["density"]["model"] == "gaussian_fractional_bias_plus_ou"
     if cfg["density"].get("enabled", True):
-        n_obs, n_bias, n_log_error = _apply_multiplicative_bias_ou(
+        n_apply = (
+            _apply_gaussian_fractional_bias_ou if n_fractional else _apply_multiplicative_bias_ou
+        )
+        n_obs, n_bias, n_error = n_apply(
             n_sampled,
             np.asarray(time["n"], dtype=float),
             cfg["density"],
-            "requirement_fraction",
+            "density" if n_fractional else "requirement_fraction",
             rng,
         )
     else:
         n_obs = n_sampled.copy()
         n_bias = np.zeros((n_sampled.shape[0], n_sampled.shape[2]))
-        n_log_error = np.zeros_like(n_sampled)
+        n_error = np.zeros_like(n_sampled)
     observed["n"] = n_obs
     errors["n"] = n_obs - n_sampled
     errors["density_bias"] = n_bias
-    errors["density_log_error"] = n_log_error
+    errors["density_fractional_error" if n_fractional else "density_log_error"] = n_error
 
     v_sampled = np.asarray(sampled["v"], dtype=float)
     v_work = v_sampled.copy()
+    v_fractional = cfg["velocity_speed"]["model"] == "gaussian_fractional_bias_plus_ou"
     if cfg["velocity_speed"].get("enabled", True):
         speed = np.linalg.norm(v_work, axis=-1)
-        speed_obs, v_bias, v_log_error = _apply_multiplicative_bias_ou(
+        v_apply = (
+            _apply_gaussian_fractional_bias_ou if v_fractional else _apply_multiplicative_bias_ou
+        )
+        speed_obs, v_bias, v_error = v_apply(
             speed,
             np.asarray(time["v"], dtype=float),
             cfg["velocity_speed"],
-            "requirement_fraction",
+            "velocity_speed" if v_fractional else "requirement_fraction",
             rng,
         )
         scale = np.divide(speed_obs, speed, out=np.ones_like(speed), where=speed > 0.0)
         v_work = v_work * scale[..., None]
     else:
         v_bias = np.zeros((v_sampled.shape[0], v_sampled.shape[2]))
-        v_log_error = np.zeros(v_sampled.shape[:-1])
+        v_error = np.zeros(v_sampled.shape[:-1])
     errors["velocity_speed_bias"] = v_bias
-    errors["velocity_speed_log_error"] = v_log_error
+    errors["velocity_speed_fractional_error" if v_fractional else "velocity_speed_log_error"] = (
+        v_error
+    )
     if cfg["velocity_angle"].get("enabled", True):
-        sigma_angle = np.deg2rad(
-            sigma_from_requirement(
-                float(cfg["velocity_angle"]["requirement_deg"]),
-                cfg["velocity_angle"]["sigma_level"],
-            )
-        )
+        sigma_angle = transverse_component_sigma_rad(cfg["velocity_angle"])
         v_work, alpha, beta = apply_transverse_angular_ou(
             v_work,
             sigma_angle,

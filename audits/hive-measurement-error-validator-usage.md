@@ -60,8 +60,8 @@ At 0.125-second cadence, the configured **10 Hz anchor is necessarily `INSUFFICI
 ## Statistical conventions and limits
 
 - Position uses the configured Maxwell radial confidence contour (95.45% at 2σ, 99.73% at 3σ), with the implemented rounded 3σ factor 3.762. `radial_probability` overrides that contour. Do not divide the radius directly by sigma level to obtain axis sigma.
-- Density/speed requirements specify log-error sigma; normalized variance fractions allocate independent constant bias and stationary OU variance. The code subtracts **saved bias**, never each path's temporal mean. Lognormal fractional mean is positive without a centering correction.
-- Velocity-angle sigma applies to **each** transverse OU coordinate. The total latent angle is Rayleigh, with RMS sqrt(2) times component sigma. Alignment uses independent Gaussian B/V rotation vectors and Maxwell rotation magnitudes, not Euler angles.
+- Legacy density/speed requirements specify log-error sigma; normalized variance fractions allocate independent constant bias and stationary OU variance. The code subtracts **saved bias**, never each path's temporal mean. Lognormal fractional mean is positive without a centering correction.
+- The legacy velocity-angle sigma applies to **each** transverse OU coordinate. The total latent angle is Rayleigh, with RMS sqrt(2) times component sigma. Alignment uses independent Gaussian B/V rotation vectors and Maxwell rotation magnitudes, not Euler angles.
 - Constant errors contribute one draw per MC/spacecraft. Gaussian/Maxwell/Rayleigh CDF tests for correlated processes use the initial timestamp across independent paths. Plots of sampled OU values are descriptive and explicitly labeled correlated. Constant-distribution quantile intervals use exact binomial/order-statistic inversion.
 - Temporal moments and ACF use independent path summaries, with approximate Student intervals requiring at least 30 paths. ACF at 30, 300 and 600 seconds uses known zero mean and configured variance, not sample demeaning/normalization. Unresolvable lags are reported. Standardized OU innovation mean/variance use exact Gaussian/chi-square null formulas with unfitted parameters; serial covariance checks never join different paths.
 - Holm adjustment controls familywise significance across all eligible primary statistical p-values within one input even when tests overlap. Confidence intervals shown in tables and plots are **marginal**, not simultaneous intervals. Numerical invariants have explicit tolerances. Pearson independence tests assume the configured Gaussian joint null; failure to detect correlation does not prove general independence.
@@ -80,3 +80,64 @@ The self-tests live outside the default `tests/` collection and use tiny fixture
 .venv/bin/ruff check scripts/validate_measurement_errors.py scripts/measurement_error_validation scripts/validator_selftests/test_measurement_error_validation.py
 .venv/bin/ruff format --check scripts/validate_measurement_errors.py scripts/measurement_error_validation scripts/validator_selftests/test_measurement_error_validation.py
 ```
+
+## Selectable model families
+
+The validator now dispatches from the **embedded** density, speed and angular
+model identifiers. Its independent mathematical conversions do not import the
+production generators or conversion helpers. Supplied YAML is cross-checked,
+not used to override the product's embedded statistical interpretation.
+
+- `multiplicative_bias_plus_ou`: read `*_log_error`, subtract saved bias, use
+  Gaussian log-space targets and `expm1` for fractional summaries. Historical
+  result names are retained.
+- `gaussian_fractional_bias_plus_ou`: read `*_fractional_error`, subtract saved
+  bias and test Gaussian fractional statistics directly. Mean fractional error
+  is zero; the validator does not take logarithms or exponentiate these errors.
+  It also checks positive factors and symmetric requirement coverage at the
+  initial timestamp across independent paths.
+- `transverse_ou_rotation`: retain the per-coordinate `requirement_deg/k` sigma
+  and corresponding Rayleigh radial coverage (86.47% at the configured radius
+  when k=2).
+- `transverse_ou_rotation_total_angle`: independently derive component sigma
+  from Rayleigh coverage `erf(k/sqrt(2))`; test Gaussian/OU coordinate statistics,
+  Rayleigh angle statistics and configured-radius coverage.
+
+New normalized provenance explicitly identifies `error_interpretation` for
+log/fractional models and `requirement_interpretation` for angular models.
+Historical missing interpretation fields are inferred from the legacy model
+identifiers, preserving old-file validation. Contradictory model/interpretation
+metadata is rejected. If present, dataset model/interpretation attributes must
+agree with provenance; new fractional datasets and biases require dimensionless
+`units='1'`. Missing attributes on historical log-error products remain allowed.
+
+For large angle requirements the Rayleigh target applies to the latent angle;
+principal vector deflection wraps above pi. The informational
+`total_angle.wrapping_probability` row reports the theoretical wrapping
+probability. New Gaussian fractional generation aborts on nonpositive or
+nonfinite factors without clipping or resampling. If such events are not rare,
+selecting only completed products can bias the saved ensemble; the validator
+continues to test the stated unconditioned Gaussian targets.
+
+Generation snippets and full storage conventions are in the existing
+[error-model reference](../docs/reference/errors.md#alternative-fractional-and-total-angle-requirements).
+The Phase A CLI, read-only behavior and campaign commands above are unchanged;
+point them at newly generated products and their corresponding YAML when ready.
+No production products or generation recipes were changed to add these options.
+
+Run the additional error-only statistical and serialization checks explicitly:
+
+```bash
+.venv/bin/python -m pytest tests/test_observatory_errors.py tests/test_hdf5_roundtrip.py scripts/validator_selftests/test_measurement_error_validation.py scripts/validator_selftests/test_observatory_model_options.py -q
+.venv/bin/ruff check src/hs_observatory/errors/observatory.py src/hs_observatory/io/hdf5.py tests/test_observatory_errors.py scripts/measurement_error_validation/model.py scripts/measurement_error_validation/runner.py scripts/measurement_error_validation/reporting.py scripts/validator_selftests/test_observatory_model_options.py
+.venv/bin/ruff format --check src/hs_observatory/errors/observatory.py src/hs_observatory/io/hdf5.py tests/test_observatory_errors.py scripts/measurement_error_validation/model.py scripts/measurement_error_validation/runner.py scripts/measurement_error_validation/reporting.py scripts/validator_selftests/test_observatory_model_options.py
+```
+
+The explicit statistical tests use independent error-only ensembles: 60,000
+three-timestamp paths for fractional errors and 20,000 three-timestamp paths
+for each angular sigma level. Normal/chi-square, binomial and correlation
+checks use conservative predeclared tail bounds. They stay outside default
+pytest collection. Small deterministic contracts and the pre-extension legacy
+array/RNG reference are in the ordinary observatory tests. The reference was
+captured before the implementation changes and includes all error components;
+it does not evaluate a Malara field.
