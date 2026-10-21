@@ -307,9 +307,21 @@ def test_legacy_reference_arrays_and_rng_are_unchanged(explicit):
         config["velocity_angle"]["model"] = "transverse_ou_rotation"
     result, coordinates, state = _run_reference(config)
     for name, actual in result.observed.items():
-        np.testing.assert_array_equal(actual, reference["observed"][name])
+        expected = np.asarray(reference["observed"][name])
+        if name == "v":
+            # Norms, exp and rotations can round differently across CPU/NumPy paths.
+            assert actual.shape == expected.shape
+            np.testing.assert_allclose(actual, expected, rtol=1e-14, atol=1e-12)
+        else:
+            np.testing.assert_array_equal(actual, expected)
     for name, actual in {**coordinates, **result.errors}.items():
-        np.testing.assert_array_equal(actual, reference["errors"][name])
+        expected = np.asarray(reference["errors"][name])
+        if name == "v":
+            # This derived residual inherits the observed velocity's rounding.
+            assert actual.shape == expected.shape
+            np.testing.assert_allclose(actual, expected, rtol=1e-14, atol=1e-12)
+        else:
+            np.testing.assert_array_equal(actual, expected)
     assert state == reference["rng_state"]
 
 
