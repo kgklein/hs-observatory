@@ -10,10 +10,10 @@ fi
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 usage() {
-  echo "Usage: $0 [OPTIONS] {100|101|102|400|401|402} [...]" >&2
-  echo "  100, 400: p=0.9 (orange)" >&2
-  echo "  101, 401: p=0.7 (green)" >&2
-  echo "  102, 402: p=0.5 (blue)" >&2
+  echo "Usage: $0 [OPTIONS] {100|101|102|400|401|402|600|601|602} [...]" >&2
+  echo "  100, 400, 600: p=0.9 (orange)" >&2
+  echo "  101, 401, 601: p=0.7 (green)" >&2
+  echo "  102, 402, 602: p=0.5 (blue)" >&2
   echo "Options:" >&2
   echo "  --stage3                      use refined 40X results (defaults to all three)" >&2
   echo "  --recalculate                 opt-in Stage 3 ensemble analysis, then plot" >&2
@@ -117,16 +117,17 @@ batch_inputs=()
 batch_p_values=()
 for run_id in "${run_ids[@]}"; do
   case "${run_id}" in
-    100|400) batch_p_values+=("0.9") ;;
-    101|401) batch_p_values+=("0.7") ;;
-    102|402) batch_p_values+=("0.5") ;;
+    100|400|600) batch_p_values+=("0.9") ;;
+    101|401|601) batch_p_values+=("0.7") ;;
+    102|402|602) batch_p_values+=("0.5") ;;
     *)
       echo "Unknown run ID: ${run_id}" >&2
       usage
       exit 2
       ;;
   esac
-  input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
+  #input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
+  input="${ROOT}/outputs/production/malara-prod-${run_id}_sf_puma-v00.json"
   if [[ ! -f "${input}" ]]; then
     echo "Input not found: ${input}" >&2
     exit 1
@@ -163,7 +164,8 @@ plot_run() {
   local run_id="$1"
   local p_value="$2"
 
-  local input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
+  #local input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
+  local input="${ROOT}/outputs/production/malara-prod-${run_id}_sf_puma-v00.json"
   local output="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.png"
 
   local plot_args=(
