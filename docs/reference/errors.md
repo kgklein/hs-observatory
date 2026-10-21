@@ -133,7 +133,7 @@ used within the stored trajectory, with endpoint-velocity extrapolation for
 clock shifts beyond its first or last sample. Nominal coordinates remain in the
 HDF5 coordinate datasets.
 
-Density and velocity speed use lognormal multiplicative errors with a constant
+By default, density and velocity speed use lognormal multiplicative errors with a constant
 spacecraft bias plus a stationary exact-discrete Ornstein-Uhlenbeck component.
 The default density and speed 3-sigma fractional requirements are 6% and 3%,
 respectively, with half the variance in the bias and half in the OU process.
@@ -237,3 +237,137 @@ The generator writes sampled errors under `/errors`, including:
 
 The exact merged configuration is stored as the HDF5 metadata attribute
 `observatory_error_config`.
+
+### Alternative fractional and total-angle requirements
+
+The following are alternative `errors` sections for an existing generation
+recipe; retain its other error sections and spacecraft, field, time, and output
+settings. No existing generation recipe is changed automatically.
+
+Legacy conventions remain the defaults:
+
+```yaml
+errors:
+  model: observatory
+  density:
+    enabled: true
+    model: multiplicative_bias_plus_ou
+    requirement_fraction: 0.06
+    sigma_level: 2
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+  velocity_speed:
+    enabled: true
+    model: multiplicative_bias_plus_ou
+    requirement_fraction: 0.03
+    sigma_level: 2
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+  velocity_angle:
+    enabled: true
+    model: transverse_ou_rotation
+    requirement_deg: 0.25
+    sigma_level: 2
+    ou_correlation_time_s: 300.0
+```
+
+Select symmetric fractional errors and a total-angle confidence radius explicitly:
+
+```yaml
+errors:
+  model: observatory
+  density:
+    enabled: true
+    model: gaussian_fractional_bias_plus_ou
+    requirement_fraction: 0.06
+    sigma_level: 2
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+  velocity_speed:
+    enabled: true
+    model: gaussian_fractional_bias_plus_ou
+    requirement_fraction: 0.03
+    sigma_level: 2
+    bias_variance_fraction: 0.5
+    ou_variance_fraction: 0.5
+    ou_correlation_time_s: 300.0
+  velocity_angle:
+    enabled: true
+    model: transverse_ou_rotation_total_angle
+    requirement_deg: 0.25
+    sigma_level: 2
+    ou_correlation_time_s: 300.0
+```
+
+For `gaussian_fractional_bias_plus_ou`, `epsilon=b+u` and the measurement is
+`X_obs=X_sampled*(1+epsilon)`. The constant bias and stationary OU term are
+independent, with total sigma `requirement_fraction/sigma_level`. Their variance
+fractions are normalized by their sum. OU initialization is stationary, and its
+exact transition uses the actual time interval and configured correlation time.
+Velocity speed uses the same positive scalar multiplier, preserving direction
+and leaving zero vectors zero.
+
+Thus the fractional marginal error is a zero-mean Gaussian, with approximately
+95.45% coverage inside ±6% for density and ±3% for speed in the example. The
+legacy model instead applies `exp(b+u)` and has a positive fractional mean.
+Both retain independent draws per MC realization and spacecraft.
+
+An unbounded Gaussian can produce `1+epsilon<=0`. The new model raises
+`ValueError` with the component and first offending MC/time/spacecraft index
+for nonpositive or nonfinite factors, even if the sampled quantity is zero.
+It never clips, resamples, or substitutes a lognormal multiplier. Requirements
+that make such events appreciably probable can cause runs to abort; accepting
+only successful runs can also select the saved ensemble. There is no truncated
+Gaussian interpretation.
+
+For `transverse_ou_rotation_total_angle`, the total latent transverse angle is
+Rayleigh with component sigma
+`requirement_deg/sqrt(-2*log(1-P_k))`, where `P_k=erf(sigma_level/sqrt(2))`.
+Two independent OU coordinates use this sigma, then the existing isotropic
+transverse rotation preserves vector magnitude. The 0.25°/2σ example has
+component sigma approximately **0.100564°**, total RMS **0.142219°**, and 95.45%
+latent radial quantile **0.25°**. Both sigma levels 2 and 3 and finite
+nonnegative requirement values, including zero, are supported dynamically.
+The legacy model still uses 0.125° per component for 0.25°/2σ, whose total
+0.25° coverage is about 86.47%.
+
+The confidence-radius conversion concerns the latent transverse rotation.
+Principal vector deflection is `acos(cos(theta))` and wraps above pi radians.
+At these small requirements the wrapping probability is negligible; for larger
+requirements the validator reports `P(theta>pi)=exp(-pi^2/(2*sigma_perp^2))`.
+The model does not clamp angles or reinterpret the radius at large values.
+The independent MAG–FC alignment model is unchanged.
+
+#### Saved interpretations and compatibility
+
+Normalized `observatory_error_config` records both the selected model and:
+
+- `density.error_interpretation`, `velocity_speed.error_interpretation`:
+  `log_multiplier` or `fractional_error`.
+- `velocity_angle.requirement_interpretation`: `per_transverse_component` or
+  `total_angle_confidence_radius`.
+
+These values are inferred from the model; explicitly conflicting values and
+unsupported model identifiers in these three sections are rejected. The
+configured `requirement_deg` remains the engineering radius, not the derived
+component sigma.
+
+| Dataset under `/errors` | Meaning | Shape |
+| --- | --- | --- |
+| `density_log_error`, `velocity_speed_log_error` | Legacy log multiplier `b+u` | `(mc,time,spacecraft)` |
+| `density_fractional_error`, `velocity_speed_fractional_error` | New fractional error `epsilon=b+u` | `(mc,time,spacecraft)` |
+| `density_bias`, `velocity_speed_bias` | Bias in the selected log/fractional convention | `(mc,spacecraft)` |
+| `velocity_angle_alpha`, `velocity_angle_beta` | Transverse coordinates under the selected angular convention | `(mc,time,spacecraft)` |
+
+Only the selected density/speed latent dataset is written; fractional values
+never appear under a `*_log_error` name. Disabled sections write zeros under
+the selected names. New products attach dimensionless `units: '1'`, model and
+interpretation attributes to density/speed latents and biases; angular
+coordinates retain `units: rad` and identify the model and angular requirement
+interpretation. Existing files without these attributes remain readable.
+Legacy numerical operations and random draw order are preserved, including
+subsequent magnetic and alignment draws. Selecting the new options does not
+rewrite existing products.
