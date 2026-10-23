@@ -9,6 +9,8 @@ from typing import Any, Mapping
 import h5py
 import numpy as np
 
+from hs_observatory.errors.observatory import relative_alignment_metadata
+
 
 def _dataset(group: h5py.Group, name: str, value: np.ndarray) -> h5py.Dataset:
     array = np.asarray(value)
@@ -74,6 +76,16 @@ def write_observations(
             group = handle.create_group("errors")
             for name, values in errors.items():
                 dataset = _dataset(group, name, values)
+                if name in {"relative_alignment_rotvec", "relative_alignment_matrix"}:
+                    dataset.attrs.update(relative_alignment_metadata(error_config["alignment"]))
+                    vector = name.endswith("rotvec")
+                    dataset.attrs["units"] = "rad" if vector else "1"
+                    dataset.attrs["representation"] = (
+                        "rotation_vector" if vector else "rotation_matrix"
+                    )
+                    dataset.attrs["axes"] = (
+                        "x,y,z" if vector else "output_component,input_component"
+                    )
                 if name == "time_offset":
                     dataset.attrs["units"] = "s"
                 elif name == "position_offset":

@@ -107,6 +107,15 @@ Use Gaussian/OU errors for configurable noise studies,
 or the [observatory requirement model](../reference/errors.md#observatory-requirement-model)
 for the current best model for the observatory performance.
 
+To model relative MAG-to-FC reconstruction uncertainty, explicitly select
+`errors.alignment.model: relative_constant_rotation_B_to_V`. It uses the nominal
+FC Cartesian frame, rotates B after magnetic DC/AC errors, and adds no velocity
+alignment rotation. A 3° per-axis requirement at `sigma_level: 3` gives 1° sigma
+per rotation-vector component. See
+[relative FC–MAG alignment](../reference/errors.md#relative-fcmag-alignment)
+for the YAML override, saved datasets and statistical validation. Independent
+B/V rotations remain the default; existing production recipes are unchanged.
+
 ## Truth-only generation
 
 Set `errors.n_mc: 0` to generate nominal sampled truth without a Monte Carlo

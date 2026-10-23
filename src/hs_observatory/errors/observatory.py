@@ -168,6 +168,16 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
         if sigma_level not in {2, 3} or sigma_level != section["sigma_level"]:
             raise ValueError(f"{section_name}.sigma_level must be 2 or 3")
         section["sigma_level"] = sigma_level
+        if section_name == "alignment":
+            if section["model"] not in {
+                "independent_constant_rotation_B_and_V",
+                "relative_constant_rotation_B_to_V",
+            }:
+                raise ValueError(f"Unsupported alignment.model: {section['model']!r}")
+            if section["model"] == "relative_constant_rotation_B_to_V":
+                requirement = float(section["requirement_deg_per_axis"])
+                if not np.isfinite(requirement) or requirement < 0:
+                    raise ValueError("alignment requirement must be finite and non-negative")
         if section_name in {"density", "velocity_speed", "velocity_angle"}:
             if section_name == "velocity_angle":
                 interpretations = {
@@ -193,6 +203,29 @@ def normalized_observatory_config(config: Mapping[str, Any] | None) -> dict[str,
             if not np.isfinite(requirement) or requirement < 0:
                 raise ValueError(f"{section_name} requirement must be finite and non-negative")
     return merged
+
+
+def relative_alignment_metadata(section: Mapping[str, Any]) -> dict[str, Any]:
+    """Describe the residual MAG-to-FC error in the nominal FC Cartesian axes."""
+    return {
+        "model": "relative_constant_rotation_B_to_V",
+        "reference_instrument": "FC",
+        "interpretation": "residual_MAG_to_FC_reconstruction_uncertainty",
+        "perturbed_product": "merged_MAG_SCM_B",
+        "requirement_deg_per_axis": float(section["requirement_deg_per_axis"]),
+        "sigma_level": section["sigma_level"],
+        "sigma_axis_rad": float(
+            np.deg2rad(section["requirement_deg_per_axis"] / section["sigma_level"])
+        ),
+        "requirement_interpretation": "gaussian_rotvec_per_axis",
+        "temporal_behavior": "constant_per_mc_spacecraft",
+        "component_basis": "common_cartesian_nominal_FC",
+        "attitude_assumption": "constant",
+        "matrix_direction": "ideal_FC_referenced_B_to_reported_FC_referenced_B",
+        "rotation_convention": "active_right_handed_column_vector",
+        "application": "B_out=R@(B_sampled+DC+AC)",
+        "rng_policy": "legacy_alignment_two_normal_blocks_relative_uses_second",
+    }
 
 
 def sigma_from_requirement(value: float, sigma_level: int) -> float:
@@ -714,6 +747,7 @@ def apply_observatory_measurement_errors(
 
     n_mc = v_sampled.shape[0]
     n_spacecraft = v_sampled.shape[2]
+    relative = cfg["alignment"]["model"] == "relative_constant_rotation_B_to_V"
     align_sigma = np.deg2rad(
         sigma_from_requirement(
             float(cfg["alignment"]["requirement_deg_per_axis"]),
@@ -721,28 +755,36 @@ def apply_observatory_measurement_errors(
         )
     )
     if cfg["alignment"].get("enabled", True):
-        v_align_rotvec = rng.normal(scale=align_sigma, size=(n_mc, n_spacecraft, 3))
+        if relative:
+            # Reserve the legacy V draw block without introducing an FC rotation.
+            rng.normal(scale=align_sigma, size=(n_mc, n_spacecraft, 3))
+        else:
+            v_align_rotvec = rng.normal(scale=align_sigma, size=(n_mc, n_spacecraft, 3))
         b_align_rotvec = rng.normal(scale=align_sigma, size=(n_mc, n_spacecraft, 3))
     else:
         v_align_rotvec = np.zeros((n_mc, n_spacecraft, 3))
         b_align_rotvec = np.zeros((n_mc, n_spacecraft, 3))
-    v_matrices = np.empty((n_mc, n_spacecraft, 3, 3), dtype=float)
+    if not relative:
+        v_matrices = np.empty((n_mc, n_spacecraft, 3, 3), dtype=float)
     b_matrices = np.empty((n_mc, n_spacecraft, 3, 3), dtype=float)
     for mc_index in range(n_mc):
         for sc_index in range(n_spacecraft):
-            v_matrices[mc_index, sc_index] = rotation_matrix_from_rotvec(
-                v_align_rotvec[mc_index, sc_index]
-            )
+            if not relative:
+                v_matrices[mc_index, sc_index] = rotation_matrix_from_rotvec(
+                    v_align_rotvec[mc_index, sc_index]
+                )
             b_matrices[mc_index, sc_index] = rotation_matrix_from_rotvec(
                 b_align_rotvec[mc_index, sc_index]
             )
-            v_work[mc_index, :, sc_index, :] = rotate_vectors(
-                v_work[mc_index, :, sc_index, :], v_matrices[mc_index, sc_index]
-            )
+            if not relative:
+                v_work[mc_index, :, sc_index, :] = rotate_vectors(
+                    v_work[mc_index, :, sc_index, :], v_matrices[mc_index, sc_index]
+                )
     observed["v"] = v_work
     errors["v"] = v_work - v_sampled
-    errors["velocity_alignment_rotvec"] = v_align_rotvec
-    errors["velocity_alignment_matrix"] = v_matrices
+    if not relative:
+        errors["velocity_alignment_rotvec"] = v_align_rotvec
+        errors["velocity_alignment_matrix"] = v_matrices
 
     b_sampled = np.asarray(sampled["B"], dtype=float)
     b_work = b_sampled.copy()
@@ -786,11 +828,14 @@ def apply_observatory_measurement_errors(
             )
     observed["B"] = b_work
     errors["B"] = b_work - b_sampled
-    errors["magnetic_alignment_rotvec"] = b_align_rotvec
-    errors["magnetic_alignment_matrix"] = b_matrices
+    prefix = "relative" if relative else "magnetic"
+    errors[prefix + "_alignment_rotvec"] = b_align_rotvec
+    errors[prefix + "_alignment_matrix"] = b_matrices
 
     metadata = {
         "observatory_error_config": cfg,
         "observatory_error_model": "helioswarm_requirement_observatory",
     }
+    if relative:
+        metadata["relative_alignment"] = relative_alignment_metadata(cfg["alignment"])
     return ObservatoryErrorResult(observed=observed, errors=errors, metadata=metadata)

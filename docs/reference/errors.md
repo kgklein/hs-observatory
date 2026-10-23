@@ -103,8 +103,9 @@ hsobs-generate configs/example_generate_ou.yaml
 Use `errors.model: observatory` for a more realistic requirement-motivated model based on HelioSwarm's expected performance.
 It samples constant timing and position offsets,
 multiplicative density/speed bias plus Ornstein–Uhlenbeck noise, transverse velocity angular precision offsets,
-magnetic DC offsets, colored magnetic AC noise, and independent
-constant B/V alignment rotation misalignments.
+magnetic DC offsets, colored magnetic AC noise, and constant alignment rotations.
+Alignment defaults to independent B/V rotations; an explicit relative MAG-to-FC
+model applies a single rotation to the magnetic measurement only.
 
 Each observatory error section accepts `sigma_level: 2` or `sigma_level: 3`
 (the default) alongside a neutral, unit-specific `requirement_*` value. Levels
@@ -140,8 +141,8 @@ respectively, with half the variance in the bias and half in the OU process.
 
 Velocity direction receives two transverse OU angular processes relative to the
 instantaneous velocity direction. The default angular precision is 0.25 degrees
-at 3-sigma. Velocity alignment is then applied as a constant per-spacecraft
-rotation matrix. Magnetic field receives a constant per-axis DC offset, colored
+at 3-sigma. With the default alignment model, velocity alignment is then applied
+as a constant per-spacecraft/MC rotation matrix. Magnetic field receives a constant per-axis DC offset, colored
 Gaussian AC noise generated in Fourier space from the merged-product ASD
 requirement, and then a separate constant per-spacecraft alignment rotation.
 
@@ -237,6 +238,119 @@ The generator writes sampled errors under `/errors`, including:
 
 The exact merged configuration is stored as the HDF5 metadata attribute
 `observatory_error_config`.
+
+### Relative FC–MAG alignment
+
+Select `relative_constant_rotation_B_to_V` to represent uncertainty in
+reconstructing the MAG-to-FC instrument alignment under requirement
+L2.5-MDRA-28. HIVE's existing Cartesian axes are the **nominal FC reference
+frame**, with constant spacecraft attitude throughout the interval. The model
+does not infer an alignment frame from the plasma velocity direction or add
+instrument/attitude transformations.
+
+Override the alignment section of an existing observatory recipe:
+
+```yaml
+errors:
+  model: observatory
+  alignment:
+    enabled: true
+    requirement_deg_per_axis: 3.0
+    sigma_level: 3
+    model: relative_constant_rotation_B_to_V
+
+output:
+  write_errors: true  # retain primitive errors for statistical validation
+```
+
+Retain the recipe's other settings, including its output path. The requirement
+is **3° per rotation-vector component at 3 sigma**, giving a component standard
+deviation of 1°. Each spacecraft and MC realization receives one independent
+three-component Gaussian rotation vector, held fixed at every timestamp:
+
+```text
+sigma_axis = deg2rad(requirement_deg_per_axis / sigma_level)
+omega[m,s] ~ Normal(0, sigma_axis**2 * I_3)
+R[m,s] = exp([omega[m,s]]_cross)  # Rodrigues' formula
+
+B_observed[m,t,s] = R[m,s] @ (B_sampled[m,t,s] + DC[m,s] + AC[m,t,s])
+V_observed = V_after_configured_speed_and_direction_errors
+```
+
+The relative rotation acts on the entire merged MAG/SCM magnetic product,
+including magnetic DC and AC perturbations. It introduces no FC rotation and
+leaves velocity exactly unchanged by the alignment operation; other configured
+velocity errors still apply. The spacecraft-relative velocity option remains
+the existing velocity subtraction in common Cartesian axes, as described in
+the [data reference](data-products.md#velocity-frame-convention).
+
+`R` is a right-handed **active residual reconstruction-error rotation**: a
+positive z-axis rotation sends +x toward +y. For row-vector arrays the helper
+implements the same action as `values @ R.T`. The matrix maps ideally
+FC-referenced magnetic components to erroneously reported FC-referenced
+components; its transpose would undo that error. It is not a full physical
+instrument attitude matrix.
+
+These Gaussian coordinates are rotation-vector components, **not Euler
+angles**. Their total magnitude follows a Maxwell distribution with scale
+`sigma_axis`. At 1° component sigma, approximately 97.07% of rotation-vector
+magnitudes are below 3°; 3° is not a 99.73% total-angle bound. The actual
+B-vector angular deflection also depends on its direction relative to the
+rotation axis: an axis-parallel vector does not move. Alignment alone preserves
+B magnitude, and each matrix satisfies `R.T @ R = I` and `det(R) = 1`.
+
+Both sigma levels 2 and 3 and finite nonnegative requirements are supported.
+A zero requirement produces zero rotation vectors and identity matrices.
+Disabled relative alignment also writes those values when errors are saved,
+and consumes no alignment RNG draws. Unknown alignment model names are rejected.
+
+#### Saved relative errors and compatibility
+
+The relative model writes `/errors/relative_alignment_rotvec` and
+`/errors/relative_alignment_matrix` in place of the four legacy B/V alignment
+datasets. Dataset shapes, units and convention metadata are described in
+[alignment data products](data-products.md#alignment-error-datasets).
+Legacy datasets retain their original meaning. The normalized alignment model
+remains in `observatory_error_config`, and the JSON metadata attribute
+`relative_alignment` records the resolved FC reference and residual convention.
+
+`independent_constant_rotation_B_and_V` remains the default. Its independent
+1° B/V coordinate errors imply approximately `sqrt(2)` degrees of relative
+coordinate uncertainty at small angles; they do not represent the new single
+1° relative error. Existing 6xx/7xx recipes and products are unchanged. The new
+model is an explicit selection for future 8xx recipes.
+
+For matched seeds and settings, switching between the two **enabled** models
+preserves unrelated latent errors and the final RNG state: the relative model
+discards the legacy V normal block and uses the legacy B block as its sole
+physical rotation. This also preserves the magnetic observation. Enabling
+versus disabling alignment retains the historical downstream RNG difference.
+Readers that require legacy alignment dataset names need explicit support for
+the relative representation; the HDF5 schema remains version 2.
+
+#### Phase A statistical validation
+
+Use the standalone validator on saved errors without reevaluating Malara fields:
+
+```bash
+python scripts/validate_measurement_errors.py \
+  --input path/to/observations.h5 \
+  --config path/to/generation.yaml \
+  --output-dir outputs/error_validation/relative
+```
+
+The validator dispatches from embedded HDF5 provenance and cross-checks the
+supplied YAML. It checks Gaussian coordinates, per-axis coverage, Maxwell
+magnitude, isotropy, spacecraft/MC independence diagnostics, matrix invariants,
+and saved conventions. Small ensembles or selections may yield
+`INSUFFICIENT_DATA`; statistical consistency does not prove independence.
+The relative model's `alignment_distributions_1.png/.pdf` contains its three
+coordinates and magnitude, labeled with the FC reference. Legacy figures keep
+velocity on `_1` and magnetic alignment on `_2`.
+
+Phase A validates saved primitives, not full measurement application. Exact
+velocity invariance, reuse across timestamps and DC/AC application order are
+covered by synthetic unit tests with known sampled inputs.
 
 ### Alternative fractional and total-angle requirements
 
@@ -339,7 +453,9 @@ Principal vector deflection is `acos(cos(theta))` and wraps above pi radians.
 At these small requirements the wrapping probability is negligible; for larger
 requirements the validator reports `P(theta>pi)=exp(-pi^2/(2*sigma_perp^2))`.
 The model does not clamp angles or reinterpret the radius at large values.
-The independent MAG–FC alignment model is unchanged.
+These velocity-angle options do not change the selected alignment model.
+Independent B/V alignment remains the default; the
+[relative FC–MAG model](#relative-fcmag-alignment) is a separate explicit option.
 
 #### Saved interpretations and compatibility
 

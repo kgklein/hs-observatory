@@ -48,6 +48,47 @@ measurement:
 
 A constant `velocity_km_s` is broadcast over every spacecraft and time. Trajectory readers may instead provide `(spacecraft, time, 3)` velocity arrays. Selecting the spacecraft frame without an available spacecraft velocity raises an error. The HDF5 metadata attributes `velocity_truth_frame`, `velocity_observed_frame`, and `velocity_error_applied_frame` record the convention used.
 
+The subtraction changes the reference motion, not the component axes. B and V
+use common Cartesian axes. For relative FC–MAG alignment those axes are the
+nominal FC reference, with constant attitude; only the magnetic measurement
+receives the residual alignment rotation.
+
+## Alignment error datasets
+
+With observatory errors enabled and `output.write_errors: true`, the selected
+alignment model determines which auxiliary datasets are written. Schema version
+2 and the generic error-dataset reader support both representations.
+
+| Alignment model | Datasets under `/errors` | Shapes | Units |
+| --- | --- | --- | --- |
+| `independent_constant_rotation_B_and_V` (default) | `velocity_alignment_rotvec`, `magnetic_alignment_rotvec` | Each `(mc,spacecraft,3)` | rad |
+| Legacy model above | `velocity_alignment_matrix`, `magnetic_alignment_matrix` | Each `(mc,spacecraft,3,3)` | Dimensionless; no explicit units attribute on legacy matrices |
+| `relative_constant_rotation_B_to_V` | `relative_alignment_rotvec` | `(mc,spacecraft,3)` | rad |
+| Relative model above | `relative_alignment_matrix` | `(mc,spacecraft,3,3)` | `1` |
+
+There is no time dimension: one matrix is reused throughout each spacecraft/MC
+path. Relative products omit the legacy alignment datasets; no legacy name is
+reinterpreted. A disabled alignment section writes zero rotation vectors and
+identity matrices under the selected model's names. Truth-only (`n_mc: 0`)
+products do not create alignment realizations.
+
+Relative datasets identify their `representation` and `axes`: `x,y,z` for a
+rotation vector and `output_component,input_component` for a matrix. Both carry
+`model`, `reference_instrument: FC`, and the interpretation
+`residual_MAG_to_FC_reconstruction_uncertainty`. Attributes also record
+`requirement_deg_per_axis`, `sigma_level`, `sigma_axis_rad`, the Gaussian per-axis
+interpretation, constant-per-MC/spacecraft behavior, nominal FC Cartesian basis,
+constant attitude, matrix direction, active right-handed convention, application
+order and RNG policy. The same conventions appear in the JSON metadata
+attribute `relative_alignment`; the configured model/requirement remain in
+`observatory_error_config`.
+
+`read_observations` returns all stored error arrays and metadata, with structured
+metadata retained as JSON strings. Dataset attributes can be inspected directly
+with h5py. Older consumers hard-coded to the legacy alignment names must be
+updated for relative files. See [relative FC–MAG alignment](errors.md#relative-fcmag-alignment)
+for the scientific interpretation, equations, configuration and validation.
+
 ## Coordinates and time grids
 
 Positions have spacecraft-first shape `(spacecraft, time, 3)`, while truth fields

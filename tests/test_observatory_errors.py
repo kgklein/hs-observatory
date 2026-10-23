@@ -375,6 +375,232 @@ def _only_options(**sections):
     return cfg
 
 
+RELATIVE_ALIGNMENT = "relative_constant_rotation_B_to_V"
+
+
+def _relative_inputs(n_mc=4):
+    time = {"n": np.arange(3.0), "v": np.arange(5.0), "B": np.arange(8.0)}
+    sampled = {
+        "n": np.ones((n_mc, 3, 2)),
+        "v": np.broadcast_to([400.0, -20.0, 5.0], (n_mc, 5, 2, 3)).copy(),
+        "B": np.broadcast_to(np.arange(48.0).reshape(8, 2, 3), (n_mc, 8, 2, 3)).copy(),
+    }
+    sampled["v"][:, 0] = 0
+    return sampled, time
+
+
+@pytest.mark.parametrize("enabled,requirement", [(True, 3.0), (False, 3.0), (True, 0.0)])
+def test_relative_alignment_application_and_velocity_direction_independence(enabled, requirement):
+    from scipy.spatial.transform import Rotation
+
+    sampled, time = _relative_inputs()
+    cfg = _only_options(
+        alignment=dict(
+            model=RELATIVE_ALIGNMENT,
+            enabled=enabled,
+            requirement_deg_per_axis=requirement,
+        )
+    )
+    rng = np.random.default_rng(72)
+    before = rng.bit_generator.state
+    result = apply_observatory_measurement_errors(sampled, time, cfg, rng)
+    vec = result.errors["relative_alignment_rotvec"]
+    matrices = result.errors["relative_alignment_matrix"]
+    assert vec.shape == (4, 2, 3) and matrices.shape == (4, 2, 3, 3)
+    assert not any(
+        name.startswith(("velocity_alignment", "magnetic_alignment")) for name in result.errors
+    )
+    np.testing.assert_array_equal(result.observed["v"], sampled["v"])
+    np.testing.assert_array_equal(result.errors["v"], 0)
+    np.testing.assert_allclose(
+        matrices,
+        Rotation.from_rotvec(vec.reshape(-1, 3)).as_matrix().reshape(matrices.shape),
+        atol=1e-15,
+    )
+    np.testing.assert_allclose(
+        np.swapaxes(matrices, -1, -2) @ matrices,
+        np.broadcast_to(np.eye(3), matrices.shape),
+        atol=1e-15,
+    )
+    np.testing.assert_allclose(np.linalg.det(matrices), 1, atol=1e-15)
+    expected = np.einsum("msij,mtsj->mtsi", matrices, sampled["B"])
+    np.testing.assert_allclose(result.observed["B"], expected, atol=2e-14)
+    np.testing.assert_allclose(
+        np.linalg.norm(result.observed["B"], axis=-1),
+        np.linalg.norm(sampled["B"], axis=-1),
+        atol=2e-14,
+    )
+    if not enabled or requirement == 0:
+        np.testing.assert_array_equal(vec, 0)
+        np.testing.assert_array_equal(result.observed["B"], sampled["B"])
+    if not enabled:
+        assert rng.bit_generator.state == before
+    else:
+        assert not np.array_equal(vec[0], vec[1]) or requirement == 0
+        assert not np.array_equal(vec[:, 0], vec[:, 1]) or requirement == 0
+    # Rotation is defined in FC axes, independent of instantaneous V direction.
+    sampled["v"] = np.flip(sampled["v"], axis=-1).copy()
+    other = apply_observatory_measurement_errors(sampled, time, cfg, np.random.default_rng(72))
+    np.testing.assert_array_equal(other.errors["relative_alignment_matrix"], matrices)
+    np.testing.assert_array_equal(other.observed["B"], result.observed["B"])
+
+
+def test_relative_alignment_signed_rotation_and_axis_parallel_vector():
+    matrix = rotation_matrix_from_rotvec(np.array([0, 0, np.pi / 2]))
+    np.testing.assert_allclose(rotate_vectors([1, 0, 0], matrix), [0, 1, 0], atol=2e-16)
+    np.testing.assert_array_equal(rotate_vectors([0, 0, 2], matrix), [0, 0, 2])
+    np.testing.assert_allclose(rotate_vectors([0, 1, 0], matrix.T), [1, 0, 0], atol=2e-16)
+
+
+def test_relative_alignment_rng_compatibility_and_magnetic_noise_order():
+    from copy import deepcopy
+
+    config = normalized_observatory_config(deepcopy(_legacy_reference()["config"]))
+    legacy, coordinates, state = _run_reference(config)
+    config["alignment"]["model"] = RELATIVE_ALIGNMENT
+    relative, rel_coordinates, rel_state = _run_reference(config)
+    assert state == rel_state
+    for name in coordinates:
+        np.testing.assert_array_equal(coordinates[name], rel_coordinates[name])
+    for name in legacy.errors:
+        if name not in {
+            "v",
+            "velocity_alignment_rotvec",
+            "velocity_alignment_matrix",
+            "magnetic_alignment_rotvec",
+            "magnetic_alignment_matrix",
+        }:
+            np.testing.assert_array_equal(relative.errors[name], legacy.errors[name])
+    for suffix in ("rotvec", "matrix"):
+        np.testing.assert_array_equal(
+            relative.errors["relative_alignment_" + suffix],
+            legacy.errors["magnetic_alignment_" + suffix],
+        )
+    np.testing.assert_array_equal(relative.observed["B"], legacy.observed["B"])
+    reference = _legacy_reference()
+    before_rotation = (
+        np.asarray(reference["sampled"]["B"])
+        + relative.errors["magnetic_dc_offset"][:, None]
+        + relative.errors["magnetic_ac_noise"]
+    )
+    matrix = relative.errors["relative_alignment_matrix"]
+    np.testing.assert_allclose(
+        relative.observed["B"], np.einsum("msij,mtsj->mtsi", matrix, before_rotation), atol=1e-14
+    )
+    wrong_order = (
+        np.einsum("msij,mtsj->mtsi", matrix, reference["sampled"]["B"])
+        + relative.errors["magnetic_dc_offset"][:, None]
+        + relative.errors["magnetic_ac_noise"]
+    )
+    assert not np.allclose(relative.observed["B"], wrong_order, rtol=1e-10, atol=1e-12)
+    config["alignment"]["enabled"] = False
+    disabled, _, disabled_state = _run_reference(config)
+    np.testing.assert_array_equal(relative.observed["v"], disabled.observed["v"])
+    config["alignment"]["model"] = "independent_constant_rotation_B_and_V"
+    legacy_disabled, _, legacy_disabled_state = _run_reference(config)
+    assert disabled_state == legacy_disabled_state
+    np.testing.assert_array_equal(disabled.observed["B"], legacy_disabled.observed["B"])
+
+
+@pytest.mark.parametrize("level", [2, 3])
+def test_relative_alignment_normalization_alias_and_uncertainty(level):
+    cfg = normalized_observatory_config(
+        {
+            "alignment": {
+                "model": RELATIVE_ALIGNMENT,
+                "requirement_deg_per_axis": 3,
+                "sigma_level": level,
+            }
+        }
+    )
+    assert cfg["alignment"]["sigma_level"] == level
+    alias = normalized_observatory_config(
+        {
+            "alignment": {
+                "model": RELATIVE_ALIGNMENT,
+                "requirement_3sigma_deg_per_axis": 3,
+            }
+        }
+    )
+    assert alias["alignment"]["requirement_deg_per_axis"] == 3
+    assert alias["alignment"]["sigma_level"] == 3
+
+
+@pytest.mark.parametrize("value", [-1, np.inf, np.nan])
+def test_relative_alignment_rejects_invalid_requirements(value):
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        normalized_observatory_config(
+            {
+                "alignment": {
+                    "model": RELATIVE_ALIGNMENT,
+                    "requirement_deg_per_axis": value,
+                }
+            }
+        )
+
+
+def test_alignment_rejects_unknown_model():
+    with pytest.raises(ValueError, match="Unsupported alignment.model"):
+        normalized_observatory_config({"alignment": {"model": "misspelled"}})
+
+
+@pytest.mark.parametrize("frame", ["spacecraft", "plasma"])
+@pytest.mark.parametrize("n_mc,write_errors", [(2, True), (0, True), (2, False)])
+def test_generate_relative_alignment_frame_and_truth_only(tmp_path, frame, n_mc, write_errors):
+    import json
+    import yaml
+    from hs_observatory.io.hdf5 import read_observations
+
+    output = tmp_path / "relative.h5"
+    path = tmp_path / "relative.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            dict(
+                spacecraft=dict(source="synthetic", velocity_km_s=[10, 0, 0]),
+                time=dict(t_start_s=0, t_stop_s=2, cadence_s=1),
+                field=dict(
+                    model="sine_sum", background=dict(n=5, v=[400, 20, 5], B=[5, 1, 2]), modes=[]
+                ),
+                measurement=dict(velocity_frame=frame),
+                errors=dict(
+                    model="observatory",
+                    n_mc=n_mc,
+                    random_seed=7,
+                    **_only_options(alignment=dict(model=RELATIVE_ALIGNMENT)),
+                ),
+                output=dict(path=str(output), write_errors=write_errors),
+                visualization=dict(enabled=False),
+            )
+        )
+    )
+    generate_from_config(path)
+    loaded = read_observations(output)
+    assert loaded["metadata"]["schema_version"] == "2"
+    assert loaded["metadata"]["velocity_observed_frame"] == frame
+    if n_mc:
+        expected = loaded["truth"]["v_spacecraft_frame" if frame == "spacecraft" else "v"]
+        np.testing.assert_array_equal(
+            loaded["observed"]["v"], np.broadcast_to(expected, loaded["observed"]["v"].shape)
+        )
+        convention = json.loads(loaded["metadata"]["relative_alignment"])
+        assert convention["reference_instrument"] == "FC"
+        assert convention["attitude_assumption"] == "constant"
+    if n_mc and write_errors:
+        assert loaded["errors"]["relative_alignment_rotvec"].shape == (2, 9, 3)
+        with h5py.File(output) as handle:
+            for suffix, units in (("rotvec", "rad"), ("matrix", "1")):
+                ds = handle["errors/relative_alignment_" + suffix]
+                assert ds.attrs["units"] == units
+                assert ds.attrs["reference_instrument"] == "FC"
+                assert ds.attrs["matrix_direction"] == convention["matrix_direction"]
+        assert "velocity_alignment_rotvec" not in loaded["errors"]
+        assert "magnetic_alignment_rotvec" not in loaded["errors"]
+    elif n_mc == 0:
+        assert not loaded.get("errors")
+    else:
+        assert "errors" not in loaded
+
+
 @pytest.mark.parametrize("component", ["density", "velocity_speed"])
 def test_fractional_application_and_zero_vectors(component):
     cfg = _only_options(**{component: {"model": "gaussian_fractional_bias_plus_ou"}})
