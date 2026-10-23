@@ -141,6 +141,8 @@ class Validator:
             "velocity_angle_beta": "rad",
             "velocity_alignment_rotvec": "rad",
             "magnetic_alignment_rotvec": "rad",
+            "relative_alignment_rotvec": "rad",
+            "relative_alignment_matrix": "1",
         }
         if name in units:
             actual = ds.attrs.get("units")
@@ -324,13 +326,27 @@ class Validator:
     def alignment(self):
         section = self.cfg["alignment"]
         sigma = np.deg2rad(section["requirement_deg_per_axis"] / section["sigma_level"])
+        relative = section["model"] == "relative_constant_rotation_B_to_V"
+        if relative:
+            self.relative_alignment_provenance(section, sigma)
+        elif any(
+            "errors/relative_alignment_" + suffix in self.h for suffix in ("rotvec", "matrix")
+        ):
+            self.results.add(
+                "alignment",
+                "representation",
+                status="FAIL",
+                note="relative datasets contradict legacy alignment provenance",
+            )
         rotations = []
-        for field in ("velocity", "magnetic"):
+        for field in ("relative",) if relative else ("velocity", "magnetic"):
             vec = self.constant("alignment", field + "_alignment_rotvec", vector=True)
             mat = self.constant("alignment", field + "_alignment_matrix", matrix=True)
             rotations.append(vec)
             self.gaussian_vector("alignment", field, vec, sigma, "rad")
             self.radial("alignment", field + ".magnitude", vec, sigma)
+            if relative and vec is not None and sigma > 0:
+                self.relative_alignment_statistics(vec, section)
             if mat is not None:
                 eye_res = np.max(np.abs(np.swapaxes(mat, -1, -2) @ mat - np.eye(3)))
                 self.results.identity("alignment", field + ".orthogonality", eye_res, 1e-12, self.k)
@@ -346,7 +362,7 @@ class Validator:
                 self.results.identity(
                     "alignment", field + ".rodrigues", np.max(np.abs(mat - expected)), 1e-12, self.k
                 )
-        if all(v is not None for v in rotations) and sigma > 0:
+        if not relative and all(v is not None for v in rotations) and sigma > 0:
             for a in range(3):
                 for b in range(3):
                     self.results.correlation(
@@ -355,6 +371,127 @@ class Validator:
                         rotations[0][:, a],
                         rotations[1][:, b],
                     )
+
+    def relative_alignment_provenance(self, section, sigma):
+        """Check saved conventions independently of production metadata helpers."""
+        expected = dict(
+            model="relative_constant_rotation_B_to_V",
+            reference_instrument="FC",
+            interpretation="residual_MAG_to_FC_reconstruction_uncertainty",
+            perturbed_product="merged_MAG_SCM_B",
+            requirement_deg_per_axis=section["requirement_deg_per_axis"],
+            sigma_level=section["sigma_level"],
+            sigma_axis_rad=sigma,
+            requirement_interpretation="gaussian_rotvec_per_axis",
+            temporal_behavior="constant_per_mc_spacecraft",
+            component_basis="common_cartesian_nominal_FC",
+            attitude_assumption="constant",
+            matrix_direction="ideal_FC_referenced_B_to_reported_FC_referenced_B",
+            rotation_convention="active_right_handed_column_vector",
+            application="B_out=R@(B_sampled+DC+AC)",
+            rng_policy="legacy_alignment_two_normal_blocks_relative_uses_second",
+        )
+        try:
+            metadata = json.loads(self.meta.get("relative_alignment", "null"))
+        except (TypeError, ValueError) as exc:
+            raise InvalidInput(f"invalid relative alignment metadata: {exc}") from exc
+        sources = [("metadata", metadata)]
+        for suffix, units, representation, axes in (
+            ("rotvec", "rad", "rotation_vector", "x,y,z"),
+            ("matrix", "1", "rotation_matrix", "output_component,input_component"),
+        ):
+            path = "errors/relative_alignment_" + suffix
+            if path in self.h:
+                sources.append((suffix, dict(self.h[path].attrs)))
+                for key, value in dict(
+                    units=units, representation=representation, axes=axes
+                ).items():
+                    if self.h[path].attrs.get(key) != value:
+                        self.results.add(
+                            "alignment",
+                            f"relative.{suffix}.{key}",
+                            status="FAIL",
+                            note=f"expected {value!r}",
+                        )
+        for label, source in sources:
+            for key, value in expected.items():
+                if not isinstance(source, dict) or source.get(key) != value:
+                    self.results.add(
+                        "alignment",
+                        f"relative.{label}.{key}",
+                        status="FAIL",
+                        note=f"missing or contradictory convention; expected {value!r}",
+                    )
+        for field in ("velocity", "magnetic"):
+            for suffix in ("rotvec", "matrix"):
+                if f"errors/{field}_alignment_{suffix}" in self.h:
+                    self.results.add(
+                        "alignment",
+                        "relative.representation",
+                        status="FAIL",
+                        note="legacy alignment datasets contradict relative provenance",
+                    )
+
+    def relative_alignment_statistics(self, vec, section):
+        radius = np.linalg.norm(vec, axis=-1)
+        nonzero = radius > 0
+        direction = vec[nonzero] / radius[nonzero, None]
+        for axis in range(3):
+            self.results.coverage(
+                "alignment",
+                f"relative.coverage.{axis}",
+                np.abs(vec[:, axis]),
+                np.deg2rad(section["requirement_deg_per_axis"]),
+                math.erf(section["sigma_level"] / math.sqrt(2)),
+            )
+            self.results.path_mean(
+                "alignment",
+                f"relative.direction_mean.{axis}",
+                direction[:, axis],
+                0,
+            )
+            self.results.distribution(
+                "alignment",
+                f"relative.direction_cosine.{axis}",
+                direction[:, axis],
+                stats.uniform(-1, 2),
+            )
+            for other in range(axis, 3):
+                self.results.path_mean(
+                    "alignment",
+                    f"relative.direction_second_moment.{axis}_{other}",
+                    direction[:, axis] * direction[:, other],
+                    1 / 3 if axis == other else 0,
+                )
+        paths = vec.reshape(len(self.mcs), len(self.scs), 3)
+        # Disjoint MC pairs preserve the independent-pair correlation null.
+        pairs = len(self.mcs) // 2
+        for spacecraft, sc in enumerate(self.scs):
+            for a in range(3):
+                for b in range(3):
+                    self.results.correlation(
+                        "alignment",
+                        f"relative.mc_independence.{self.ids[sc]}.{a}_{b}",
+                        paths[: 2 * pairs : 2, spacecraft, a],
+                        paths[1 : 2 * pairs : 2, spacecraft, b],
+                    )
+        for a, b in combinations(range(len(self.scs)), 2):
+            for first in range(3):
+                for second in range(3):
+                    if first != second:  # Same-component checks are in gaussian_vector.
+                        self.results.correlation(
+                            "alignment",
+                            f"relative.sc_independence.{a}_{b}.{first}_{second}",
+                            paths[:, a, first],
+                            paths[:, b, second],
+                        )
+        if len(np.unique(vec, axis=0)) < len(vec):
+            self.results.add(
+                "alignment",
+                "relative.duplicate_paths",
+                status="FAIL",
+                note="duplicate nondegenerate rotation vectors across MC/spacecraft paths",
+            )
 
     def ou(
         self,

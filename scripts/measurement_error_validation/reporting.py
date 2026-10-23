@@ -31,6 +31,13 @@ INTERPRETATIONS = [
 
 def model_interpretations(config):
     notes = list(INTERPRETATIONS)
+    if config.get("alignment", {}).get("model") == "relative_constant_rotation_B_to_V":
+        notes.append(
+            "Relative alignment is residual MAG-to-FC reconstruction uncertainty in the nominal "
+            "FC Cartesian frame, with constant attitude. Velocity receives no alignment rotation. "
+            "The requirement is per Gaussian rotvec coordinate; the Maxwell rotvec magnitude "
+            "is neither an Euler angle nor the actual B-vector deflection."
+        )
     for name in ("density", "velocity_speed"):
         s = config.get(name, {})
         if not s.get("enabled", False):
@@ -95,13 +102,18 @@ def plot_figures(records, output):
             r for r in records if r["component"] == component and r["kind"] == "distribution"
         ]
         if component == "alignment":
+            fields = (
+                ("relative",)
+                if any(r["title"].startswith("relative") for r in distributions)
+                else ("velocity", "magnetic")
+            )
             pages = [
                 (
                     index,
-                    f"{component}: {field}",
+                    f"{component}: {field}" + (" (FC reference)" if field == "relative" else ""),
                     [r for r in distributions if r["title"].startswith(field)],
                 )
-                for index, field in enumerate(("velocity", "magnetic"), start=1)
+                for index, field in enumerate(fields, start=1)
             ]
         else:
             pages = [

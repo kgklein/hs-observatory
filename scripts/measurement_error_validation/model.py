@@ -118,6 +118,8 @@ def normalize(config):
         if not isinstance(s["enabled"], bool) or s["sigma_level"] not in (2, 3):
             raise ValueError(f"invalid enabled/sigma_level in {name}")
         options = {default["model"]}
+        if name == "alignment":
+            options.add("relative_constant_rotation_B_to_V")
         if name in ("density", "velocity_speed"):
             options.add("gaussian_fractional_bias_plus_ou")
         if name == "velocity_angle":
