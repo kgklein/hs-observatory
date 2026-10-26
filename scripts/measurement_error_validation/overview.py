@@ -97,8 +97,8 @@ def build_overview(records, config):
     """Build eight fixed panels from bounded validator records and embedded settings."""
     fig, axes = plt.subplots(4, 2, figsize=(12, 15), layout="constrained")
     fig.get_layout_engine().set(rect=(0, 0.065, 1, 0.87))
-    #title = fig.suptitle("HIVE measurement-error validation summary", fontsize=15, y=0.995)
-    #title.set_in_layout(False)
+    # title = fig.suptitle("HIVE measurement-error validation summary", fontsize=15, y=0.995)
+    # title.set_in_layout(False)
     handles = [
         Patch(facecolor=OBSERVED_COLOR, alpha=HIST_ALPHA, label="Saved realizations"),
         Line2D([], [], color=MODEL_COLOR, linewidth=MODEL_WIDTH, label="Configured model"),
@@ -281,7 +281,7 @@ def build_overview(records, config):
                 distribution_panel(ax, samples, dist, bounds, units, zero=sigma == 0)
             else:
                 ax.text(0.5, 0.5, "Saved samples unavailable", transform=ax.transAxes, ha="center")
-    #fig.text(
+    # fig.text(
     #    0.5,
     #    0.015,
     #    "Density, speed and angle: first timestamp across selected MC/spacecraft paths.\n"
@@ -290,7 +290,7 @@ def build_overview(records, config):
     #    ha="center",
     #    va="bottom",
     #    fontsize=9,
-    #)
+    # )
     return fig
 
 

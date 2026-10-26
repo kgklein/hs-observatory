@@ -21,8 +21,8 @@ def build_ou_summary(records, config):
     """Plot existing path summaries; never load HDF5 or fit model parameters."""
     fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True, layout="constrained")
     fig.get_layout_engine().set(rect=(0, 0.08, 1, 0.88))
-    #title = fig.suptitle("HIVE measurement-error OU validation summary", y=0.995, fontsize=15)
-    #title.set_in_layout(False)
+    # title = fig.suptitle("HIVE measurement-error OU validation summary", y=0.995, fontsize=15)
+    # title.set_in_layout(False)
     handles = [
         Line2D([], [], color=OBSERVED_COLOR, marker="o", label="Empirical (95% CI)"),
         Line2D([], [], color=MODEL_COLOR, linewidth=MODEL_WIDTH, label="Configured OU model"),
@@ -104,7 +104,7 @@ def build_ou_summary(records, config):
             )
     axes[-1].set_xticks(np.arange(0, 901, 100))
     fig.supxlabel("Lag (s)", y=0.065)
-    #fig.text(
+    # fig.text(
     #    0.5,
     #    0.015,
     #    "Saved constant biases removed; covariance normalized by configured stationary OU variance.\n"
@@ -113,7 +113,7 @@ def build_ou_summary(records, config):
     #    ha="center",
     #    va="bottom",
     #    fontsize=8,
-    #)
+    # )
     return fig
 
 
