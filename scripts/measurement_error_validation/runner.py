@@ -21,6 +21,9 @@ from .model import (
 from .statistics import Results
 
 
+OU_SUMMARY_LAGS = (0, 25, 50, 100, 150, 200, 300, 400, 500, 600, 900)
+
+
 class InvalidInput(ValueError):
     pass
 
@@ -198,13 +201,20 @@ class Validator:
             raise InvalidInput(f"nonfinite saved errors in {ds.name}")
         return values
 
-    def draw_plot(self, component, title, values, distribution, units):
+    def draw_plot(
+        self, component, title, values, distribution, units, *, record_id=None, overview_only=False
+    ):
         values = np.asarray(values).ravel()
         if len(values) > 4096:
-            values = self.rng.choice(values, size=4096, replace=False)
+            values = (
+                values[np.linspace(0, len(values) - 1, 4096, dtype=int)]
+                if overview_only
+                else self.rng.choice(values, size=4096, replace=False)
+            )
         self.plots.append(
             dict(
-                kind="distribution",
+                kind="overview_distribution" if overview_only else "distribution",
+                record_id=record_id,
                 component=component,
                 title=title,
                 values=values,
@@ -220,7 +230,12 @@ class Validator:
         for axis in range(x.shape[1]):
             self.results.gaussian(component, f"{name}.{axis}", x[:, axis], sigma, units)
             self.draw_plot(
-                component, f"{name} axis {axis}", x[:, axis], stats.norm(scale=sigma), units
+                component,
+                f"{name} axis {axis}",
+                x[:, axis],
+                stats.norm(scale=sigma),
+                units,
+                record_id=f"{name}.{axis}",
             )
         if sigma == 0:
             return
@@ -248,9 +263,20 @@ class Validator:
                     )
 
     def radial(self, component, name, vectors, sigma):
-        if vectors is None or sigma == 0:
+        if vectors is None:
             return
         r = np.linalg.norm(vectors, axis=-1)
+        if sigma == 0:
+            self.draw_plot(
+                component,
+                name,
+                r,
+                None,
+                "km" if component == "position" else "rad",
+                record_id=name,
+                overview_only=True,
+            )
+            return
         self.results.distribution(component, name, r, stats.maxwell(scale=sigma))
         self.results.path_mean(component, name + ".squared_radius", r * r, 3 * sigma * sigma)
         self.draw_plot(
@@ -259,6 +285,7 @@ class Validator:
             r,
             stats.maxwell(scale=sigma),
             "km" if component == "position" else "rad",
+            record_id=name,
         )
 
     def constants(self):
@@ -281,6 +308,15 @@ class Validator:
                         int((~mask).sum()),
                     )
                     self.results.gaussian("timing", "offset_nonreference", values[mask], sigma, "s")
+                    self.draw_plot(
+                        "timing",
+                        "Nonreference timing offsets",
+                        values[mask],
+                        stats.norm(scale=sigma),
+                        "s",
+                        record_id="offset.0",
+                        overview_only=True,
+                    )
                     y = values.reshape(len(self.mcs), len(self.scs))
                     for a, b in combinations(range(len(self.scs)), 2):
                         if reference not in (self.ids[self.scs[a]], self.ids[self.scs[b]]):
@@ -511,7 +547,9 @@ class Validator:
         n = len(time)
         phi = np.exp(-np.diff(time) / tau)
         innovation_scale = sigma * np.sqrt(-np.expm1(-2 * np.diff(time) / tau))
-        lags = {lag: int(np.argmin(np.abs(time - time[0] - lag))) for lag in (30.0, 300.0, 600.0)}
+        # Retain the original statistical checks; extra lags are plotting summaries only.
+        requested_lags = sorted(set(OU_SUMMARY_LAGS[1:]) | {30.0})
+        lags = {lag: int(np.argmin(np.abs(time - time[0] - lag))) for lag in requested_lags}
         lags = {
             lag: step
             for lag, step in lags.items()
@@ -555,6 +593,35 @@ class Validator:
                 for lag in innovation_correlations:
                     if len(z) > lag:
                         innovation_correlations[lag].append(float(np.mean(z[:-lag] * z[lag:])))
+        # Each covariance is one summary per independent MC/spacecraft path.
+        # These fixed 95% plotting intervals do not enter the validation test family.
+        summary_lags = [0, *(lag for lag in OU_SUMMARY_LAGS[1:] if lag in covariance)]
+        normalized = np.array(
+            [summaries["second_moment"], *(covariance[lag] for lag in summary_lags[1:])]
+        )
+        if sigma > 0:
+            normalized /= sigma**2
+            estimate = normalized.mean(axis=1)
+            margin = (
+                stats.t.ppf(0.975, self.k - 1) * normalized.std(axis=1, ddof=1) / np.sqrt(self.k)
+                if self.k >= 30
+                else np.full(len(summary_lags), np.nan)
+            )
+        else:
+            estimate = margin = np.full(len(summary_lags), np.nan)
+        self.plots.append(
+            dict(
+                kind="ou_summary",
+                component=component,
+                record_id=dataset_name,
+                lag=np.array(summary_lags),
+                measured=estimate,
+                lower=estimate - margin,
+                upper=estimate + margin,
+                n_paths=self.k,
+                zero_variance=sigma == 0,
+            )
+        )
         label = dataset_name
         units = (
             "rad" if component == "velocity_angle" else "fraction" if fractional else "log fraction"
@@ -587,6 +654,7 @@ class Validator:
                 first_full,
                 stats.norm(scale=total_sigma),
                 units,
+                record_id="initial_full",
             )
             self.results.path_mean(
                 component,
@@ -775,6 +843,16 @@ class Validator:
                 )
                 for name in ("alpha", "beta")
             ]
+            if all(v is not None for v in values) and sigma == 0:
+                self.draw_plot(
+                    "velocity_angle",
+                    "Latent total angle",
+                    np.hypot(*values),
+                    None,
+                    "rad",
+                    record_id="total_angle",
+                    overview_only=True,
+                )
             if all(v is not None for v in values) and sigma > 0:
                 self.results.correlation(
                     "velocity_angle", "alpha_beta.initial_independence", *values
@@ -793,6 +871,7 @@ class Validator:
                     angle,
                     stats.rayleigh(scale=sigma),
                     "rad",
+                    record_id="total_angle",
                 )
                 self.results.path_mean(
                     "velocity_angle", "total_angle.second_moment", angle**2, 2 * sigma**2, "rad^2"

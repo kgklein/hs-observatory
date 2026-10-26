@@ -10,6 +10,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .overview import plot_overview
+from .ou_summary import plot_ou_summary
+
 
 INTERPRETATIONS = [
     "PASS means consistency at the chosen familywise significance level, not proof of correctness.",
@@ -201,6 +204,10 @@ def plot_figures(records, output):
 def write_reports(output, payload, records):
     output.mkdir(parents=True, exist_ok=True)
     figures = plot_figures(records, output)
+    config = payload.get("provenance", {}).get("embedded_configuration")
+    if config:
+        figures += plot_overview(records, config, output)
+        figures += plot_ou_summary(records, config, output)
     payload["figures"] = figures
     interpretations = model_interpretations(
         payload.get("provenance", {}).get("embedded_configuration", {})

@@ -348,6 +348,89 @@ The relative model's `alignment_distributions_1.png/.pdf` contains its three
 coordinates and magnitude, labeled with the FC reference. Legacy figures keep
 velocity on `_1` and magnetic alignment on `_2`.
 
+#### Summary overview
+
+Each validator run with usable embedded configuration also writes
+`measurement_error_summary_overview.png` and
+`measurement_error_summary_overview.pdf` alongside the detailed diagnostics.
+The four-row, two-column overview compares saved timing, radial position,
+fractional density and speed, total transverse velocity angle, DC magnetic
+components, total AC magnetic ASD, and relative FC–MAG rotation-vector
+components against configured models and 2σ/3σ statistical bounds. OU
+autocorrelation remains in the detailed companion figures.
+
+For example, regenerate the overview and existing diagnostics from an 800-series
+observation product:
+
+```bash
+.venv/bin/python scripts/validate_measurement_errors.py \
+  --input outputs/malara-8xx/malara-prod-800.h5 \
+  --config generation/malara-prod-800.yaml \
+  --output-dir outputs/error_validation/malara-prod-800 \
+  --mc all
+```
+
+The observation HDF5 must retain saved errors (`output.write_errors: true`);
+the report JSON alone does not contain the plotting samples. Embedded settings
+supply every theoretical distribution, with no fitted parameters. Timing bounds
+use the sigma derived from the embedded timing requirement in milliseconds;
+a fixed reference clock, when configured, is excluded from the timing histogram.
+
+Position radii follow a Maxwell distribution with Cartesian sigma resolved by
+the validator's existing radial-confidence conversion. Density, speed, and
+velocity-angle histograms use the first timestamp across selected MC members
+and spacecraft; density and speed include both saved bias and OU error. Legacy
+log-error models are transformed to fractional errors with `expm1`, and their
+PDFs are shifted lognormal distributions, with asymmetric fractional 2σ/3σ
+bounds obtained by transforming the latent Gaussian bounds with `expm1`.
+
+Both angular panels use degrees. Velocity angle is the latent transverse
+rotation magnitude with a configured Rayleigh distribution; it is not a wrapped
+principal deflection for angles above 180 degrees. Legacy per-coordinate angle
+requirements are labeled explicitly. Relative alignment shows Gaussian
+rotation-vector coordinates in the nominal FC reference frame; legacy
+independent alignment is marked unavailable in that panel.
+
+A shared figure legend identifies blue saved scalar distributions, orange
+configured models, gray dashed 2σ markers, and dark-gray dash-dot 3σ markers.
+DC and alignment use consistent semi-transparent x/y/z component colors;
+saved total magnetic ASD uses charcoal. Signed Gaussian markers are ±2σ and
+±3σ; alignment retains its per-axis rotation-vector interpretation. Position
+and velocity-angle markers are Maxwell and Rayleigh radii at `erf(k/sqrt(2))`
+coverage for k = 2 and 3. The validator's existing rounded position conversion
+is unchanged, so an exact radial quantile can differ slightly from its
+engineering requirement. Custom radial coverage and legacy log/angle conventions
+are annotated where requirements differ from the statistical markers. These
+comparison levels do not introduce additional mission requirements.
+
+AC noise shows total ASD from the quadrature sum of mean component PSDs,
+compared with the finite-record, Hann-window-adjusted total target using the
+longest available segment. Disabled or unavailable components retain their panel
+with an explanatory note, and zero-width models show a configured point mass.
+
+#### OU covariance summary
+
+The same validator command also writes
+`measurement_error_validation_ou_summary.png` and
+`measurement_error_validation_ou_summary.pdf`, alongside the overview and
+existing detailed figures. Its three stacked panels show density OU, speed OU,
+and the separate transverse angular coordinates α and β. Saved constant biases
+are subtracted before computing density/speed covariance; empirical time means
+are never subtracted. Current Gaussian fractional models use fractional OU
+coordinates. Legacy log-error models retain their latent log OU coordinates and
+are labeled explicitly.
+
+Each MC/spacecraft path contributes one known-mean lagged covariance at each
+resolved lag: 0, 25, 50, 100, 150, 200, 300, 400, 500, 600, and 900 seconds.
+Covariances are normalized by the configured stationary OU variance, including
+at zero lag, and compared with `exp(-lag / ou_correlation_time_s)`. The marginal
+95% Student-t intervals summarize independent paths, not individual timestamps;
+as in the validator's existing path-summary convention, intervals require at
+least 30 paths. Unresolved lags are omitted, and disabled/missing components or
+zero configured variance are annotated. The plot's fixed 95% intervals do not
+change the CLI confidence setting, existing statistical tests, or validation
+status.
+
 Phase A validates saved primitives, not full measurement application. Exact
 velocity invariance, reuse across timestamps and DC/AC application order are
 covered by synthetic unit tests with known sampled inputs.
