@@ -10,10 +10,10 @@ fi
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 usage() {
-  echo "Usage: $0 [OPTIONS] {100|101|102|400|401|402|600|601|602} [...]" >&2
-  echo "  100, 400, 600: p=0.9 (orange)" >&2
-  echo "  101, 401, 601: p=0.7 (green)" >&2
-  echo "  102, 402, 602: p=0.5 (blue)" >&2
+  echo "Usage: $0 [OPTIONS] {100|101|102|400|401|402|600|601|602|900|901|902} [...]" >&2
+  echo "  100, 400, 600, 900: p=0.9 (orange)" >&2
+  echo "  101, 401, 601, 901: p=0.7 (green)" >&2
+  echo "  102, 402, 602, 902: p=0.5 (blue)" >&2
   echo "Options:" >&2
   echo "  --stage3                      use refined 40X results (defaults to all three)" >&2
   echo "  --recalculate                 opt-in Stage 3 ensemble analysis, then plot" >&2
@@ -117,9 +117,9 @@ batch_inputs=()
 batch_p_values=()
 for run_id in "${run_ids[@]}"; do
   case "${run_id}" in
-    100|400|600) batch_p_values+=("0.9") ;;
-    101|401|601) batch_p_values+=("0.7") ;;
-    102|402|602) batch_p_values+=("0.5") ;;
+    100|400|600|900) batch_p_values+=("0.9") ;;
+    101|401|601|901) batch_p_values+=("0.7") ;;
+    102|402|602|902) batch_p_values+=("0.5") ;;
     *)
       echo "Unknown run ID: ${run_id}" >&2
       usage
