@@ -1914,6 +1914,7 @@ def _plot_context_projection(
     title: str,
     moon_position: np.ndarray | None = None,
     axis_limits: GeometryAxisLimits | None = None,
+    segment_validity: np.ndarray | None = None,
 ) -> None:
     labels = ("X", "Y", "Z")
     trajectory_re = trajectory / EARTH_RADIUS_KM
@@ -1927,15 +1928,29 @@ def _plot_context_projection(
             zorder=3,
         )
     )
-    ax.plot(
-        trajectory_re[:, x_index],
-        trajectory_re[:, y_index],
-        color="#777777",
-        linewidth=0.55,
-        alpha=0.45,
-        zorder=1,
-    )
-    for start, stop in zip(trajectory[:-1], trajectory[1:]):
+    if segment_validity is not None:
+        # Opt-in gap-aware rendering; existing callers retain their artist layout.
+        from matplotlib.collections import LineCollection
+
+        valid = np.asarray(segment_validity, dtype=bool)
+        if valid.shape != (len(trajectory) - 1,):
+            raise ValueError("segment_validity must have shape (n_trajectory_samples - 1,)")
+        starts, stops = trajectory[:-1][valid], trajectory[1:][valid]
+        if not np.all(np.isfinite(starts)) or not np.all(np.isfinite(stops)):
+            raise ValueError("Valid orbit segments must have finite endpoints")
+        segments = np.stack((starts, stops), axis=1)[:, :, [x_index, y_index]] / EARTH_RADIUS_KM
+        colors = [REGION_COLORS[classify_gse_region((a + b) * 0.5)] for a, b in zip(starts, stops)]
+        ax.add_collection(LineCollection(segments, colors=colors, linewidths=0.55, alpha=0.9))
+    else:
+        ax.plot(
+            trajectory_re[:, x_index],
+            trajectory_re[:, y_index],
+            color="#777777",
+            linewidth=0.55,
+            alpha=0.45,
+            zorder=1,
+        )
+    for start, stop in zip(trajectory[:-1], trajectory[1:]) if segment_validity is None else ():
         segment_region = classify_gse_region((start + stop) * 0.5)
         start_re = start / EARTH_RADIUS_KM
         stop_re = stop / EARTH_RADIUS_KM
