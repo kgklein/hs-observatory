@@ -9,6 +9,7 @@ import numpy as np
 
 from hs_observatory.fields.base import FieldModel
 from hs_observatory.io.simulation_bp import load_simulation_bp
+from hs_observatory.io.simulation_dhybridr import load_simulation_dhybridr, proton_normalization
 from hs_observatory.io.simulation_npy import (
     PeriodicTrilinearInterpolator,
     SimulationSnapshot,
@@ -60,12 +61,16 @@ def hub_centered_coordinates(
     box_size_km: np.ndarray,
     hub_spacecraft: int = 0,
     reference_position_km: np.ndarray | None = None,
+    initial_hub_position_km: np.ndarray | None = None,
+    wrap: bool = True,
 ) -> np.ndarray:
     """Center the Hub initially, then preserve the formation's absolute motion.
 
     Input and output use shape ``(spacecraft, time, 3)``. The first Hub sample
     maps to the box center. Every later point retains its displacement from
-    that initial Hub position before periodic wrapping.
+    that initial Hub position before periodic wrapping. An optional target is
+    expressed in rebased grid km. ``wrap=False`` permits source-specific domain
+    validation before any periodic wrapping; defaults retain the original map.
     """
 
     position = np.asarray(position_km, dtype=float)
@@ -87,11 +92,19 @@ def hub_centered_coordinates(
         raise ValueError("reference_position_km must contain three finite coordinates")
     relative = position - initial_hub[None, None, :]
     # TODO: Add an explicit simulation-to-spacecraft coordinate rotation here.
-    return np.mod(relative + 0.5 * box, box)
+    target = (
+        0.5 * box
+        if initial_hub_position_km is None
+        else np.asarray(initial_hub_position_km, dtype=float)
+    )
+    if target.shape != (3,) or not np.all(np.isfinite(target)):
+        raise ValueError("initial_hub_position_km must contain three finite coordinates")
+    mapped = relative + target
+    return np.mod(mapped, box) if wrap else mapped
 
 
 class SimulationSampledField(FieldModel):
-    """Sample one static, periodic simulation cube along spacecraft positions."""
+    """Sample one frozen volume along prescribed simulation-frame trajectories."""
 
     name = "simulation_sampled"
 
@@ -100,6 +113,7 @@ class SimulationSampledField(FieldModel):
         if not isinstance(simulation, dict):
             raise ValueError("field.simulation must be a mapping")
         simulation_format = str(simulation.get("format", "npy")).lower()
+        self.is_dhybridr = simulation_format == "dhybridr_npz"
         layout = simulation.get("layout", {})
         if not isinstance(layout, dict):
             raise ValueError("field.simulation.layout must be a mapping")
@@ -124,17 +138,41 @@ class SimulationSampledField(FieldModel):
                 "field": str(Path(field_path).expanduser().resolve()),
                 "moments": str(Path(moments_path).expanduser().resolve()),
             }
+        elif self.is_dhybridr:
+            sources = simulation.get("sources", {})
+            if not isinstance(sources, dict) or not all(
+                sources.get(q) for q in ("fields", "moments")
+            ):
+                raise ValueError("dhybridr_npz requires simulation.sources.fields and .moments")
+            if layout:
+                raise ValueError("dhybridr_npz uses the documented release layout; omit layout")
+            normalization = simulation.get("normalization", {})
+            if not isinstance(normalization, dict) or not all(
+                key in normalization for key in ("n0_cm3", "B0_nT")
+            ):
+                raise ValueError("dhybridr_npz requires normalization.n0_cm3 and .B0_nT")
+            self.normalization = proton_normalization(
+                normalization["n0_cm3"], normalization["B0_nT"]
+            )
+            self.snapshot = load_simulation_dhybridr(
+                sources["fields"], sources["moments"], simulation.get("iteration")
+            )
+            source_paths = {
+                key: str(Path(sources[key]).expanduser().resolve()) for key in ("fields", "moments")
+            }
+            simulation = self._dhybridr_configuration(simulation)
         else:
-            raise NotImplementedError("simulation_sampled supports only format: npy or format: bp")
+            raise NotImplementedError("simulation_sampled supports npy, bp, or dhybridr_npz")
 
         coordinates = simulation.get("coordinates", {})
         if not isinstance(coordinates, dict):
             raise ValueError("field.simulation.coordinates must be a mapping")
         self.box_size_km, coordinate_metadata = coordinate_box_size_km(coordinates)
         self.interpolator = PeriodicTrilinearInterpolator(self.box_size_km)
-        if str(simulation.get("boundary", "periodic")).lower() != "periodic":
+        boundary = "interior_x_periodic_yz" if self.is_dhybridr else "periodic"
+        if str(simulation.get("boundary", boundary)).lower() != boundary:
             raise NotImplementedError(
-                "simulation_sampled currently supports only periodic boundaries"
+                f"simulation format {simulation_format} requires boundary: {boundary}"
             )
 
         mapping = simulation.get("coordinate_mapping", {})
@@ -184,7 +222,9 @@ class SimulationSampledField(FieldModel):
             raise ValueError("simulation.scale_factors must be finite")
         self.metadata = {
             "field_model": self.name,
-            "simulation_path": source_paths.get("combined", source_paths.get("field")),
+            "simulation_path": source_paths.get(
+                "combined", source_paths.get("field", source_paths.get("fields"))
+            ),
             "simulation_sources": source_paths,
             "simulation_format": simulation_format,
             "simulation_shape": list(self.snapshot.source_shape),
@@ -196,13 +236,100 @@ class SimulationSampledField(FieldModel):
             "coordinate_mapping_method": "hub_centered",
             "coordinate_mapping_reference": "nominal_hub_position_at_first_sample",
             "hub_spacecraft": self.hub_spacecraft,
-            "boundary": "periodic",
+            "boundary": boundary,
             "grid_coordinates": "uniform_endpoint_excluded_[0,L)",
             "interpolation": "trilinear",
             "fields_are": self.fields_are,
             "scale_factors": self.scale_factors,
             "output_units": {"n": "cm^-3", "v": "km/s", "B": "nT"},
         }
+        if self.is_dhybridr:
+            self.metadata.update(
+                {
+                    "normalization": self.normalization,
+                    "initial_hub_position_di": self.initial_hub_position_di.tolist(),
+                    "grid_origin_di": self.snapshot.layout["origin_di"],
+                    "frozen_snapshot": True,
+                    "trajectory_frame": "simulation_downstream_rest",
+                    "axis_alignment": "identity",
+                    "snapshot_time_s": self.snapshot.layout["snapshot_time_Omega_ci_inv"]
+                    / self.normalization["Omega_ci_s_inv"],
+                }
+            )
+
+    def _dhybridr_configuration(self, simulation: dict[str, Any]) -> dict[str, Any]:
+        """Fill derived settings locally and reject contradictory user scales."""
+        simulation = dict(simulation)
+        scale = self.normalization["di_km"]
+        box = np.asarray(self.snapshot.layout["box_size_di"])
+        coordinates = simulation.get("coordinates", {})
+        if not isinstance(coordinates, dict):
+            raise ValueError("simulation.coordinates must be a mapping")
+        coordinates = dict(coordinates)
+        units = str(coordinates.get("units", "code")).lower()
+        if units == "code":
+            expected = {"units": "code", "box_size_code": box.tolist(), "code_length_to_km": scale}
+        elif units == "km":
+            expected = {"units": "km", "box_size_km": (box * scale).tolist()}
+        else:
+            raise ValueError("dHybridR coordinates.units must be code (d_i) or km")
+        for key, value in coordinates.items():
+            if key not in expected or (
+                key != "units"
+                and (
+                    np.shape(value) != np.shape(expected[key])
+                    or not np.allclose(
+                        np.asarray(value, dtype=float), expected[key], rtol=1e-10, atol=0.0
+                    )
+                )
+            ):
+                raise ValueError(
+                    f"dHybridR coordinates.{key} conflicts with the grid/normalization"
+                )
+        simulation["coordinates"] = expected
+        derived = {
+            "n": self.normalization["n0_cm3"],
+            "v": self.normalization["vA_km_s"],
+            "B": self.normalization["B0_nT"],
+        }
+        configured = simulation.get("scale_factors", {})
+        if not isinstance(configured, dict):
+            raise ValueError("simulation.scale_factors must be a mapping")
+        for key, value in configured.items():
+            if (
+                key not in derived
+                or isinstance(value, (bool, np.bool_))
+                or np.ndim(value) != 0
+                or not np.isclose(float(value), derived[key], rtol=1e-10, atol=0)
+            ):
+                raise ValueError(f"dHybridR scale_factors.{key} conflicts with normalization")
+        simulation["scale_factors"] = derived
+        fields_are = simulation.get("fields_are", {})
+        if not isinstance(fields_are, dict) or any(
+            key not in derived or str(value).lower() != "total" for key, value in fields_are.items()
+        ):
+            raise ValueError("dHybridR n, v, B are total quantities; fields_are must be total")
+        origin = np.asarray(self.snapshot.layout["origin_di"])
+        self.initial_hub_position_di = np.asarray(
+            simulation.get("initial_hub_position_di", origin + box / 2), dtype=float
+        )
+        if self.initial_hub_position_di.shape != (3,) or not np.all(
+            np.isfinite(self.initial_hub_position_di)
+        ):
+            raise ValueError("initial_hub_position_di must contain three finite coordinates")
+        lo, hi = self.snapshot.layout["cell_center_interval_di"][0]
+        if not lo <= self.initial_hub_position_di[0] <= hi:
+            raise ValueError(
+                f"Initial dHybridR x={self.initial_hub_position_di[0]} d_i "
+                f"outside supported cell-center interval [{lo}, {hi}] d_i"
+            )
+        # Keep the exact legacy half-box calculation when placement is omitted.
+        self.initial_hub_position_km = (
+            (self.initial_hub_position_di - origin) * scale
+            if "initial_hub_position_di" in simulation
+            else None
+        )
+        return simulation
 
     def set_coordinate_mapping_reference(self, position_km: np.ndarray) -> None:
         """Fix the simulation-box origin to the nominal initial Hub position."""
@@ -229,10 +356,36 @@ class SimulationSampledField(FieldModel):
             self.box_size_km,
             self.hub_spacecraft,
             reference_position_km=self.coordinate_mapping_reference_km,
+            initial_hub_position_km=(self.initial_hub_position_km if self.is_dhybridr else None),
+            wrap=not self.is_dhybridr,
         )
+        if self.is_dhybridr:
+            # Guard unwrapped x, including every MC query, before the periodic sampler.
+            scale = self.normalization["di_km"]
+            origin = self.snapshot.layout["origin_di"][0]
+            lo, hi = self.snapshot.layout["cell_center_interval_di"][0]
+            xmax = (hi - lo) * scale
+            x = mapped[..., 0]
+            invalid = ~np.isfinite(x) | (x < 0) | (x > xmax)
+            if np.any(invalid):
+                bad = float(x[invalid][0] / scale + origin)
+                raise ValueError(
+                    f"dHybridR x={bad:.17g} d_i outside supported cell-center "
+                    f"interval [{lo}, {hi}] d_i; x wrapping is forbidden"
+                )
         points_time_first = np.swapaxes(mapped, 0, 1)
         grid = getattr(self.snapshot, quantity)
-        sampled = self.interpolator.sample(grid, points_time_first)
+        if self.is_dhybridr:
+            # At the final center, floating arithmetic may yield index nx-1+epsilon.
+            # Sample that plane with a singleton x axis: no first-cell contribution,
+            # no clamping of queries, and the same y/z interpolator and weights.
+            last = points_time_first[..., 0] * grid.shape[0] / self.box_size_km[0]
+            last = last >= grid.shape[0] - 1
+            sampled = np.empty((*last.shape, *grid.shape[3:]))
+            sampled[~last] = self.interpolator.sample(grid, points_time_first[~last])
+            sampled[last] = self.interpolator.sample(grid[-1:], points_time_first[last])
+        else:
+            sampled = self.interpolator.sample(grid, points_time_first)
         sampled *= self.scale_factors[quantity]
         if self.fields_are[quantity] == "fluctuation":
             sampled += self.background[quantity]

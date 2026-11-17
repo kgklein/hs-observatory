@@ -1,0 +1,65 @@
+# Run from repository root:
+#   hsobs-generate configs/example_generate_dhybridr_hs_formation.yaml
+# Same frozen shock, normalization, placement, speed, duration and cadences as
+# example_generate_dhybridr.yaml; only the formation and output location change.
+spacecraft:
+  source: cdf
+  # Production Malara 600/900-series formation source and requested epoch.
+  cdf_directory: ../HelioSwarm/HS-RT/PhB_SRD8_0x78f/
+  configuration_time: "2030-08-25T12:00:00"
+  # Expected nearest record: 2030-08-25T11:50:35.801000000; H,N1,...,N8.
+  fallback_synthetic: false
+  # Prescribed motion relative to the frozen downstream simulation frame.
+  # This replaces the Malara sampling velocity, without changing relative positions.
+  velocity_km_s: [-200.0, 0.0, 0.0]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 40.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: simulation_sampled
+  simulation:
+    format: dhybridr_npz
+    sources:
+      fields: ../dhybridr/release/npz/fields.npz
+      moments: ../dhybridr/release/npz/moments.npz
+    iteration: 10000
+    normalization:
+      n0_cm3: 5.0
+      B0_nT: 5.0
+    initial_hub_position_di: [120.25, 5.25, 5.25]
+    coordinate_mapping:
+      method: hub_centered
+      hub_spacecraft: 0
+    boundary: interior_x_periodic_yz
+    fields_are: {n: total, v: total, B: total}
+
+# CDF positions are in GSE km; identify their axes with simulation x/y/z as an
+# explicit modeling choice, not a claim that this shock physically aligns with GSE x.
+# All nine traverse the x=64..74 di downstream ramp, with safe x-boundary margins.
+# Caution: 26/36 baselines have transverse periodic-image reductions in this narrow
+# 10-di domain. H,N6,N7,N8 is the existing small regular, unaliased tetrahedron.
+measurement:
+  velocity_frame: spacecraft  # Existing subtraction of [-200,0,0] from total V.
+
+errors:
+  random_seed: 12345
+  n_mc: 1
+  time: {model: none}
+  position: {model: none}
+  variables:
+    n: {model: none}
+    v: {model: none}
+    B: {model: none}
+
+output:
+  path: outputs/dhybridr/hs_formation/synthetic_observations_simulation_sampled_hs_formation.h5
+  write_errors: true
+
+visualization:
+  enabled: false
