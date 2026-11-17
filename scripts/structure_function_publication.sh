@@ -127,7 +127,7 @@ for run_id in "${run_ids[@]}"; do
       ;;
   esac
   #input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
-  input="${ROOT}/outputs/production/malara-prod-${run_id}_sf_puma-v00.json"
+  input="${ROOT}/outputs/malara-9xx/malara-prod-${run_id}_sf_puma-v02.json"
   if [[ ! -f "${input}" ]]; then
     echo "Input not found: ${input}" >&2
     exit 1
@@ -165,8 +165,8 @@ plot_run() {
   local p_value="$2"
 
   #local input="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.json"
-  local input="${ROOT}/outputs/production/malara-prod-${run_id}_sf_puma-v00.json"
-  local output="${ROOT}/outputs/malara-prod-${run_id}_sf_publication.png"
+  local input="${ROOT}/outputs/malara-9xx/malara-prod-${run_id}_sf_puma-v02.json"
+  local output="${ROOT}/outputs/malara-9xx/malara-prod-${run_id}_sf_publication-v02.png"
 
   local plot_args=(
     "${input}" --p-value "${p_value}" --quantity z_plus --output "${output}"

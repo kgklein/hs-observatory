@@ -1,0 +1,67 @@
+# Run from the repository root:
+#   hsobs-generate configs/example_generate_dhybridr.yaml
+# One frozen downstream-frame snapshot; no shock propagation or volume advection.
+# Sampling axes are identified with simulation x/y/z (no GSE rotation).
+spacecraft:
+  source: synthetic  # Existing deterministic H, N1,...,N8 formation, offsets in km.
+  # Velocity relative to the simulation frame, NOT an added plasma bulk flow.
+  velocity_km_s: [-200.0, 0.0, 0.0]
+
+time:
+  t_start_s: 0.0
+  t_stop_s: 40.0
+  cadence_s:
+    n: 0.125
+    v: 0.125
+    B: 0.03125
+
+field:
+  model: simulation_sampled
+  simulation:
+    format: dhybridr_npz
+    sources:
+      fields: ../dhybridr/release/npz/fields.npz
+      moments: ../dhybridr/release/npz/moments.npz
+    iteration: 10000  # Explicit iteration, t=50 Omega_ci^-1, not time-array index.
+    normalization:
+      n0_cm3: 5.0
+      B0_nT: 5.0
+    # di ~= 101.8 km; box and n/v/B scales are derived, not independently tuned.
+    # Optional coordinates/scale_factors must agree with those derived values.
+    # Native cell-center coordinates in d_i; node zero is [0.25,0.25,0.25].
+    # Omit placement to retain the legacy rebased half-box Hub placement:
+    # source [250.25,5.25,5.25] d_i for this release.
+    initial_hub_position_di: [120.25, 5.25, 5.25]
+    coordinate_mapping:
+      method: hub_centered
+      hub_spacecraft: 0
+    boundary: interior_x_periodic_yz
+    fields_are: {n: total, v: total, B: total}
+
+# Local t=50 density inspection: yz-mean n/n0 is about 1.2 at x=110..120,
+# about 3.7 at x=50..60; rightmost n>2.5 is x=89.75. Moving in -x crosses
+# from upstream to downstream; Hub ends at x~=41.6 d_i. This does not emulate
+# temporal shock evolution. Adjust placement/track for other snapshots.
+# All nine craft remain inside x cell centers; y/z can wrap periodically.
+# The synthetic formation's transverse span is small compared with 10 d_i here.
+measurement:
+  # Existing generator subtracts the prescribed trajectory velocity once.
+  # truth/v stays in simulation frame; observed/v is relative to spacecraft.
+  velocity_frame: spacecraft
+
+errors:
+  random_seed: 12345
+  n_mc: 1
+  time: {model: none}
+  position: {model: none}
+  variables:
+    n: {model: none}
+    v: {model: none}
+    B: {model: none}
+
+output:
+  path: outputs/dhybridr/synthetic_observations_simulation_sampled.h5
+  write_errors: true
+
+visualization:
+  enabled: false
